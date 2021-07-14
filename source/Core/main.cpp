@@ -7,6 +7,8 @@
 #include "Window.hpp"
 #include "SwapChain.hpp"
 #include "Camera.hpp"
+#include "Shader.hpp"
+#include "FileManager.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -105,6 +107,10 @@ class VulkanTutorialApplication {
 public:
     void run() {
         firstInitImgui();
+        vertexShaderDesc.shaderBytes = FileManager::ReadRawBytes("bin/shader.vert.spv");
+        vertexShaderDesc.stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        fragShaderDesc.shaderBytes = FileManager::ReadRawBytes("bin/shader.frag.spv");
+        fragShaderDesc.stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
         initVulkan();
         mainLoop();
         cleanup();
@@ -118,6 +124,8 @@ private:
     VkPipelineLayout pipelineLayout;
     VkDescriptorSetLayout descriptorSetLayout;
     VkPipeline graphicsPipeline;
+    ShaderDesc vertexShaderDesc;
+    ShaderDesc fragShaderDesc;
 
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
@@ -277,53 +285,16 @@ private:
         vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
     }
 
-    static std::vector<char> readFile(const std::string& filename) {
-        // ate specify to start reading at the end of the file
-        // we can use the read position to determine the size of the file
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-        if (!file.is_open()) {
-            LOG_CRITICAL("failed to open file {}", filename);
-        }
-
-        size_t fileSize = (size_t)file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-        file.close();
-
-        return buffer;
-    }
-
     void createGraphicsPipeline() {
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
-        auto vertShaderCode = readFile("bin/shader.vert.spv");
-        auto fragShaderCode = readFile("bin/shader.frag.spv");
 
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        ShaderResource vertRes;
+        ShaderResource fragRes;
+        Shader::Create(vertexShaderDesc, vertRes);
+        Shader::Create(fragShaderDesc, fragRes);
 
-        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        vertShaderStageInfo.module = vertShaderModule;
-        // function to invoke inside the shader module
-        // it's possible to combine multiple shaders into a single module
-        // using different entry points
-        vertShaderStageInfo.pName = "main";
-        // this allow us to specify values for shader constants
-        vertShaderStageInfo.pSpecializationInfo = nullptr;
-
-        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragShaderStageInfo.module = fragShaderModule;
-        fragShaderStageInfo.pName = "main";
-        fragShaderStageInfo.pSpecializationInfo = nullptr;
-
-        VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+        VkPipelineShaderStageCreateInfo shaderStages[] = { vertRes.stageCreateInfo, fragRes.stageCreateInfo };
 
         auto bindingDescription = Vertex::getBindingDescription();
         auto attributeDescriptions = Vertex::getAttributeDescriptions();
@@ -470,24 +441,8 @@ private:
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-    }
-
-    VkShaderModule createShaderModule(const std::vector<char>& code) {
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-        VkShaderModuleCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-        VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create shader module!");
-        }
-
-        return shaderModule;
+        Shader::Destroy(vertRes);
+        Shader::Destroy(fragRes);
     }
 
     void createCommandPool() {
