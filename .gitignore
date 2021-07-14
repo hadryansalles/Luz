@@ -1,0 +1,9 @@
+bin/
+lib/
+build/
+ignore/
+*.spv
+*.log
+*.ini
+.vs
+.vscode
