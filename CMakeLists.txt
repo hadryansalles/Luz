@@ -71,6 +71,12 @@ file(GLOB_RECURSE IMGUI_SOURCE "deps/imgui/*.cpp")
 add_library(imgui ${IMGUI_SOURCE})
 target_link_libraries(${PROJECT_NAME} imgui)
 
+# spirv reflect
+include_directories("deps/spirv_reflect")
+file(GLOB_RECURSE SPIRVR_SOURCE "deps/spirv_reflect/*.c")
+add_library(spirvr ${SPIRVR_SOURCE})
+target_link_libraries(${PROJECT_NAME} spirvr)
+
 # other includes
 include_directories("deps/")
 

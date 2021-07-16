@@ -5,7 +5,7 @@
 #include "PhysicalDevice.hpp"
 #include "Window.hpp"
 #include "Instance.hpp"
-#include "VulkanUtils.h"
+#include "VulkanUtils.hpp"
 
 void SwapChain::Create() {
     auto device = LogicalDevice::GetVkDevice();
@@ -232,76 +232,6 @@ void SwapChain::Create() {
 
         auto res = vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass);
         DEBUG_VK(res, "Failed to create render pass!");
-        // VkAttachmentDescription colorAttachment{};
-        // colorAttachment.format = colorFormat;
-        // colorAttachment.samples = numSamples;
-        // colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        // colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        // colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        // colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        // colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        // colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        // VkAttachmentDescription depthAttachment{};
-        // depthAttachment.format = depthFormat;
-        // depthAttachment.samples = numSamples;
-        // depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        // depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        // depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        // depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        // depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        // depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        // VkAttachmentDescription colorAttachmentResolve{};
-        // colorAttachmentResolve.format = colorFormat;
-        // colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-        // colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        // colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        // colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        // colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        // colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        // colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-        // VkAttachmentReference colorAttachmentRef{};
-        // colorAttachmentRef.attachment = 0;
-        // colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        // VkAttachmentReference depthAttachmentRef{};
-        // depthAttachmentRef.attachment = 1;
-        // depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        // VkAttachmentReference colorAttachmentResolveRef{};
-        // colorAttachmentResolveRef.attachment = 2;
-        // colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        // VkSubpassDescription subpass{};
-        // subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        // subpass.colorAttachmentCount = 1;
-        // subpass.pColorAttachments = &colorAttachmentRef;
-        // subpass.pDepthStencilAttachment = &depthAttachmentRef;
-        // subpass.pResolveAttachments = &colorAttachmentResolveRef;
-
-        // VkSubpassDependency dependency{};
-        // dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        // dependency.dstSubpass = 0;
-        // dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        // dependency.srcAccessMask = 0;
-        // dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        // dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        // std::array<VkAttachmentDescription, 3> attachments = {colorAttachment, depthAttachment, colorAttachmentResolve };
-        // VkRenderPassCreateInfo renderPassInfo{};
-        // renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        // renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        // renderPassInfo.pAttachments = attachments.data();
-        // renderPassInfo.subpassCount = 1;
-        // renderPassInfo.pSubpasses = &subpass;
-        // renderPassInfo.dependencyCount = 1;
-        // renderPassInfo.pDependencies = &dependency;
-
-        // if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-        //     throw std::runtime_error("failed to create render pass!");
-        // }
     }
 
     // create framebuffers
@@ -331,28 +261,6 @@ void SwapChain::Create() {
             auto res = vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffers[i]);
             DEBUG_VK(res, "Failed to create framebuffer!");
         }
-        // framebuffers.resize(images.size());
-
-        // for (size_t i = 0; i < views.size(); i++) {
-        //     std::array<VkImageView, 3> attachments = {
-        //         colorRes.view,
-        //         depthRes.view,
-        //         views[i]
-        //     };
-
-        //     VkFramebufferCreateInfo framebufferInfo{};
-        //     framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        //     framebufferInfo.renderPass = renderPass;
-        //     framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        //     framebufferInfo.pAttachments = attachments.data();
-        //     framebufferInfo.width = extent.width;
-        //     framebufferInfo.height = extent.height;
-        //     framebufferInfo.layers = 1;
-
-        //     if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffers[i]) != VK_SUCCESS) {
-        //         throw std::runtime_error("failed to create framebuffer!");
-        //     }
-        // }
     }
 
     LOG_INFO("Create Swapchain");
@@ -440,10 +348,10 @@ void SwapChain::OnImgui() {
             ImGui::SameLine(totalWidth*3.0/5.0f);
             ImGui::SetNextItemWidth(totalWidth*2.0/5.0f);
             ImGui::PushID("presentMode");
-            if (ImGui::BeginCombo("", VkPresentModeKHRStr(presentMode))) {
+            if (ImGui::BeginCombo("", LUZ_VkPresentModeKHRStr(presentMode))) {
                 for (auto mode : PhysicalDevice::GetPresentModes()) {
                     bool selected = mode == presentMode;
-                    if (ImGui::Selectable(VkPresentModeKHRStr(mode), selected) && !selected) {
+                    if (ImGui::Selectable(LUZ_VkPresentModeKHRStr(mode), selected) && !selected) {
                         presentMode = mode;
                         dirty = true;
                     }
@@ -461,11 +369,11 @@ void SwapChain::OnImgui() {
             ImGui::SameLine(totalWidth*3.0/5.0f);
             ImGui::SetNextItemWidth(totalWidth*2.0/5.0f);
             ImGui::PushID("samplesCombo");
-            if (ImGui::BeginCombo("", VkSampleCountFlagBitsStr(numSamples))) {
+            if (ImGui::BeginCombo("", LUZ_VkSampleCountFlagBitsStr(numSamples))) {
                 for (size_t i = 1; i <= PhysicalDevice::GetMaxSamples(); i *= 2) {
                     VkSampleCountFlagBits curSamples = (VkSampleCountFlagBits)i;
                     bool selected = curSamples == numSamples;
-                    if (ImGui::Selectable(VkSampleCountFlagBitsStr(curSamples), selected) && !selected) {
+                    if (ImGui::Selectable(LUZ_VkSampleCountFlagBitsStr(curSamples), selected) && !selected) {
                         numSamples = curSamples;
                         dirty = true;
                     }
@@ -482,8 +390,8 @@ void SwapChain::OnImgui() {
             if (ImGui::TreeNode("Surface Format")) {
                 auto surfaceFormats = PhysicalDevice::GetSurfaceFormats();
                 for (size_t i = 0; i < surfaceFormats.size(); i++) {
-                    const char* formatName = VkFormatStr(surfaceFormats[i].format);
-                    const char* spaceName = VkColorSpaceKHRStr(surfaceFormats[i].colorSpace);
+                    const char* formatName = LUZ_VkFormatStr(surfaceFormats[i].format);
+                    const char* spaceName = LUZ_VkColorSpaceKHRStr(surfaceFormats[i].colorSpace);
                     bool selected = (surfaceFormats[i].colorSpace == colorSpace && surfaceFormats[i].format == colorFormat);
                     ImGui::PushID(i);
                     if (ImGui::RadioButton("", selected)) {

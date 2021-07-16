@@ -28,9 +28,12 @@ void LogicalDevice::Create() {
 
     // logical device features
     VkPhysicalDeviceFeatures features{};
-    if (supportedFeatures.logicOp)           { features.logicOp = VK_TRUE;           }
+    if (supportedFeatures.logicOp)           { features.logicOp           = VK_TRUE; }
     if (supportedFeatures.samplerAnisotropy) { features.samplerAnisotropy = VK_TRUE; }
     if (supportedFeatures.sampleRateShading) { features.sampleRateShading = VK_TRUE; }
+    if (supportedFeatures.fillModeNonSolid)  { features.fillModeNonSolid  = VK_TRUE; }
+    if (supportedFeatures.wideLines)         { features.wideLines         = VK_TRUE; }
+    if (supportedFeatures.depthClamp)        { features.depthClamp        = VK_TRUE; }
 
     auto requiredExtensions = PhysicalDevice::GetRequiredExtensions();
     auto allExtensions = PhysicalDevice::GetExtensions();
