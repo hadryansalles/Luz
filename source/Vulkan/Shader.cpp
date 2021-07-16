@@ -3,13 +3,14 @@
 #include "Shader.hpp"
 #include "Instance.hpp"
 #include "LogicalDevice.hpp"
+#include <spirv_reflect.h>
 
 void Shader::Create(const ShaderDesc& desc, ShaderResource& res) {
     auto device = LogicalDevice::GetVkDevice();
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = desc.shaderBytes.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(desc.shaderBytes.data());
+    createInfo.pCode = (const uint32_t*)(desc.shaderBytes.data());
     auto result = vkCreateShaderModule(device, &createInfo, Instance::GetAllocator(), &res.shaderModule);
     DEBUG_VK(result, "Failed to create shader module!");
 
