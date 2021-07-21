@@ -10,6 +10,7 @@
 #include "Shader.hpp"
 #include "GraphicsPipeline.hpp"
 #include "FileManager.hpp"
+#include "Scene.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -108,6 +109,7 @@ class VulkanTutorialApplication {
 public:
     void run() {
         firstInitImgui();
+        Scene::Init();
         setupUnlitPipeline();
         initVulkan();
         mainLoop();
@@ -431,6 +433,8 @@ private:
             camera.OnImgui();
         }
         ImGui::End();
+
+        Scene::OnImgui();
 
         ImGuizmo::BeginFrame();
         static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
