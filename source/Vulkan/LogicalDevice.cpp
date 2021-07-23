@@ -5,8 +5,6 @@
 #include "LogicalDevice.hpp"
 
 void LogicalDevice::Create() {
-    auto instance = Instance::GetVkInstance();
-
     std::set<uint32_t> uniqueFamilies = {
         PhysicalDevice::GetPresentFamily(),
         PhysicalDevice::GetGraphicsFamily() 
@@ -69,17 +67,30 @@ void LogicalDevice::Create() {
     }
 
     auto res = vkCreateDevice(PhysicalDevice::GetVkPhysicalDevice(), &createInfo, nullptr, &device);
-    DEBUG_VK(res, "failed to create logical device!");
+    DEBUG_VK(res, "Failed to create logical device!");
 
     vkGetDeviceQueue(device, PhysicalDevice::GetGraphicsFamily(), 0, &graphicsQueue);
     vkGetDeviceQueue(device, PhysicalDevice::GetPresentFamily(), 0, &presentQueue);
+
+    // command pool
+    {
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.queueFamilyIndex = PhysicalDevice::GetGraphicsFamily();
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+        res = vkCreateCommandPool(device, &poolInfo, Instance::GetAllocator(), &commandPool);
+        DEBUG_VK(res, "Failed to create command pool!");
+    }
 
     dirty = false;
 }
 
 void LogicalDevice::Destroy() {
-    vkDestroyDevice(device, nullptr);
+    vkDestroyCommandPool(device, commandPool, Instance::GetAllocator());
+    vkDestroyDevice(device, Instance::GetAllocator());
     device = VK_NULL_HANDLE;
+    commandPool = VK_NULL_HANDLE;
     presentQueue = VK_NULL_HANDLE;
     graphicsQueue = VK_NULL_HANDLE;
 }
@@ -93,4 +104,37 @@ void LogicalDevice::OnImgui() {
             ImGui::TreePop();
         }
     }
+}
+
+VkCommandBuffer LogicalDevice::BeginSingleTimeCommands() {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    return commandBuffer;
+}
+
+void LogicalDevice::EndSingleTimeCommands(VkCommandBuffer& commandBuffer) {
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(LogicalDevice::GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(LogicalDevice::GetGraphicsQueue());
+
+    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }

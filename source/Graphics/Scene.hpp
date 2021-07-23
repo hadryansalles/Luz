@@ -6,7 +6,7 @@ class Scene {
 private:
     static inline std::filesystem::path path = "assets/Default.Luzscene";
     static inline bool dirty = true;
-    static inline bool autoReloadFiles = true;
+    static inline bool autoReloadFiles = false;
 
 public:
     static void Init();
