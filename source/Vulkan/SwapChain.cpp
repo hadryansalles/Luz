@@ -263,7 +263,46 @@ void SwapChain::Create() {
         }
     }
 
+    // create command buffers 
+    {
+        commandBuffers.resize(images.size());
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = LogicalDevice::GetCommandPool();
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
+
+        auto res = vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data());
+        DEBUG_VK(res, "Failed to allocate command buffers!");
+    }
+
+    // synchronization objects
+    {
+        imageAvailableSemaphores.resize(framesInFlight);
+        renderFinishedSemaphores.resize(framesInFlight);
+        inFlightFences.resize(framesInFlight);
+        imagesInFlight.resize(images.size(), VK_NULL_HANDLE);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    
+        for (size_t i = 0; i < framesInFlight; i++) {
+            auto res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
+            DEBUG_VK(res, "Failed to create semaphore!");
+            res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]);
+            DEBUG_VK(res, "Failed to create semaphore!");
+            res = vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]);
+            DEBUG_VK(res, "Failed to create fence!");
+        }
+    }
+
     LOG_INFO("Create Swapchain");
+    currentFrame = 0;
     dirty = false;
 }
 
@@ -279,14 +318,99 @@ void SwapChain::Destroy() {
         vkDestroyImageView(device, views[i], allocator);
     }
 
+    for (size_t i = 0; i < framesInFlight; i++) {
+        vkDestroySemaphore(device, imageAvailableSemaphores[i], allocator);
+        vkDestroySemaphore(device, renderFinishedSemaphores[i], allocator);
+        vkDestroyFence(device, inFlightFences[i], allocator);
+    }
+
+    vkFreeCommandBuffers(device, LogicalDevice::GetCommandPool(), (uint32_t)commandBuffers.size(), commandBuffers.data());
     vkDestroyRenderPass(device, renderPass, allocator);
     vkDestroySwapchainKHR(device, swapChain, allocator);
 
+    imageAvailableSemaphores.clear();
+    renderFinishedSemaphores.clear();
+    inFlightFences.clear();
+    imagesInFlight.clear();
+    commandBuffers.clear();
     framebuffers.clear();
     views.clear();
     images.clear();
     swapChain = VK_NULL_HANDLE;
     renderPass = VK_NULL_HANDLE;
+}
+
+uint32_t SwapChain::Acquire() {
+    auto device = LogicalDevice::GetVkDevice();
+
+    vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex;
+    auto res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+        dirty = true;
+    }
+    else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+        DEBUG_VK(res, "Failed to acquire swap chain image!");
+    }
+
+    return imageIndex;
+}
+
+void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
+    auto device = LogicalDevice::GetVkDevice();
+
+    // check if a previous frame is using this image
+    if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+        vkWaitForFences(device, 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+    }
+
+    // mark the image as now being in use by this frame
+    imagesInFlight[imageIndex] = inFlightFences[currentFrame];
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &(commandBuffers[imageIndex]);
+
+    VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    vkResetFences(device, 1, &inFlightFences[currentFrame]);
+
+    auto res = vkQueueSubmit(LogicalDevice::GetGraphicsQueue(), 1, &submitInfo, inFlightFences[currentFrame]);
+    DEBUG_VK(res, "Failed to submit draw command buffer!");
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = { swapChain };
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pResults = nullptr;
+
+    res = vkQueuePresentKHR(LogicalDevice::GetPresentQueue(), &presentInfo);
+
+    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+        dirty = true;
+        return;
+    } 
+    else if (res != VK_SUCCESS) {
+        DEBUG_VK(res, "Failed to present swap chain image!");
+    }
+
+    currentFrame = (currentFrame + 1) % framesInFlight;
 }
 
 void SwapChain::OnImgui() {
@@ -313,9 +437,6 @@ void SwapChain::OnImgui() {
                 else if (cap.maxImageCount > 0 && newFramesInFlight + additionalImages > cap.maxImageCount) {
                     newFramesInFlight = cap.maxImageCount - additionalImages;
                 }
-                else {
-                    framesInFlight = newFramesInFlight;
-                }
             }
             ImGui::PopID();
         }
@@ -335,9 +456,6 @@ void SwapChain::OnImgui() {
                 }
                 else if (cap.maxImageCount > 0 && newAdditionalImages + framesInFlight > cap.maxImageCount) {
                     newAdditionalImages = cap.maxImageCount - framesInFlight;
-                }
-                else {
-                    additionalImages = newAdditionalImages;
                 }
             }
             ImGui::PopID();
