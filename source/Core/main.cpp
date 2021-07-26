@@ -118,8 +118,8 @@ public:
     }
 
 private:
-    const std::string MODEL_PATH = "assets/models/viking_room.obj";
-    const std::string TEXTURE_PATH = "assets/models/viking_room.png";
+    const std::string MODEL_PATH = "assets/models/converse.obj";
+    const std::string TEXTURE_PATH = "assets/models/converse.jpg";
 
     // vulkan members
     GraphicsPipelineResource unlitPipeline;
