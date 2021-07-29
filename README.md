@@ -1,10 +1,29 @@
 # Luz Engine
 A Vulkan engine that I'm developing to study and implement modern rendering techniques used by AAA games.
-- [Videos](https://www.youtube.com/user/HadryanSalles/videos)
+- [Features](#features)
+- [How to build and run](#build)
+- [References and credits](#references)
+
+<a name="features"/>
 
 ## Features
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 - Widgets for adjusting Vulkan settings at runtime
+
+## Gallery
+
+- Graphics Pipeline configuration at runtime
+![Alt Text](assets/gifs/polygon.gif)
+
+- Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
+![Alt Text](assets/gifs/cameras.gif)
+
+- ImGui and ImGuizmo integration
+![Alt Text](assets/gifs/imgui.gif)
+
+- [More videos](https://www.youtube.com/user/HadryanSalles/videos)
+
+<a name="build"/>
 
 ## Requirements
 - C++17 compiler. Tested with ``Visual Studio 2019``, ``Clang`` and ``GCC``
@@ -22,7 +41,6 @@ sudo apt-get install xorg-dev
 If you are using another window manager (like Wayland) you can check the dependencies [here](https://www.glfw.org/docs/latest/compile.html#compile_deps).
 
 ## Build and Run
-
 ```sh
 git clone --recursive https://github.com/hadryansalles/Luz
 cd Luz
@@ -38,13 +56,7 @@ make run -j
 
 - Visual Studio: open ``build/Luz.sln`` and compile/run the project ``Luz``.
 
-## Gallery
-
-- Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
-![Alt Text](assets/gifs/cameras.gif)
-
-- ImGui and ImGuizmo integration
-![Alt Text](assets/gifs/imgui.gif)
+<a name="references"/>
 
 ## References and Credits
 
