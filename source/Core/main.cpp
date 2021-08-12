@@ -8,9 +8,10 @@
 #include "SwapChain.hpp"
 #include "Camera.hpp"
 #include "Shader.hpp"
-#include "GraphicsPipeline.hpp"
+#include "GraphicsPipelineManager.hpp"
+#include "UnlitGraphicsPipeline.hpp"
 #include "FileManager.hpp"
-#include "Buffers.hpp"
+#include "BuffersManager.hpp"
 #include "Scene.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -111,6 +112,7 @@ public:
     void run() {
         firstInitImgui();
         Scene::Init();
+        UnlitGraphicsPipeline::Setup();
         setupUnlitPipeline();
         initVulkan();
         mainLoop();
@@ -121,11 +123,6 @@ private:
     const std::string MODEL_PATH = "assets/models/converse.obj";
     const std::string TEXTURE_PATH = "assets/models/converse.jpg";
 
-    // vulkan members
-    GraphicsPipelineResource unlitPipeline;
-    GraphicsPipelineDesc unlitPipelineDesc;
-
-    VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
 
     // vertex buffers
@@ -162,16 +159,16 @@ private:
         LogicalDevice::Create();
         SwapChain::Create();
         DEBUG_TRACE("Finish creating SwapChain.");
-        createGraphicsPipeline();
+        GraphicsPipelineManager::Create();
+        UnlitGraphicsPipeline::Create();
         createTextureImage();
         createTextureImageView();
         createTextureSampler();
         loadModel();
         DEBUG_TRACE("Finish loading model.");
-        Buffers::CreateVertexBuffer(vertexBuffer, vertices.data(), sizeof(vertices[0]) * vertices.size());
-        Buffers::CreateIndexBuffer(indexBuffer, indices.data(), sizeof(indices[0]) * indices.size());
+        BuffersManager::CreateVertexBuffer(vertexBuffer, vertices.data(), sizeof(vertices[0]) * vertices.size());
+        BuffersManager::CreateIndexBuffer(indexBuffer, indices.data(), sizeof(indices[0]) * indices.size());
         createUniformBuffers();
-        createDescriptorPool();
         createDescriptorSets();
         initImgui();
         createUniformModelView();
@@ -190,8 +187,8 @@ private:
 
         cleanupSwapChain();
 
-        Buffers::Destroy(vertexBuffer);
-        Buffers::Destroy(indexBuffer);
+        BuffersManager::Destroy(vertexBuffer);
+        BuffersManager::Destroy(indexBuffer);
 
         vkDestroySampler(device, textureSampler, nullptr);
         vkDestroyImageView(device, textureImageView, nullptr);
@@ -200,7 +197,7 @@ private:
 
         LogicalDevice::Destroy();
         PhysicalDevice::Destroy();
-        Instance::Destroy();    
+        Instance::Destroy();
 
         uniformBuffers.clear();
 
@@ -208,16 +205,12 @@ private:
     }
 
     void cleanupSwapChain() {
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-
-        GraphicsPipeline::Destroy(unlitPipeline);
+        UnlitGraphicsPipeline::Destroy();
+        GraphicsPipelineManager::Destroy();
 
         for (size_t i = 0; i < SwapChain::GetNumFrames(); i++) {
-            Buffers::Destroy(uniformBuffers[i]);
+            BuffersManager::Destroy(uniformBuffers[i]);
         }
-
-        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
         cleanupImgui();
 
@@ -241,89 +234,6 @@ private:
     }
 
     void setupUnlitPipeline() {
-        unlitPipelineDesc.name = "Unlit";
-
-        unlitPipelineDesc.shaderStages.resize(2);
-        unlitPipelineDesc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/shader.vert.spv");
-        unlitPipelineDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        unlitPipelineDesc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/shader.frag.spv");
-        unlitPipelineDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        unlitPipelineDesc.bindingDesc = Vertex::getBindingDescription();
-        unlitPipelineDesc.attributesDesc = Vertex::getAttributeDescriptions();
-
-        unlitPipelineDesc.rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        // fragments beyond near and far planes are clamped to them
-        unlitPipelineDesc.rasterizer.depthClampEnable = VK_FALSE;
-        unlitPipelineDesc.rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        unlitPipelineDesc.rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        // line thickness in terms of number of fragments
-        unlitPipelineDesc.rasterizer.lineWidth = 1.0f;
-        unlitPipelineDesc.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        unlitPipelineDesc.rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        unlitPipelineDesc.rasterizer.depthBiasEnable = VK_FALSE;
-        unlitPipelineDesc.rasterizer.depthBiasConstantFactor = 0.0f;
-        unlitPipelineDesc.rasterizer.depthBiasClamp = 0.0f;
-        unlitPipelineDesc.rasterizer.depthBiasSlopeFactor = 0.0f;
-
-        unlitPipelineDesc.multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        unlitPipelineDesc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
-        unlitPipelineDesc.multisampling.sampleShadingEnable = VK_FALSE;
-        unlitPipelineDesc.multisampling.minSampleShading = 0.5f;
-        unlitPipelineDesc.multisampling.pSampleMask = nullptr;
-
-        unlitPipelineDesc.depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        unlitPipelineDesc.depthStencil.depthTestEnable = VK_TRUE;
-        unlitPipelineDesc.depthStencil.depthWriteEnable = VK_TRUE;
-        unlitPipelineDesc.depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-        unlitPipelineDesc.depthStencil.depthBoundsTestEnable = VK_FALSE;
-        unlitPipelineDesc.depthStencil.minDepthBounds = 0.0f;
-        unlitPipelineDesc.depthStencil.maxDepthBounds = 1.0f;
-        unlitPipelineDesc.depthStencil.stencilTestEnable = VK_FALSE;
-        unlitPipelineDesc.depthStencil.front = {};
-        unlitPipelineDesc.depthStencil.back = {};
-
-        unlitPipelineDesc.colorBlendAttachment.colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
-        unlitPipelineDesc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-        unlitPipelineDesc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-        unlitPipelineDesc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-        unlitPipelineDesc.colorBlendAttachment.blendEnable = VK_TRUE;
-        unlitPipelineDesc.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        unlitPipelineDesc.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        unlitPipelineDesc.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        unlitPipelineDesc.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        unlitPipelineDesc.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        unlitPipelineDesc.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-
-        unlitPipelineDesc.colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        unlitPipelineDesc.colorBlendState.logicOpEnable = VK_FALSE;
-        unlitPipelineDesc.colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-        unlitPipelineDesc.colorBlendState.attachmentCount = 1;
-        unlitPipelineDesc.colorBlendState.pAttachments = &unlitPipelineDesc.colorBlendAttachment;
-        unlitPipelineDesc.colorBlendState.blendConstants[0] = 0.0f;
-        unlitPipelineDesc.colorBlendState.blendConstants[1] = 0.0f;
-        unlitPipelineDesc.colorBlendState.blendConstants[2] = 0.0f;
-        unlitPipelineDesc.colorBlendState.blendConstants[3] = 0.0f;
-
-        unlitPipelineDesc.bindings.resize(2);
-        unlitPipelineDesc.bindings[0].binding = 0;
-        unlitPipelineDesc.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        unlitPipelineDesc.bindings[0].descriptorCount = 1;
-        // here we specify in which shader stages the buffer will by referenced
-        unlitPipelineDesc.bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        // only relevant for image sampling related descriptors
-        unlitPipelineDesc.bindings[0].pImmutableSamplers = nullptr;
-
-        unlitPipelineDesc.bindings[1].binding = 1;
-        unlitPipelineDesc.bindings[1].descriptorCount = 1;
-        unlitPipelineDesc.bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        unlitPipelineDesc.bindings[1].pImmutableSamplers = nullptr;
-        unlitPipelineDesc.bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-
-    void createGraphicsPipeline() {
-        unlitPipelineDesc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
-        GraphicsPipeline::Create(unlitPipelineDesc, unlitPipeline);
     }
 
     void imguiDrawFrame() {
@@ -339,7 +249,7 @@ private:
             PhysicalDevice::OnImgui();
             LogicalDevice::OnImgui();
             SwapChain::OnImgui();
-            GraphicsPipeline::OnImgui(unlitPipelineDesc, unlitPipeline);
+            UnlitGraphicsPipeline::OnImgui();
             camera.OnImgui();
         }
         ImGui::End();
@@ -438,7 +348,8 @@ private:
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitPipeline.pipeline);
+        auto unlitGPO = UnlitGraphicsPipeline::GetResource();
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
 
         VkBuffer vertexBuffers[] = { vertexBuffer.buffer };
         VkDeviceSize offsets[] = { 0 };
@@ -449,7 +360,7 @@ private:
         // command buffer, vertex count, instance count, first vertex, first instance
         // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitPipeline.layout, 0,
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
             1, &descriptorSets[frameIndex], 0, nullptr);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
@@ -466,46 +377,45 @@ private:
         imguiDrawFrame();
 
         auto image = SwapChain::Acquire(); 
-        if (dirtyFrameResources()) {
-            recreateSwapChain();
-            return;
-        }
 
         updateUniformBuffer(image);
         updateCommandBuffer(image);
 
         SwapChain::SubmitAndPresent(image);
         if (dirtyFrameResources()) {
-            recreateSwapChain();
+            recreateFrameResources();
             return;
         }
     }
 
     bool dirtyFrameResources() {
-        return SwapChain::IsDirty() || Window::GetFramebufferResized() || unlitPipeline.dirty;
+        return SwapChain::IsDirty() || Window::GetFramebufferResized() || UnlitGraphicsPipeline::IsDirty();
     }
 
-    void recreateSwapChain() {
+    void recreateFrameResources() {
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
-        // busy wait while the window is minimized
-        while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
-            Window::WaitEvents();
-        }
-        Window::UpdateFramebufferSize();
-
         vkDeviceWaitIdle(device);
-
-        cleanupSwapChain();
-
-        PhysicalDevice::OnSurfaceUpdate();
-        SwapChain::Create();
-        createGraphicsPipeline();
-        createUniformBuffers();
-        createDescriptorPool();
-        createDescriptorSets();
-        initImgui();
-        createUniformProjection();
+        if (Window::GetFramebufferResized() || SwapChain::IsDirty()) {
+            // busy wait while the window is minimized
+            while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
+                Window::WaitEvents();
+            }
+            Window::UpdateFramebufferSize();
+            vkDeviceWaitIdle(device);
+            cleanupSwapChain();
+            PhysicalDevice::OnSurfaceUpdate();
+            SwapChain::Create();
+            GraphicsPipelineManager::Create();
+            UnlitGraphicsPipeline::Create();
+            createUniformBuffers();
+            createDescriptorSets();
+            initImgui();
+            createUniformProjection();
+        } else if (UnlitGraphicsPipeline::IsDirty()) {
+            UnlitGraphicsPipeline::Destroy();
+            UnlitGraphicsPipeline::Create();
+        }
     }
 
     void createUniformBuffers() {
@@ -518,7 +428,7 @@ private:
         uniformDesc.size = sizeof(UniformBufferObject);
 
         for (size_t i = 0; i < numFrames; i++) {
-            Buffers::Create(uniformDesc, uniformBuffers[i]);
+            BuffersManager::Create(uniformDesc, uniformBuffers[i]);
         }
     }
 
@@ -536,41 +446,18 @@ private:
     void updateUniformBuffer(uint32_t currentImage) {
         ubo.view = camera.GetView();
         ubo.proj = camera.GetProj();
-        Buffers::Update(uniformBuffers[currentImage], &ubo, sizeof(ubo));
-    }
-
-    void createDescriptorPool() {
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-        auto numFrames = SwapChain::GetNumFrames();
-        uint32_t sets = static_cast<uint32_t>(numFrames);
-
-        std::array<VkDescriptorPoolSize, 2> poolSizes{};
-        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(numFrames);
-        poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(numFrames + 1);
-
-        VkDescriptorPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        poolInfo.maxSets = 2*static_cast<uint32_t>(numFrames);
-        poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-        poolInfo.pPoolSizes = poolSizes.data();
-
-        if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create descriptor pool!");
-        }
+        BuffersManager::Update(uniformBuffers[currentImage], &ubo, sizeof(ubo));
     }
 
     void createDescriptorSets() {
         auto numFrames = SwapChain::GetNumFrames();
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
-        std::vector<VkDescriptorSetLayout> layouts(numFrames, unlitPipeline.descriptorSetLayout);
+        auto unlitGPO = UnlitGraphicsPipeline::GetResource();
+        std::vector<VkDescriptorSetLayout> layouts(numFrames, unlitGPO.descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = descriptorPool;
+        allocInfo.descriptorPool = GraphicsPipelineManager::GetDescriptorPool();
         allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
         allocInfo.pSetLayouts = layouts.data();
 
@@ -759,7 +646,7 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
         mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
 
         BufferResource staging;
-        Buffers::CreateStagingBuffer(staging, pixels, imageSize);
+        BuffersManager::CreateStagingBuffer(staging, pixels, imageSize);
 
         stbi_image_free(pixels);
         
@@ -774,7 +661,7 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
         //     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);
         generateMipmaps(textureImage, colorFormat, texWidth, texHeight, mipLevels);
 
-        Buffers::Destroy(staging);
+        BuffersManager::Destroy(staging);
     }
 
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
@@ -972,7 +859,7 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
         initInfo.QueueFamily = PhysicalDevice::GetGraphicsFamily();
         initInfo.Queue = LogicalDevice::GetGraphicsQueue();
         initInfo.PipelineCache = VK_NULL_HANDLE;
-        initInfo.DescriptorPool = descriptorPool;
+        initInfo.DescriptorPool = GraphicsPipelineManager::GetDescriptorPool();
         initInfo.MinImageCount = 2;
         initInfo.ImageCount = (uint32_t)SwapChain::GetNumFrames();
         initInfo.MSAASamples = SwapChain::GetNumSamples();

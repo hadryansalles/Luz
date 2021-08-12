@@ -27,10 +27,10 @@ struct MeshVertex {
         return bindingDescription;
     }
 
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+    static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() {
         // describe how to extract each vertex attribute from the chunk of data
         // inside the binding description
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions;
+        std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
         attributeDescriptions[0].binding  = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format   = VK_FORMAT_R32G32B32_SFLOAT;

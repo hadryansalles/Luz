@@ -1,13 +1,40 @@
 #include "Luzpch.hpp"
 
-#include "GraphicsPipeline.hpp"
+#include "GraphicsPipelineManager.hpp"
 #include "PhysicalDevice.hpp"
 #include "LogicalDevice.hpp"
 #include "SwapChain.hpp"
 #include "Instance.hpp"
 #include "VulkanUtils.hpp"
 
-void GraphicsPipeline::Create(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
+void GraphicsPipelineManager::Create() {
+    auto device = LogicalDevice::GetVkDevice();
+    auto allocator = Instance::GetAllocator();
+    auto numFrames = SwapChain::GetNumFrames();
+    uint32_t sets = static_cast<uint32_t>(numFrames);
+
+    std::array<VkDescriptorPoolSize, 2> poolSizes{};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(numFrames);
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(numFrames + 1);
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    poolInfo.maxSets = 2*static_cast<uint32_t>(numFrames);
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+
+    auto result = vkCreateDescriptorPool(device, &poolInfo, allocator, &descriptorPool);
+    DEBUG_VK(result, "Failed to create descriptor pool!");
+}
+
+void GraphicsPipelineManager::Destroy() {
+    vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), descriptorPool, Instance::GetAllocator());
+}
+
+void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
 
@@ -101,13 +128,13 @@ void GraphicsPipeline::Create(const GraphicsPipelineDesc& desc, GraphicsPipeline
     res.dirty = false;
 }
 
-void GraphicsPipeline::Destroy(GraphicsPipelineResource& res) {
+void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
     vkDestroyPipeline(LogicalDevice::GetVkDevice(), res.pipeline, Instance::GetAllocator());
     vkDestroyPipelineLayout(LogicalDevice::GetVkDevice(), res.layout, Instance::GetAllocator());
     vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.descriptorSetLayout, Instance::GetAllocator());
 }
 
-void GraphicsPipeline::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
+void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_DefaultOpen;
     const float totalWidth = ImGui::GetContentRegionAvailWidth();
     std::string name = desc.name + " Graphics Pipeline";

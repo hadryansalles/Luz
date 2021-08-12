@@ -25,9 +25,15 @@ struct GraphicsPipelineResource {
     bool                  dirty               = false;
 };
 
-class GraphicsPipeline {
+class GraphicsPipelineManager {
+    static inline VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+
 public:
-    static void Create(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
-    static void Destroy(GraphicsPipelineResource& res);
+    static void Create();
+    static void Destroy();
+    static void CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
+    static void DestroyPipeline(GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
+
+    static inline VkDescriptorPool GetDescriptorPool() { return descriptorPool; }
 };
