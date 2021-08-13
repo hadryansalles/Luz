@@ -1,6 +1,6 @@
 #include "Luzpch.hpp"
 
-#include "Mesh.hpp"
+#include "MeshManager.hpp"
 #include "UnlitGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
@@ -70,20 +70,24 @@ void UnlitGraphicsPipeline::Setup() {
     desc.colorBlendState.blendConstants[2] = 0.0f;
     desc.colorBlendState.blendConstants[3] = 0.0f;
 
-    desc.bindings.resize(2);
+    desc.bindings.resize(3);
     desc.bindings[0].binding = 0;
     desc.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[0].descriptorCount = 1;
-    // here we specify in which shader stages the buffer will by referenced
     desc.bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    // only relevant for image sampling related descriptors
-    desc.bindings[0].pImmutableSamplers = nullptr;
 
-    desc.bindings[1].binding = 1;
+    desc.bindings[1].binding = 0;
+    desc.bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[1].descriptorCount = 1;
-    desc.bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc.bindings[1].pImmutableSamplers = nullptr;
-    desc.bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    desc.bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    desc.bindings[2].binding = 0;
+    desc.bindings[2].descriptorCount = 1;
+    desc.bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    // only relevant for image sampling related descriptors
+    desc.bindings[2].pImmutableSamplers = nullptr;
+    // here we specify in which shader stages the buffer will by referenced
+    desc.bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 }
 
 void UnlitGraphicsPipeline::Create() {

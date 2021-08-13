@@ -19,10 +19,12 @@ struct GraphicsPipelineDesc {
 };
 
 struct GraphicsPipelineResource {
-    VkPipeline            pipeline            = VK_NULL_HANDLE;
-    VkPipelineLayout      layout              = VK_NULL_HANDLE;
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    bool                  dirty               = false;
+    VkPipeline            pipeline                 = VK_NULL_HANDLE;
+    VkPipelineLayout      layout                   = VK_NULL_HANDLE;
+    VkDescriptorSetLayout sceneDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout modelDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textureDescriptorSetLayout = VK_NULL_HANDLE;
+    bool                  dirty                    = false;
 };
 
 class GraphicsPipelineManager {
