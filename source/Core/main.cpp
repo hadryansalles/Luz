@@ -3,7 +3,7 @@
 #include "PhysicalDevice.hpp"
 #include "LogicalDevice.hpp"
 #include "Instance.hpp"
-#include "Image.hpp"
+#include "ImageManager.hpp"
 #include "Window.hpp"
 #include "SwapChain.hpp"
 #include "Camera.hpp"
@@ -11,14 +11,12 @@
 #include "GraphicsPipelineManager.hpp"
 #include "UnlitGraphicsPipeline.hpp"
 #include "FileManager.hpp"
-#include "BuffersManager.hpp"
-#include "Scene.hpp"
+#include "BufferManager.hpp"
+#include "SceneManager.hpp"
+#include "TextureManager.hpp"
+#include "AssetManager.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
 
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_vulkan.h>
@@ -36,100 +34,20 @@ void CheckVulkanResult(VkResult res) {
     }
 }
 
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
-
-    bool operator==(const Vertex& other) const {
-        return pos == other.pos && color == other.color && texCoord == other.texCoord;
-    }
-
-    static VkVertexInputBindingDescription getBindingDescription() {
-        // specifies at which rate load data from memory throughout the vertices,
-        // number of bytes between data entries 
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return bindingDescription;
-    }
-
-    static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() {
-        // describe how to extract each vertex attribute from the chunk of data
-        // inside the binding description
-        std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
-        attributeDescriptions[0].binding  = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset   = offsetof(Vertex, pos);;
-
-        attributeDescriptions[1].binding  = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset   = offsetof(Vertex, color);;
-
-        attributeDescriptions[2].binding  = 0;
-        attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format   = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset   = offsetof(Vertex, texCoord);;
-
-        return attributeDescriptions;
-    }
-};
-
-namespace std {
-    template<> struct hash<Vertex> {
-        size_t operator()(Vertex const& vertex) const {
-            return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-                (hash<glm::vec2>()(vertex.texCoord) << 1);
-        }
-    };
-}
-
-// vulkan always expect data to be alligned with multiples of 16
-struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-};
-
-struct Transform {
-    glm::vec3 position = glm::vec3(.0f);
-    glm::vec3 rotation = glm::vec3(.0f);
-    glm::vec3 scale = glm::vec3(1.0f);
-
-    glm::mat4 getMatrix() {
-        glm::mat4 rotationMat = glm::toMat4(glm::quat(glm::radians(rotation)));
-        glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), position);
-        glm::mat4 scaleMat = glm::scale(scale);
-        return translationMat * scaleMat * rotationMat;
-    }
-};
-
 class VulkanTutorialApplication {
 public:
     void run() {
-        firstInitImgui();
-        Scene::Init();
-        UnlitGraphicsPipeline::Setup();
-        setupUnlitPipeline();
-        initVulkan();
-        mainLoop();
-        cleanup();
+        Setup();
+        Create();
+        MainLoop();
+        Destroy();
     }
 
 private:
     const std::string MODEL_PATH = "assets/models/converse.obj";
-    const std::string TEXTURE_PATH = "assets/models/converse.jpg";
+    const std::string TEXTURE_PATH = "assets/models/checker.png";
 
-    std::vector<VkDescriptorSet> descriptorSets;
-
-    // vertex buffers
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    BufferResource vertexBuffer;
-    BufferResource indexBuffer;
+    SceneUBO sceneUBO;
 
     // image 
     uint32_t mipLevels;
@@ -137,22 +55,23 @@ private:
     VkSampler textureSampler;
     VkImageView textureImageView;
     VkDeviceMemory textureImageMemory;
+    VkDescriptorSet textureDescriptor;
 
-    std::vector<BufferResource> uniformBuffers;
+    TextureResource* textureResource;
 
     // imgui
     ImDrawData* imguiDrawData = nullptr;
 
-    // imguizmo
-
-    // uniform
-    UniformBufferObject ubo;
-    Transform transform;
-
     // camera 
     Camera camera;
 
-    void initVulkan() {
+    void Setup() {
+        UnlitGraphicsPipeline::Setup();
+        SceneManager::Setup();
+    }
+
+    void Create() {
+        SetupImgui();
         Window::Create();
         Instance::Create();
         PhysicalDevice::Create();
@@ -164,31 +83,64 @@ private:
         createTextureImage();
         createTextureImageView();
         createTextureSampler();
-        loadModel();
+        createTextureDescriptor();
         DEBUG_TRACE("Finish loading model.");
-        BuffersManager::CreateVertexBuffer(vertexBuffer, vertices.data(), sizeof(vertices[0]) * vertices.size());
-        BuffersManager::CreateIndexBuffer(indexBuffer, indices.data(), sizeof(indices[0]) * indices.size());
-        createUniformBuffers();
-        createDescriptorSets();
-        initImgui();
-        createUniformModelView();
+        CreateImgui();
         createUniformProjection();
         DEBUG_TRACE("Finish initializing Vulkan.");
+        SceneManager::Create();
     }
     
-    void cleanup() {
-        cleanupVulkan();
-        finishImgui();
+    void createTextureDescriptor() {
+        auto device = LogicalDevice::GetVkDevice();
+        auto allocator = Instance::GetAllocator();
+        auto unlitGPO = UnlitGraphicsPipeline::GetResource();
+
+        textureResource = AssetManager::LoadImageFile(TEXTURE_PATH);
+
+        std::vector<VkDescriptorSetLayout> layouts(1, unlitGPO.textureDescriptorSetLayout);
+
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = GraphicsPipelineManager::GetDescriptorPool();
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = layouts.data();
+
+        auto vkRes = vkAllocateDescriptorSets(device, &allocInfo, &textureDescriptor);
+
+        DEBUG_VK(vkRes, "Failed to allocate scene descriptor sets!");
+        std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = textureResource->image.view;
+        imageInfo.sampler = textureResource->sampler;
+
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstSet = textureDescriptor;
+        descriptorWrites[0].dstBinding = 0;
+        descriptorWrites[0].dstArrayElement = 0;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
 
-    void cleanupVulkan() {
+    void Destroy() {
+        DestroyVulkan();
+        FinishImgui();
+    }
+
+    void DestroyVulkan() {
+        SceneManager::Destroy();
+        MeshManager::Destroy();
+        TextureManager::Destroy();
+
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
 
-        cleanupSwapChain();
-
-        BuffersManager::Destroy(vertexBuffer);
-        BuffersManager::Destroy(indexBuffer);
+        DestroySwapChain();
 
         vkDestroySampler(device, textureSampler, nullptr);
         vkDestroyImageView(device, textureImageView, nullptr);
@@ -198,27 +150,20 @@ private:
         LogicalDevice::Destroy();
         PhysicalDevice::Destroy();
         Instance::Destroy();
-
-        uniformBuffers.clear();
-
         Window::Destroy();
     }
 
-    void cleanupSwapChain() {
+    void DestroySwapChain() {
         UnlitGraphicsPipeline::Destroy();
         GraphicsPipelineManager::Destroy();
 
-        for (size_t i = 0; i < SwapChain::GetNumFrames(); i++) {
-            BuffersManager::Destroy(uniformBuffers[i]);
-        }
-
-        cleanupImgui();
+        DestroyImgui();
 
         SwapChain::Destroy();
         LOG_INFO("Destroyed SwapChain.");
     }
 
-    void mainLoop() {
+    void MainLoop() {
         auto instance = Instance::GetVkInstance();
         while (!Window::GetShouldClose()) {
             Window::Update();
@@ -226,14 +171,11 @@ private:
             drawFrame();
             if (Instance::IsDirty() || PhysicalDevice::IsDirty() || Window::IsDirty()) {
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-                cleanupVulkan();
-                initVulkan();
+                Destroy();
+                Create();
             }
         }
         vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-    }
-
-    void setupUnlitPipeline() {
     }
 
     void imguiDrawFrame() {
@@ -254,63 +196,70 @@ private:
         }
         ImGui::End();
 
-        Scene::OnImgui();
+        SceneManager::OnImgui();
 
         ImGuizmo::BeginFrame();
         static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
         static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-        if (ImGui::Begin("Transform")) {
-            if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
-                currentGizmoOperation = ImGuizmo::TRANSLATE;
-            }
-            if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
-                currentGizmoOperation = ImGuizmo::ROTATE;
-            }
-            if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
-                currentGizmoOperation = ImGuizmo::SCALE;
-            }
-            if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
-                currentGizmoOperation = ImGuizmo::TRANSLATE;
-            }
-            ImGui::SameLine();
-            if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
-                currentGizmoOperation = ImGuizmo::ROTATE;
-            }
-            ImGui::SameLine();
-            if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
-                currentGizmoOperation = ImGuizmo::SCALE;
-            }
+        Model* selectedModel = SceneManager::GetSelectedModel();
 
-            ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
-            ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
-            ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
-            ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation), 
-                glm::value_ptr(transform.scale), glm::value_ptr(ubo.model));
-
-            if (currentGizmoOperation != ImGuizmo::SCALE) {
-                if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
-                    currentGizmoMode = ImGuizmo::LOCAL;
+        if (selectedModel != nullptr) {
+            if (ImGui::Begin("Transform")) {
+                Transform& transform = selectedModel->transform;
+                ModelUBO& modelUBO = selectedModel->ubo;
+     
+                if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+                    currentGizmoOperation = ImGuizmo::TRANSLATE;
+                }
+                if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+                    currentGizmoOperation = ImGuizmo::ROTATE;
+                }
+                if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+                    currentGizmoOperation = ImGuizmo::SCALE;
+                }
+                if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
+                    currentGizmoOperation = ImGuizmo::TRANSLATE;
                 }
                 ImGui::SameLine();
-                if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
-                    currentGizmoMode = ImGuizmo::WORLD;
+                if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
+                    currentGizmoOperation = ImGuizmo::ROTATE;
                 }
-            } else {
-                currentGizmoMode = ImGuizmo::LOCAL;
+                ImGui::SameLine();
+                if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
+                    currentGizmoOperation = ImGuizmo::SCALE;
+                }
+
+                ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
+                ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
+                ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
+                ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation), 
+                    glm::value_ptr(transform.scale), glm::value_ptr(modelUBO.model));
+
+                if (currentGizmoOperation != ImGuizmo::SCALE) {
+                    if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
+                        currentGizmoMode = ImGuizmo::LOCAL;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
+                        currentGizmoMode = ImGuizmo::WORLD;
+                    }
+                } else {
+                    currentGizmoMode = ImGuizmo::LOCAL;
+                }
+
+                glm::mat4 guizmoProj(sceneUBO.proj);
+                guizmoProj[1][1] *= -1;
+
+                ImGuiIO& io = ImGui::GetIO();
+                ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+                ImGuizmo::Manipulate(glm::value_ptr(sceneUBO.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
+                    currentGizmoMode, glm::value_ptr(modelUBO.model), nullptr, nullptr);
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(modelUBO.model), glm::value_ptr(transform.position), 
+                    glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
             }
-
-            glm::mat4 guizmoProj(ubo.proj);
-            guizmoProj[1][1] *= -1;
-
-            ImGuiIO& io = ImGui::GetIO();
-            ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-            ImGuizmo::Manipulate(glm::value_ptr(ubo.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
-                currentGizmoMode, glm::value_ptr(ubo.model), nullptr, nullptr);
-            ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(ubo.model), glm::value_ptr(transform.position), 
-                glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
+            ImGui::End();
         }
-        ImGui::End();
 
         ImGui::ShowDemoWindow();
 
@@ -348,21 +297,28 @@ private:
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+        auto sceneDescriptor = SceneManager::GetSceneDescriptor(frameIndex);
         auto unlitGPO = UnlitGraphicsPipeline::GetResource();
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
-
-        VkBuffer vertexBuffers[] = { vertexBuffer.buffer };
-        VkDeviceSize offsets[] = { 0 };
-
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-        // command buffer, vertex count, instance count, first vertex, first instance
-        // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
-            1, &descriptorSets[frameIndex], 0, nullptr);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+                    1, &sceneDescriptor, 0, nullptr);
+
+        for (const Model* model : SceneManager::GetModels()) {
+            if (model->mesh != nullptr) {
+                MeshResource* mesh = model->mesh;
+                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                // command buffer, vertex count, instance count, first vertex, first instance
+                // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
+                    1, &model->descriptors[frameIndex], 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
+                    1, &model->materialDescriptors[frameIndex], 0, nullptr);
+                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
+            }
+        }
 
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
 
@@ -403,37 +359,19 @@ private:
             }
             Window::UpdateFramebufferSize();
             vkDeviceWaitIdle(device);
-            cleanupSwapChain();
+            DestroySwapChain();
             PhysicalDevice::OnSurfaceUpdate();
             SwapChain::Create();
             GraphicsPipelineManager::Create();
             UnlitGraphicsPipeline::Create();
-            createUniformBuffers();
-            createDescriptorSets();
-            initImgui();
+            SceneManager::RecreateDescriptors();
+            createTextureDescriptor();
+            CreateImgui();
             createUniformProjection();
         } else if (UnlitGraphicsPipeline::IsDirty()) {
             UnlitGraphicsPipeline::Destroy();
             UnlitGraphicsPipeline::Create();
         }
-    }
-
-    void createUniformBuffers() {
-        auto numFrames = SwapChain::GetNumFrames();
-        uniformBuffers.resize(numFrames);
-
-        BufferDesc uniformDesc;
-        uniformDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        uniformDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        uniformDesc.size = sizeof(UniformBufferObject);
-
-        for (size_t i = 0; i < numFrames; i++) {
-            BuffersManager::Create(uniformDesc, uniformBuffers[i]);
-        }
-    }
-
-    void createUniformModelView() {
-        ubo.model = glm::mat4(1.0f);
     }
 
     void createUniformProjection() {
@@ -444,60 +382,13 @@ private:
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
-        ubo.view = camera.GetView();
-        ubo.proj = camera.GetProj();
-        BuffersManager::Update(uniformBuffers[currentImage], &ubo, sizeof(ubo));
-    }
-
-    void createDescriptorSets() {
-        auto numFrames = SwapChain::GetNumFrames();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-        auto unlitGPO = UnlitGraphicsPipeline::GetResource();
-        std::vector<VkDescriptorSetLayout> layouts(numFrames, unlitGPO.descriptorSetLayout);
-        VkDescriptorSetAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = GraphicsPipelineManager::GetDescriptorPool();
-        allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-        allocInfo.pSetLayouts = layouts.data();
-
-        descriptorSets.resize(numFrames);
-        if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-            throw std::runtime_error("failed to allocate descriptor sets!");
+        for (Model* model : SceneManager::GetModels()) {
+            BufferManager::Update(model->buffers[currentImage], &model->ubo, sizeof(model->ubo));
         }
 
-        for (size_t i = 0; i < numFrames; i++) {
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = uniformBuffers[i].buffer;
-            bufferInfo.offset = 0;
-            bufferInfo.range = sizeof(UniformBufferObject);
-
-            VkDescriptorImageInfo imageInfo{};
-            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfo.imageView = textureImageView;
-            imageInfo.sampler = textureSampler;
-
-            std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-
-descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-descriptorWrites[0].dstSet = descriptorSets[i];
-descriptorWrites[0].dstBinding = 0;
-// in the case of our descriptors being arrays, we specify the index
-descriptorWrites[0].dstArrayElement = 0;
-descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-descriptorWrites[0].descriptorCount = 1;
-descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-descriptorWrites[1].dstSet = descriptorSets[i];
-descriptorWrites[1].dstBinding = 1;
-descriptorWrites[1].dstArrayElement = 0;
-descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-descriptorWrites[1].descriptorCount = 1;
-descriptorWrites[1].pImageInfo = &imageInfo;
-
-vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-        }
+        sceneUBO.view = camera.GetView();
+        sceneUBO.proj = camera.GetProj();
+        BufferManager::Update(SceneManager::GetUniformBuffer(currentImage), &sceneUBO, sizeof(sceneUBO));
     }
 
     void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, 
@@ -646,7 +537,7 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
         mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
 
         BufferResource staging;
-        BuffersManager::CreateStagingBuffer(staging, pixels, imageSize);
+        BufferManager::CreateStagingBuffer(staging, pixels, imageSize);
 
         stbi_image_free(pixels);
         
@@ -661,7 +552,7 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
         //     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);
         generateMipmaps(textureImage, colorFormat, texWidth, texHeight, mipLevels);
 
-        BuffersManager::Destroy(staging);
+        BufferManager::Destroy(staging);
     }
 
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
@@ -751,9 +642,7 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
     }
 
     void createTextureImageView() {
-        auto image = VulkanImage();
-        image.Create(textureImage, mipLevels, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
-        textureImageView = image.view;
+        textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
     }
 
     void createTextureSampler() {
@@ -792,61 +681,15 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
             throw std::runtime_error("failed to create texture sampler!");
         }
     }
-    
-    bool hasStencilComponent(VkFormat format) {
-        return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-    }
 
-    void loadModel() {
-        if (vertices.size() || indices.size()) {
-            return;
-        }
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn, err;
-
-        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-            throw std::runtime_error(warn + err);
-        }
-
-        for (const auto& shape : shapes) {
-            for (const auto& index : shape.mesh.indices) {
-                Vertex vertex{};
-
-                vertex.pos = {
-                    attrib.vertices[3 * index.vertex_index + 0],
-                    attrib.vertices[3 * index.vertex_index + 1],
-                    attrib.vertices[3 * index.vertex_index + 2]
-                };
-
-                vertex.texCoord = {
-                    attrib.texcoords[2 * index.texcoord_index + 0],
-                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                };
-
-                vertex.color = { 1.0f, 1.0f, 1.0f };
-
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                    vertices.push_back(vertex);
-                }
-
-                indices.push_back(uniqueVertices[vertex]);
-            }
-        }
-    }
-
-    void firstInitImgui() {
+    void SetupImgui() {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         ImGui::StyleColorsDark();
     }
 
-    void initImgui() {
+    void CreateImgui() {
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
 
@@ -873,12 +716,12 @@ vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), d
         ImGui_ImplVulkan_DestroyFontUploadObjects();
     }
 
-    void cleanupImgui() {
+    void DestroyImgui() {
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
     }
     
-    void finishImgui() {
+    void FinishImgui() {
         ImGui::DestroyContext();
     }
 };

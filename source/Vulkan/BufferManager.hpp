@@ -13,7 +13,7 @@ struct BufferResource {
     VkDeviceMemory memory;
 };
 
-class BuffersManager {
+class BufferManager {
 public:
     static void Create(const BufferDesc& desc, BufferResource& res);
     static void CreateStaged(const BufferDesc& desc, BufferResource& res, void* data);

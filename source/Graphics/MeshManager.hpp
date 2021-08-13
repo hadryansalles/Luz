@@ -8,6 +8,8 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
+#include "BufferManager.hpp"
+
 struct MeshVertex {
     glm::vec3 pos;
     glm::vec3 color;
@@ -59,17 +61,23 @@ namespace std {
     };
 }
 
-struct MeshResource {
+struct MeshDesc {
     std::vector<MeshVertex> vertices;
     std::vector<uint32_t> indices;
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
 };
 
-class Mesh {
+struct MeshResource {
+    std::string name;
+    BufferResource vertexBuffer;
+    BufferResource indexBuffer;
+    uint32_t indexCount;
+};
+
+class MeshManager {
+private:
+    static inline std::vector<MeshResource*> meshes;
 public:
-    static MeshResource* Load(std::filesystem::path path);
-    static void CreateBuffers(MeshResource* res);
+    static void Create();
+    static void Destroy();
+    static MeshResource* CreateMesh(MeshDesc& desc);
 };

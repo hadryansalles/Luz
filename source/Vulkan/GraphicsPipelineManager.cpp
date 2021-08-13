@@ -11,19 +11,18 @@ void GraphicsPipelineManager::Create() {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
     auto numFrames = SwapChain::GetNumFrames();
-    uint32_t sets = static_cast<uint32_t>(numFrames);
 
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(numFrames);
+    poolSizes[0].descriptorCount = (uint32_t)(500*numFrames);
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(numFrames + 1);
+    poolSizes[1].descriptorCount = (uint32_t)(500*numFrames);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    poolInfo.maxSets = 2*static_cast<uint32_t>(numFrames);
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.maxSets = (uint32_t)(1000*numFrames);
+    poolInfo.poolSizeCount = (uint32_t)(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
 
     auto result = vkCreateDescriptorPool(device, &poolInfo, allocator, &descriptorPool);
@@ -79,19 +78,34 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     viewportState.pViewports = &viewport;
     viewportState.scissorCount = 1;
     viewportState.pScissors = &scissor;
-    
+
     VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
     descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorLayoutInfo.bindingCount = (uint32_t)(desc.bindings.size());
-    descriptorLayoutInfo.pBindings = desc.bindings.data();
+    descriptorLayoutInfo.bindingCount = 1;
+    descriptorLayoutInfo.pBindings = &desc.bindings[0];
 
-    auto vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.descriptorSetLayout);
-    DEBUG_VK(vkRes, "Failed to create descriptor set layout!");
+    auto vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.sceneDescriptorSetLayout);
+    DEBUG_VK(vkRes, "Failed to create scene descriptor set layout!");
+
+    descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorLayoutInfo.bindingCount = 1;
+    descriptorLayoutInfo.pBindings = &desc.bindings[1];
+
+    vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.modelDescriptorSetLayout);
+    DEBUG_VK(vkRes, "Failed to create model descriptor set layout!");
+
+    descriptorLayoutInfo.bindingCount = 1;
+    descriptorLayoutInfo.pBindings = &desc.bindings[2];
+
+    vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.textureDescriptorSetLayout);
+    DEBUG_VK(vkRes, "Failed to create texture descriptor set layout!");
+
+    std::array<VkDescriptorSetLayout, 3> setLayouts = { res.sceneDescriptorSetLayout, res.modelDescriptorSetLayout, res.textureDescriptorSetLayout };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &res.descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = (uint32_t)setLayouts.size();
+    pipelineLayoutInfo.pSetLayouts = setLayouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -131,7 +145,9 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
 void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
     vkDestroyPipeline(LogicalDevice::GetVkDevice(), res.pipeline, Instance::GetAllocator());
     vkDestroyPipelineLayout(LogicalDevice::GetVkDevice(), res.layout, Instance::GetAllocator());
-    vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.descriptorSetLayout, Instance::GetAllocator());
+    vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.sceneDescriptorSetLayout, Instance::GetAllocator());
+    vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.modelDescriptorSetLayout, Instance::GetAllocator());
+    vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.textureDescriptorSetLayout, Instance::GetAllocator());
 }
 
 void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {

@@ -139,13 +139,13 @@ void SwapChain::Create() {
         buffersDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
         buffersDesc.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-        Image::Create(buffersDesc, depthRes);
+        ImageManager::Create(buffersDesc, depthRes);
 
         buffersDesc.format = colorFormat;
         buffersDesc.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         buffersDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 
-        Image::Create(buffersDesc, colorRes);
+        ImageManager::Create(buffersDesc, colorRes);
     }
 
     // create render pass
@@ -310,8 +310,8 @@ void SwapChain::Destroy() {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
 
-    Image::Destroy(colorRes);
-    Image::Destroy(depthRes);
+    ImageManager::Destroy(colorRes);
+    ImageManager::Destroy(depthRes);
 
     for (size_t i = 0; i < images.size(); i++) {
         vkDestroyFramebuffer(device, framebuffers[i], allocator);
