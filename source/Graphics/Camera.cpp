@@ -231,7 +231,7 @@ void Camera::OnImgui() {
                 ImGui::Text("Movement");
                 ImGui::SameLine(totalWidth/3.0f);
                 ImGui::PushID("mov");
-                ImGui::DragFloat("", &speed, 0.0001, 0, 0.05);
+                ImGui::DragFloat("", &speed, 0.0001, 0, 10.0);
                 ImGui::PopID();
                 ImGui::Text("Rotation");
                 ImGui::SameLine(totalWidth/3.0f);
