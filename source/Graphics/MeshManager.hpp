@@ -75,9 +75,13 @@ struct MeshResource {
 
 class MeshManager {
 private:
+    static inline std::vector<MeshDesc*> descs;
     static inline std::vector<MeshResource*> meshes;
+
+    static void SetupMesh(MeshDesc* desc, MeshResource* res);
 public:
     static void Create();
     static void Destroy();
-    static MeshResource* CreateMesh(MeshDesc& desc);
+    static void Finish();
+    static MeshResource* CreateMesh(MeshDesc* desc);
 };

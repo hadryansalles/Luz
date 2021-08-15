@@ -10,26 +10,25 @@
 #include "Camera.hpp"
 
 void SceneManager::Setup() {
-
-}
-
-void SceneManager::Create() {
-    RecreateDescriptors();
     std::vector<Model*> newModels;
 
     newModels = AssetManager::LoadObjFile("assets/models/cube.obj");
-    SceneManager::SetTexture(newModels[0], AssetManager::LoadImageFile("assets/models/cube.png"));
+    // SceneManager::SetTexture(newModels[0], AssetManager::LoadImageFile("assets/models/cube.png"));
     SceneManager::AddModel(newModels[0]);
 
-    newModels = AssetManager::LoadObjFile("assets/models/converse.obj");
-    SceneManager::SetTexture(newModels[0], AssetManager::LoadImageFile("assets/models/converse.jpg"));
-    SceneManager::AddModel(newModels[0]);
+    // newModels = AssetManager::LoadObjFile("assets/models/converse.obj");
+    // SceneManager::SetTexture(newModels[0], AssetManager::LoadImageFile("assets/models/converse.jpg"));
+    // SceneManager::AddModel(newModels[0]);
+
+    newModels = AssetManager::LoadObjFile("assets/models/teapot.obj");
+    for (Model* model : newModels) {
+        SceneManager::AddModel(model);
+    }
 
     newModels = AssetManager::LoadObjFile("assets/models/ignore/sponza_mini.obj");
     for (Model* model : newModels) {
         SceneManager::AddModel(model);
     }
-
 }
 
 void CreateModelDescriptors(Model* model) {
@@ -93,13 +92,7 @@ void CreateModelDescriptors(Model* model) {
     }
 }
 
-void SceneManager::RecreateDescriptors() {
-    for (size_t i = 0; i < sceneBuffers.size(); i++) {
-        BufferManager::Destroy(sceneBuffers[i]);
-    }
-    sceneBuffers.clear();
-    sceneDescriptors.clear();
-
+void SceneManager::Create() {
     auto numFrames = SwapChain::GetNumFrames();
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
@@ -149,15 +142,32 @@ void SceneManager::RecreateDescriptors() {
     }
 
     for (Model* model : models) {
+        CreateModelDescriptors(model);
+        if (model->texture) {
+            SceneManager::SetTexture(model, model->texture);
+        }
+    }
+}
+
+void SceneManager::Destroy() {
+    for (size_t i = 0; i < sceneBuffers.size(); i++) {
+        BufferManager::Destroy(sceneBuffers[i]);
+    }
+    sceneBuffers.clear();
+    sceneDescriptors.clear();
+
+    for (Model* model : models) {
         for (BufferResource& buffer : model->buffers) {
             BufferManager::Destroy(buffer);
         }
         model->buffers.clear();
         model->descriptors.clear();
-        CreateModelDescriptors(model);
-        if (model->texture) {
-            SceneManager::SetTexture(model, model->texture);
-        }
+    }
+}
+
+void SceneManager::Finish() {
+    for (Model* model : models) {
+        delete model;
     }
 }
 
@@ -182,28 +192,6 @@ void SceneManager::SetTexture(Model* model, TextureResource* texture) {
     }
     
     model->texture = texture;
-}
-
-void SceneManager::Save() {
-}
-
-void SceneManager::Destroy() {
-    for (size_t i = 0; i < sceneBuffers.size(); i++) {
-        BufferManager::Destroy(sceneBuffers[i]);
-    }
-    sceneBuffers.clear();
-    sceneDescriptors.clear();
-    for (Model* model : models) {
-        for (BufferResource& buffer : model->buffers) {
-            BufferManager::Destroy(buffer);
-        }
-        model->buffers.clear();
-        model->descriptors.clear();
-    }
-    for (auto& model : models) {
-        delete model;
-    }
-    models.clear();
 }
 
 Model* SceneManager::CreateModel() {
