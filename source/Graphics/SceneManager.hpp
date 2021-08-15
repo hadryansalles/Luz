@@ -25,10 +25,10 @@ private:
 public:
     static void Setup();
     static void Create();
-    static void RecreateDescriptors();
-    static void Save();
     static void Destroy();
+    static void Finish();
     static void OnImgui();
+
     static Model* CreateModel();
     static void SetTexture(Model* model, TextureResource* texture);
 

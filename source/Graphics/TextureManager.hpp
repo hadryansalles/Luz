@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <filesystem>
 
 #include "ImageManager.hpp"
 
@@ -11,15 +12,19 @@ struct TextureDesc {
 };
 
 struct TextureResource {
-    std::string   name;
-    ImageResource image;
-    VkSampler     sampler;
+    std::filesystem::path path;
+    ImageResource         image;
+    VkSampler             sampler;
 };
 
 class TextureManager {
+    static inline TextureResource* defaultTexture;
     static inline std::vector<TextureResource*> textures;
 public:
+    static void Setup();
     static void Create();
     static void Destroy();
+    static void Finish();
     static TextureResource* CreateTexture(TextureDesc& desc);
+    static inline TextureResource* GetDefaultTexture() { return defaultTexture; }
 };
