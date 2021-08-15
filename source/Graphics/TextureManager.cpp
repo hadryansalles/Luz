@@ -1,19 +1,43 @@
 #include "Luzpch.hpp"
 
+#include "AssetManager.hpp"
 #include "BufferManager.hpp"
 #include "TextureManager.hpp"
 #include "PhysicalDevice.hpp"
 #include "LogicalDevice.hpp"
 #include "Instance.hpp"
 
-void TextureManager::Create() {
+void TextureManager::Setup() {
+    defaultTexture = new TextureResource();
+    defaultTexture->path = "assets/models/default.png";
+}
 
+void TextureManager::Create() {
+    TextureResource* newTexture = AssetManager::LoadImageFile(defaultTexture->path);
+    defaultTexture->image = newTexture->image;
+    defaultTexture->sampler = newTexture->sampler;
+    DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
+    textures.pop_back();
+    for (TextureResource* texture : textures) {
+        newTexture = AssetManager::LoadImageFile(texture->path);
+        texture->image = newTexture->image;
+        texture->sampler = newTexture->sampler;
+        DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
+        textures.pop_back();
+    }
 }
 
 void TextureManager::Destroy() {
+    ImageManager::Destroy(defaultTexture->image);
+    vkDestroySampler(LogicalDevice::GetVkDevice(), defaultTexture->sampler, Instance::GetAllocator());
     for (TextureResource* texture : textures) {
         ImageManager::Destroy(texture->image);
         vkDestroySampler(LogicalDevice::GetVkDevice(), texture->sampler, Instance::GetAllocator());
+    }
+}
+
+void TextureManager::Finish() {
+    for (TextureResource* texture : textures) {
         delete texture;
     }
     textures.clear();

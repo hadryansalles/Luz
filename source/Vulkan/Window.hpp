@@ -12,9 +12,10 @@ private:
     static inline int           width              = 1280;
     static inline int           height             = 720;
     static inline int           posX               = 0;
-    static inline int           posY               = 0;
+    static inline int           posY               = 30;
     static inline int           monitorIndex       = 0;
     static inline int           monitorCount       = 0;
+    static inline int           videoModeIndex     = 0;
     static inline bool          framebufferResized = false;
 
     static inline std::chrono::high_resolution_clock::time_point lastTime;
@@ -40,12 +41,14 @@ private:
     static void ScrollCallback(GLFWwindow* window, double x, double y);
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
     static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
+    static void WindowChangePosCallback(GLFWwindow* window, int x, int y);
 
 public:
     static void Create();
     static void Update();
     static void OnImgui();
     static void Destroy();
+    static void ApplyChanges();
     static void UpdateFramebufferSize();
 
     static inline GLFWwindow* GetGLFWwindow()                  { return window;                                 }
