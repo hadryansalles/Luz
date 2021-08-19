@@ -25,121 +25,26 @@ void SceneManager::Setup() {
         SceneManager::AddModel(model);
     }
 
-    newModels = AssetManager::LoadObjFile("assets/models/ignore/sponza_mini.obj");
+    newModels = AssetManager::LoadObjFile("assets/models/ignore/coffee_cart/coffee_cart.obj");
+    for (Model* model : newModels) {
+        SceneManager::AddModel(model);
+    }
+
+    newModels = AssetManager::LoadObjFile("assets/models/ignore/sponza/sponza_mini.obj");
     for (Model* model : newModels) {
         SceneManager::AddModel(model);
     }
 }
 
 void CreateModelDescriptors(Model* model) {
-    auto numFrames = SwapChain::GetNumFrames();
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
-    auto unlitGPO = UnlitGraphicsPipeline::GetResource();
-
-    std::vector<VkDescriptorSetLayout> layouts(numFrames, unlitGPO.modelDescriptorSetLayout);
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = GraphicsPipelineManager::GetDescriptorPool();
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-    allocInfo.pSetLayouts = layouts.data();
-
-    model->descriptors.resize(numFrames);
-    auto vkRes = vkAllocateDescriptorSets(device, &allocInfo, model->descriptors.data());
-    DEBUG_VK(vkRes, "Failed to allocate transform descriptor sets!");
-
-    std::vector<VkDescriptorSetLayout> matLayouts(numFrames, unlitGPO.textureDescriptorSetLayout);
-
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = GraphicsPipelineManager::GetDescriptorPool();
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-    allocInfo.pSetLayouts = matLayouts.data();
-
-    model->materialDescriptors.resize(numFrames);
-    vkRes = vkAllocateDescriptorSets(device, &allocInfo, model->materialDescriptors.data());
-    DEBUG_VK(vkRes, "Failed to allocate texture descriptor sets!");
-
-    for (size_t i = 0; i < numFrames; i++) {
-        model->buffers.resize(numFrames);
-
-        BufferDesc uniformDesc;
-        uniformDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        uniformDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        uniformDesc.size = sizeof(ModelUBO);
-
-        BufferManager::Create(uniformDesc, model->buffers[i]);
-    }
-
-    for (size_t i = 0; i < numFrames; i++) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = model->buffers[i].buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(ModelUBO);
-
-        std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
-
-        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet = model->descriptors[i];
-        descriptorWrites[0].dstBinding = 0;
-        // in the case of our descriptors being arrays, we specify the index
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-    }
+    model->meshDescriptor = GraphicsPipelineManager::CreateMeshDescriptor(sizeof(ModelUBO));
+    model->materialDescriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+    GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
 }
 
 void SceneManager::Create() {
-    auto numFrames = SwapChain::GetNumFrames();
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
-    auto unlitGPO = UnlitGraphicsPipeline::GetResource();
-
-    std::vector<VkDescriptorSetLayout> layouts(numFrames, unlitGPO.sceneDescriptorSetLayout);
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = GraphicsPipelineManager::GetDescriptorPool();
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-    allocInfo.pSetLayouts = layouts.data();
-
-    sceneDescriptors.resize(numFrames);
-    auto vkRes = vkAllocateDescriptorSets(device, &allocInfo, sceneDescriptors.data());
-    DEBUG_VK(vkRes, "Failed to allocate scene descriptor sets!");
-
-    for (size_t i = 0; i < numFrames; i++) {
-        sceneBuffers.resize(numFrames);
-
-        BufferDesc uniformDesc;
-        uniformDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        uniformDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        uniformDesc.size = sizeof(SceneUBO);
-
-        BufferManager::Create(uniformDesc, sceneBuffers[i]);
-    }
-
-    for (size_t i = 0; i < numFrames; i++) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = sceneBuffers[i].buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(SceneUBO);
-
-        std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
-
-        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet = sceneDescriptors[i];
-        descriptorWrites[0].dstBinding = 0;
-        // in the case of our descriptors being arrays, we specify the index
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-    }
+    sceneDescriptor = GraphicsPipelineManager::CreateSceneDescriptor(sizeof(SceneUBO));
+    GraphicsPipelineManager::UpdateBufferDescriptor(sceneDescriptor, &sceneUBO, sizeof(sceneUBO));
 
     for (Model* model : models) {
         CreateModelDescriptors(model);
@@ -150,18 +55,14 @@ void SceneManager::Create() {
 }
 
 void SceneManager::Destroy() {
-    for (size_t i = 0; i < sceneBuffers.size(); i++) {
-        BufferManager::Destroy(sceneBuffers[i]);
+    for (size_t i = 0; i < sceneDescriptor.buffers.size(); i++) {
+        BufferManager::Destroy(sceneDescriptor.buffers[i]);
     }
-    sceneBuffers.clear();
-    sceneDescriptors.clear();
 
     for (Model* model : models) {
-        for (BufferResource& buffer : model->buffers) {
+        for (BufferResource& buffer : model->meshDescriptor.buffers) {
             BufferManager::Destroy(buffer);
         }
-        model->buffers.clear();
-        model->descriptors.clear();
     }
 }
 
@@ -172,26 +73,8 @@ void SceneManager::Finish() {
 }
 
 void SceneManager::SetTexture(Model* model, TextureResource* texture) {
-    std::array<VkWriteDescriptorSet, 1> writes{};
-
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.imageView = texture->image.view;
-    imageInfo.sampler = texture->sampler;
-
-    for (size_t i = 0; i < SwapChain::GetNumFrames(); i++) {
-        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].dstSet = model->materialDescriptors[i];
-        writes[0].dstBinding = 0;
-        writes[0].dstArrayElement = 0;
-        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[0].descriptorCount = 1;
-        writes[0].pImageInfo = &imageInfo;
-
-        vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), (uint32_t)(writes.size()), writes.data(), 0, nullptr);
-    }
-    
     model->texture = texture;
+    GraphicsPipelineManager::UpdateTextureDescriptor(model->materialDescriptor, texture);
 }
 
 Model* SceneManager::CreateModel() {

@@ -6,6 +6,7 @@
 #include "MeshManager.hpp"
 #include "TextureManager.hpp"
 #include "Transform.hpp"
+#include "Descriptors.hpp"
 
 struct ModelUBO {
     glm::mat4 model = glm::mat4(1.0f);
@@ -16,8 +17,7 @@ struct Model {
     Transform transform;
     MeshResource* mesh = nullptr;
     TextureResource* texture = nullptr;
+    BufferDescriptor meshDescriptor;
+    TextureDescriptor materialDescriptor;
     ModelUBO ubo;
-    std::vector<VkDescriptorSet> descriptors;
-    std::vector<BufferResource> buffers;
-    std::vector<VkDescriptorSet> materialDescriptors;
 };
