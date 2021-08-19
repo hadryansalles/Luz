@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "ImageManager.hpp"
+#include "Descriptors.hpp"
 
 struct TextureDesc {
     void* data;

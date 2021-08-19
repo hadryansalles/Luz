@@ -90,7 +90,6 @@ private:
     }
 
     void DestroyVulkan() {
-
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
 
@@ -271,11 +270,11 @@ private:
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        auto sceneDescriptor = SceneManager::GetSceneDescriptor(frameIndex);
+        auto sceneDescriptor = SceneManager::GetSceneDescriptor();
         auto unlitGPO = UnlitGraphicsPipeline::GetResource();
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
-                    1, &sceneDescriptor, 0, nullptr);
+                    1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr) {
@@ -287,9 +286,9 @@ private:
                 // command buffer, vertex count, instance count, first vertex, first instance
                 // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
-                    1, &model->descriptors[frameIndex], 0, nullptr);
+                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
-                    1, &model->materialDescriptors[frameIndex], 0, nullptr);
+                    1, &model->materialDescriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
@@ -347,12 +346,12 @@ private:
 
     void updateUniformBuffer(uint32_t currentImage) {
         for (Model* model : SceneManager::GetModels()) {
-            BufferManager::Update(model->buffers[currentImage], &model->ubo, sizeof(model->ubo));
+            BufferManager::Update(model->meshDescriptor.buffers[currentImage], &model->ubo, sizeof(model->ubo));
         }
 
         sceneUBO.view = camera.GetView();
         sceneUBO.proj = camera.GetProj();
-        BufferManager::Update(SceneManager::GetUniformBuffer(currentImage), &sceneUBO, sizeof(sceneUBO));
+        BufferManager::Update(SceneManager::GetSceneDescriptor().buffers[currentImage], &sceneUBO, sizeof(sceneUBO));
     }
 
     void SetupImgui() {
@@ -375,7 +374,7 @@ private:
         initInfo.QueueFamily = PhysicalDevice::GetGraphicsFamily();
         initInfo.Queue = LogicalDevice::GetGraphicsQueue();
         initInfo.PipelineCache = VK_NULL_HANDLE;
-        initInfo.DescriptorPool = GraphicsPipelineManager::GetDescriptorPool();
+        initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
         initInfo.MinImageCount = 2;
         initInfo.ImageCount = (uint32_t)SwapChain::GetNumFrames();
         initInfo.MSAASamples = SwapChain::GetNumSamples();
