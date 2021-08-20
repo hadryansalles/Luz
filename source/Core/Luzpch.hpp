@@ -37,3 +37,4 @@
 
 #include "Base.hpp"
 #include "Log.hpp"
+#include "Profiler.hpp"

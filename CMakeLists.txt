@@ -65,6 +65,12 @@ include_directories("deps/glm")
 # spdlog
 include_directories("deps/spdlog")
 
+# optick
+include_directories("deps/optick")
+file(GLOB_RECURSE OPTICK_SOURCE "deps/optick/*.cpp")
+add_library(optick ${OPTICK_SOURCE})
+target_link_libraries(${PROJECT_NAME} optick)
+
 # ImGui and ImGuizmo
 include_directories("deps/imgui")
 file(GLOB_RECURSE IMGUI_SOURCE "deps/imgui/*.cpp")

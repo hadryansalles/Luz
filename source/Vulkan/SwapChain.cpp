@@ -32,7 +32,7 @@ void SwapChain::Create() {
         uint32_t imageCount = framesInFlight + additionalImages;
         
         if (imageCount < capabilities.minImageCount) {
-            LOG_ERROR("Querying less images than the necessary!");
+            LOG_WARN("Querying less images than the necessary!");
             imageCount = capabilities.minImageCount;
         }
 

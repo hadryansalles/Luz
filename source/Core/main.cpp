@@ -59,6 +59,7 @@ private:
     }
 
     void Create() {
+        LUZ_PROFILE_FUNC();
         CreateVulkan();
         SceneManager::Setup();
     }
@@ -82,6 +83,7 @@ private:
     }
 
     void Finish() {
+        LUZ_PROFILE_FUNC();
         DestroyVulkan();
         SceneManager::Finish();
         MeshManager::Finish();
@@ -116,6 +118,7 @@ private:
 
     void MainLoop() {
         while (!Window::GetShouldClose()) {
+            LUZ_PROFILE_FRAME();
             Window::Update();
             camera.Update();
             drawFrame();
@@ -152,6 +155,7 @@ private:
     }
 
     void imguiDrawFrame() {
+        LUZ_PROFILE_FUNC();
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
         ImGui_ImplVulkan_NewFrame();
@@ -241,6 +245,7 @@ private:
     }
 
     void updateCommandBuffer(size_t frameIndex) {
+        LUZ_PROFILE_FUNC();
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
         auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
@@ -303,6 +308,7 @@ private:
     }
 
     void drawFrame() {
+        LUZ_PROFILE_FUNC();
         imguiDrawFrame();
 
         auto image = SwapChain::Acquire(); 
@@ -318,6 +324,7 @@ private:
     }
 
     void RecreateFrameResources() {
+        LUZ_PROFILE_FUNC();
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
         vkDeviceWaitIdle(device);
@@ -345,6 +352,7 @@ private:
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
+        LUZ_PROFILE_FUNC();
         for (Model* model : SceneManager::GetModels()) {
             BufferManager::Update(model->meshDescriptor.buffers[currentImage], &model->ubo, sizeof(model->ubo));
         }
