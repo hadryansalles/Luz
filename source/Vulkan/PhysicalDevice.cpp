@@ -4,6 +4,7 @@
 #include "Instance.hpp"
 
 void PhysicalDevice::Create() {
+    LUZ_PROFILE_FUNC();
     auto instance = Instance::GetVkInstance();
     // get all devices with Vulkan support
     uint32_t count = 0;

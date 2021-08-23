@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <Model.hpp>
 #include "Descriptors.hpp"
+#include <thread>
 
 // vulkan always expect data to be alligned with multiples of 16
 struct SceneUBO {
@@ -19,18 +20,27 @@ private:
     static inline SceneUBO sceneUBO;
     static inline BufferDescriptor sceneDescriptor;
 
+    static inline unsigned int modelID = 0;
     static inline std::vector<Model*> models;
     static inline Model* selectedModel = nullptr;
+
+    static inline std::vector<ModelDesc> preloadedModels;
+    static inline std::mutex preloadedModelsLock;
 
 public:
     static void Setup();
     static void Create();
     static void Destroy();
+    static void Update();
     static void Finish();
     static void OnImgui();
 
-    static Model* CreateModel();
+    static Model* CreateModel(ModelDesc& desc);
     static void SetTexture(Model* model, TextureResource* texture);
+
+    static void LoadModels(std::filesystem::path path);
+    static void AsyncLoadModels(std::filesystem::path path);
+    static void AddPreloadedModel(ModelDesc desc);
 
     static inline void AddModel(Model* model)            { models.push_back(model); }
     static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;  }

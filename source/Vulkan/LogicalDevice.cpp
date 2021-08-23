@@ -5,6 +5,7 @@
 #include "LogicalDevice.hpp"
 
 void LogicalDevice::Create() {
+    LUZ_PROFILE_FUNC();
     std::set<uint32_t> uniqueFamilies = {
         PhysicalDevice::GetPresentFamily(),
         PhysicalDevice::GetGraphicsFamily() 

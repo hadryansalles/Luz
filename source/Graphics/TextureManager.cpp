@@ -7,19 +7,22 @@
 #include "LogicalDevice.hpp"
 #include "Instance.hpp"
 
+#include <stb_image.h>
+
 void TextureManager::Setup() {
     defaultTexture = new TextureResource();
     defaultTexture->path = "assets/models/default.png";
 }
 
 void TextureManager::Create() {
-    TextureResource* newTexture = AssetManager::LoadImageFile(defaultTexture->path);
+    LUZ_PROFILE_FUNC();
+    TextureResource* newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(defaultTexture->path));
     defaultTexture->image = newTexture->image;
     defaultTexture->sampler = newTexture->sampler;
     DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
     textures.pop_back();
     for (TextureResource* texture : textures) {
-        newTexture = AssetManager::LoadImageFile(texture->path);
+        newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(texture->path));
         texture->image = newTexture->image;
         texture->sampler = newTexture->sampler;
         DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
@@ -33,6 +36,7 @@ void TextureManager::Destroy() {
     for (TextureResource* texture : textures) {
         ImageManager::Destroy(texture->image);
         vkDestroySampler(LogicalDevice::GetVkDevice(), texture->sampler, Instance::GetAllocator());
+        texture->sampler = VK_NULL_HANDLE;
     }
 }
 
@@ -44,6 +48,11 @@ void TextureManager::Finish() {
 }
 
 TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
+    for (int i = 0; i < textures.size(); i++) {
+        if (desc.path == textures[i]->path && textures[i]->sampler != VK_NULL_HANDLE) {
+            return textures[i];
+        }
+    }
     auto device = LogicalDevice::GetVkDevice();
     auto instance = Instance::GetVkInstance();
 
@@ -102,6 +111,9 @@ TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
     DEBUG_VK(vkRes, "Failed to create texture sampler!");
 
     textures.push_back(res);
+
+    stbi_image_free(desc.data);
+    res->path = desc.path;
 
     return res;
 }

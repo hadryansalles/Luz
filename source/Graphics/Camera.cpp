@@ -50,8 +50,11 @@ void Camera::UpdateProj(){
 }
 
 void Camera::Update() {
-    auto viewDirty = false;
-    auto projDirty = false;
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+        return;
+    }
+    bool viewDirty = false;
+    bool projDirty = false;
     glm::vec2 drag(.0f);
     glm::vec2 move(.0f);
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {

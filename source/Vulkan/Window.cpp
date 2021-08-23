@@ -23,6 +23,7 @@ void Window::WindowChangePosCallback(GLFWwindow* window, int x, int y) {
 }
 
 void Window::Create() {
+    LUZ_PROFILE_FUNC();
     // initializing glfw
     glfwInit();
 

@@ -12,6 +12,11 @@ struct ModelUBO {
     glm::mat4 model = glm::mat4(1.0f);
 };
 
+struct ModelDesc {
+    MeshDesc* mesh;
+    TextureDesc texture;
+};
+
 struct Model {
     std::string name;
     Transform transform;
@@ -20,4 +25,5 @@ struct Model {
     BufferDescriptor meshDescriptor;
     TextureDescriptor materialDescriptor;
     ModelUBO ubo;
+    unsigned int id;
 };
