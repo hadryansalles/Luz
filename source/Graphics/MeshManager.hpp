@@ -64,10 +64,11 @@ namespace std {
 struct MeshDesc {
     std::vector<MeshVertex> vertices;
     std::vector<uint32_t> indices;
+    std::filesystem::path path;
+    std::string name;
 };
 
 struct MeshResource {
-    std::string name;
     BufferResource vertexBuffer;
     BufferResource indexBuffer;
     uint32_t indexCount;
@@ -83,5 +84,7 @@ public:
     static void Create();
     static void Destroy();
     static void Finish();
+    static void OnImgui();
+
     static MeshResource* CreateMesh(MeshDesc* desc);
 };

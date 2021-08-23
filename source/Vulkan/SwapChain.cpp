@@ -6,8 +6,10 @@
 #include "Window.hpp"
 #include "Instance.hpp"
 #include "VulkanUtils.hpp"
+#include "Profiler.hpp"
 
 void SwapChain::Create() {
+    LUZ_PROFILE_FUNC();
     auto device = LogicalDevice::GetVkDevice();
     auto instance = Instance::GetVkInstance();
     auto allocator = Instance::GetAllocator();
@@ -341,6 +343,8 @@ void SwapChain::Destroy() {
 }
 
 uint32_t SwapChain::Acquire() {
+    LUZ_PROFILE_FUNC();
+
     auto device = LogicalDevice::GetVkDevice();
 
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
@@ -359,6 +363,8 @@ uint32_t SwapChain::Acquire() {
 }
 
 void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
+    LUZ_PROFILE_FUNC();
+
     auto device = LogicalDevice::GetVkDevice();
 
     // check if a previous frame is using this image

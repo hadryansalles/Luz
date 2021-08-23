@@ -7,7 +7,8 @@
 #include "Descriptors.hpp"
 
 struct TextureDesc {
-    void* data;
+    void* data = nullptr;
+    std::filesystem::path path;
     uint32_t width;
     uint32_t height;
 };

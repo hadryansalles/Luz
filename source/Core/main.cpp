@@ -37,6 +37,7 @@ void CheckVulkanResult(VkResult res) {
 class VulkanTutorialApplication {
 public:
     void run() {
+        WaitToInit(4);
         Setup();
         Create();
         MainLoop();
@@ -52,7 +53,19 @@ private:
     // camera 
     Camera camera;
 
+    void WaitToInit(float seconds) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+        auto t1 = std::chrono::high_resolution_clock::now();
+        while (std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() < seconds * 1000.0f) {
+            LUZ_PROFILE_FRAME();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            t1 = std::chrono::high_resolution_clock::now();
+        }
+        
+    }
+
     void Setup() {
+        LUZ_PROFILE_FUNC();
         UnlitGraphicsPipeline::Setup();
         TextureManager::Setup();
         SetupImgui();
@@ -65,6 +78,7 @@ private:
     }
 
     void CreateVulkan() {
+        LUZ_PROFILE_FUNC();
         Window::Create();
         Instance::Create();
         PhysicalDevice::Create();
@@ -92,6 +106,7 @@ private:
     }
 
     void DestroyVulkan() {
+        LUZ_PROFILE_FUNC();
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
 
@@ -106,6 +121,7 @@ private:
     }
 
     void DestroyFrameResources() {
+        LUZ_PROFILE_FUNC();
         SceneManager::Destroy();
         UnlitGraphicsPipeline::Destroy();
         GraphicsPipelineManager::Destroy();
@@ -120,6 +136,7 @@ private:
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
             Window::Update();
+            SceneManager::Update();
             camera.Update();
             drawFrame();
             if (DirtyGlobalResources()) {
@@ -173,7 +190,11 @@ private:
         }
         ImGui::End();
 
-        SceneManager::OnImgui();
+        if (ImGui::Begin("Scene")) {
+            SceneManager::OnImgui();
+            MeshManager::OnImgui();
+        }
+        ImGui::End();
 
         ImGuizmo::BeginFrame();
         static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
@@ -370,6 +391,7 @@ private:
     }
 
     void CreateImgui() {
+        LUZ_PROFILE_FUNC();
         auto device = LogicalDevice::GetVkDevice();
         auto instance = Instance::GetVkInstance();
 
@@ -409,7 +431,6 @@ private:
 int main() {
     Log::Init();
     VulkanTutorialApplication app;
-
     try {
         app.run();
     }
