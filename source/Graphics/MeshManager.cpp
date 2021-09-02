@@ -32,6 +32,38 @@ void MeshManager::Finish() {
 
 void MeshManager::SetupMesh(MeshDesc* desc, MeshResource* res) {
     res->indexCount = desc->indices.size();
+    glm::vec3 p0;
+    glm::vec3 p1;
+    if (desc->vertices.size() < 1) {
+        LOG_WARN("Setup mesh with 0 vertices...");
+    } else {
+        p0 = desc->vertices[0].pos;
+        p1 = desc->vertices[0].pos;
+    }
+    for (int i = 0; i < desc->vertices.size(); i++) {
+        if (desc->vertices[i].pos.x < p0.x) {
+            p0.x = desc->vertices[i].pos.x;
+        }
+        if (desc->vertices[i].pos.y < p0.y) {
+            p0.y = desc->vertices[i].pos.y;
+        }
+        if (desc->vertices[i].pos.z < p0.z) {
+            p0.z = desc->vertices[i].pos.z;
+        }
+        if (desc->vertices[i].pos.x > p1.x) {
+            p1.x = desc->vertices[i].pos.x;
+        }
+        if (desc->vertices[i].pos.y > p1.y) {
+            p1.y = desc->vertices[i].pos.y;
+        }
+        if (desc->vertices[i].pos.z > p1.z) {
+            p1.z = desc->vertices[i].pos.z;
+        }
+    }
+    res->center = (p0 + p1) / 2.0f;
+    for (int i = 0; i < desc->vertices.size(); i++) {
+        desc->vertices[i].pos -= res->center;
+    }
     BufferManager::CreateVertexBuffer(res->vertexBuffer, desc->vertices.data(), sizeof(desc->vertices[0]) * desc->vertices.size());
     BufferManager::CreateIndexBuffer(res->indexBuffer, desc->indices.data(), sizeof(desc->indices[0]) * desc->indices.size());
 }
