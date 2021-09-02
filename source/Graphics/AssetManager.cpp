@@ -24,6 +24,7 @@ void AssetManager::Destroy() {
 
 std::vector<ModelDesc> AssetManager::LoadMeshFile(std::filesystem::path path) {
     LUZ_PROFILE_FUNC();
+    DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     std::string extension = path.extension().string();
     if (extension == ".obj" || extension == ".OBJ") {
         return AssetManager::LoadObjFile(path);
@@ -116,6 +117,7 @@ std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {
 }
 
 void AssetManager::AddObjFileToScene(std::filesystem::path path) {
+    DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;

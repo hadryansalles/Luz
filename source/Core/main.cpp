@@ -202,6 +202,7 @@ private:
 
         Model* selectedModel = SceneManager::GetSelectedModel();
 
+
         if (selectedModel != nullptr) {
             if (ImGui::Begin("Transform")) {
                 Transform& transform = selectedModel->transform;
@@ -231,7 +232,7 @@ private:
                 ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
                 ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
                 ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
-                ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation), 
+                ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
                     glm::value_ptr(transform.scale), glm::value_ptr(modelUBO.model));
 
                 if (currentGizmoOperation != ImGuizmo::SCALE) {

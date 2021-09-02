@@ -72,6 +72,7 @@ struct MeshResource {
     BufferResource vertexBuffer;
     BufferResource indexBuffer;
     uint32_t indexCount;
+    glm::vec3 center;
 };
 
 class MeshManager {

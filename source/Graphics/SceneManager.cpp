@@ -14,12 +14,12 @@
 void SceneManager::Setup() {
     std::vector<ModelDesc> newModels;
 
-    auto cube = AssetManager::LoadMeshFile("assets/models/cube.obj")[0];
-    cube.texture = AssetManager::LoadImageFile("assets/models/cube.png");
-    AddModel(CreateModel(cube));
+    // auto cube = AssetManager::LoadMeshFile("assets/models/cube.obj")[0];
+    // cube.texture = AssetManager::LoadImageFile("assets/models/cube.png");
+    // AddModel(CreateModel(cube));
 
     AsyncLoadModels("assets/models/teapot.obj");
-    AsyncLoadModels("assets/models/ignore/sponza_mini.obj");
+    AsyncLoadModels("assets/models/ignore/sponza/sponza_semitransparent.obj");
 }
 
 void SceneManager::LoadModels(std::filesystem::path path) {
@@ -33,6 +33,7 @@ void SceneManager::AsyncLoadModels(std::filesystem::path path) {
 void CreateModelDescriptors(Model* model) {
     model->meshDescriptor = GraphicsPipelineManager::CreateMeshDescriptor(sizeof(ModelUBO));
     model->materialDescriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+    model->ubo.model = model->transform.getMatrix();
     GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
 }
 
@@ -95,6 +96,7 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
     model->mesh = MeshManager::CreateMesh(desc.mesh);
     model->name = desc.mesh->name;
     model->id = modelID++;
+    model->transform.position += model->mesh->center;
     CreateModelDescriptors(model);
     if (desc.texture.data != nullptr) {
         SetTexture(model, TextureManager::CreateTexture(desc.texture));
