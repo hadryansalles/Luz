@@ -61,6 +61,8 @@ std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
+    Collection* collection = SceneManager::CreateCollection();
+    collection->name = path.filename().string();
     std::vector<ModelDesc> models;
     for (size_t i = 0; i < shapes.size(); i++) {
         MeshDesc* desc = new MeshDesc;
@@ -97,6 +99,7 @@ std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {
                     desc->path = path;
                     desc->name = shapes[i].name + "_" + std::to_string(splittedShapeIndex);
                     model.mesh = desc;
+                    model.collection = collection;
                     if (lastMaterialId != -1 && materials[lastMaterialId].diffuse_texname != "") {
                         model.texture = diffuseTextures[lastMaterialId];
                     }
@@ -116,7 +119,7 @@ std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {
     return models;
 }
 
-void AssetManager::AddObjFileToScene(std::filesystem::path path) {
+void AssetManager::AddObjFileToScene(std::filesystem::path path, Collection* parent) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -138,6 +141,8 @@ void AssetManager::AddObjFileToScene(std::filesystem::path path) {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
+    Collection* collection = SceneManager::CreateCollection(parent);
+    collection->name = path.filename().string();
     for (size_t i = 0; i < shapes.size(); i++) {
         MeshDesc* desc = new MeshDesc;
         std::unordered_map<MeshVertex, uint32_t> uniqueVertices{};
@@ -153,10 +158,15 @@ void AssetManager::AddObjFileToScene(std::filesystem::path path) {
                 attrib.vertices[3 * index.vertex_index + 2]
             };
 
-            vertex.texCoord = {
-                attrib.texcoords[2 * index.texcoord_index + 0],
-                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-            };
+            if (index.texcoord_index == -1) {
+                vertex.texCoord = { 0, 0 };
+            }
+            else {
+                vertex.texCoord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+            }
 
             if (uniqueVertices.count(vertex) == 0) {
                 uniqueVertices[vertex] = (uint32_t)(desc->vertices.size());
@@ -173,6 +183,7 @@ void AssetManager::AddObjFileToScene(std::filesystem::path path) {
                     desc->path = path;
                     desc->name = shapes[i].name + "_" + std::to_string(splittedShapeIndex);
                     model.mesh = desc;
+                    model.collection = collection;
                     if (lastMaterialId != -1 && materials[lastMaterialId].diffuse_texname != "") {
                         model.texture = diffuseTextures[lastMaterialId];
                     }

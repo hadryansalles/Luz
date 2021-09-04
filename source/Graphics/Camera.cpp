@@ -2,6 +2,7 @@
 
 #include "Camera.hpp"
 #include "Window.hpp"
+#include "SceneManager.hpp"
 
 Camera::Camera() {
     UpdateView();
@@ -57,6 +58,25 @@ void Camera::Update() {
     bool projDirty = false;
     glm::vec2 drag(.0f);
     glm::vec2 move(.0f);
+    if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyDown(GLFW_KEY_1)) {
+        mode = Camera::Control::Orbit;
+    }
+    if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyDown(GLFW_KEY_2)) {
+        mode = Camera::Control::Fly;
+    }
+    if (Window::IsKeyDown(GLFW_KEY_SPACE)) {
+        Transform* selectedTransform = SceneManager::GetSelectedTransform();
+        if (selectedTransform != nullptr) {
+            zoom = 1.0f;
+            if (selectedTransform->parent != nullptr) {
+                center = selectedTransform->parent->GetMatrix()*glm::vec4(selectedTransform->position, 1.0f);
+            }
+            else {
+                center = selectedTransform->position;
+            }
+            viewDirty = true;
+        }
+    }
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {
         drag = -Window::GetDeltaMouse();
     }

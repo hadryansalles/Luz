@@ -22,10 +22,20 @@ private:
 
     static inline unsigned int modelID = 0;
     static inline std::vector<Model*> models;
+    static inline Collection mainCollection;
+    static inline std::vector<Collection*> collections;
+
     static inline Model* selectedModel = nullptr;
+    static inline Transform* selectedTransform = nullptr;
 
     static inline std::vector<ModelDesc> preloadedModels;
     static inline std::mutex preloadedModelsLock;
+
+    static void AddModel(Model* model, Collection* collection = nullptr);
+    static void SetCollection(Model* model, Collection* collection = nullptr);
+
+    static void CollectionOnImgui(Collection* collection, int id);
+    static void ModelOnImgui(Model* model);
 
 public:
     static void Setup();
@@ -38,12 +48,14 @@ public:
     static Model* CreateModel(ModelDesc& desc);
     static void SetTexture(Model* model, TextureResource* texture);
 
-    static void LoadModels(std::filesystem::path path);
-    static void AsyncLoadModels(std::filesystem::path path);
+    static Collection* CreateCollection(Collection* parent = nullptr);
+
+    static void LoadModels(std::filesystem::path path, Collection* collection = nullptr);
+    static void AsyncLoadModels(std::filesystem::path path, Collection* collection = nullptr);
     static void AddPreloadedModel(ModelDesc desc);
 
-    static inline void AddModel(Model* model)            { models.push_back(model); }
-    static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;  }
-    static inline std::vector<Model*>& GetModels()       { return models;           }
-    static inline Model* GetSelectedModel()              { return selectedModel;    }
+    static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;   }
+    static inline std::vector<Model*>& GetModels()       { return models;            }
+    static inline Model* GetSelectedModel()              { return selectedModel;     }
+    static inline Transform* GetSelectedTransform()      { return selectedTransform; }
 };
