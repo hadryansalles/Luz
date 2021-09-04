@@ -200,13 +200,11 @@ private:
         static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
         static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-        Model* selectedModel = SceneManager::GetSelectedModel();
+        Transform* selectedTransform = SceneManager::GetSelectedTransform();
 
-
-        if (selectedModel != nullptr) {
+        if (selectedTransform != nullptr) {
             if (ImGui::Begin("Transform")) {
-                Transform& transform = selectedModel->transform;
-                ModelUBO& modelUBO = selectedModel->ubo;
+                Transform& transform = *selectedTransform;
      
                 if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
                     currentGizmoOperation = ImGuizmo::TRANSLATE;
@@ -232,8 +230,9 @@ private:
                 ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
                 ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
                 ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
-                ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
-                    glm::value_ptr(transform.scale), glm::value_ptr(modelUBO.model));
+                glm::mat4 modelMat = transform.GetMatrix();
+                // ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
+                //     glm::value_ptr(transform.scale), glm::value_ptr(transform.transform));
 
                 if (currentGizmoOperation != ImGuizmo::SCALE) {
                     if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
@@ -253,8 +252,14 @@ private:
                 ImGuiIO& io = ImGui::GetIO();
                 ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
                 ImGuizmo::Manipulate(glm::value_ptr(sceneUBO.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
-                    currentGizmoMode, glm::value_ptr(modelUBO.model), nullptr, nullptr);
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(modelUBO.model), glm::value_ptr(transform.position), 
+                    currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
+
+                if (transform.parent != nullptr) {
+                    modelMat = glm::inverse(transform.parent->GetMatrix()) * modelMat;
+                }
+                transform.transform = modelMat;
+                
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
                     glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
             }
             ImGui::End();
@@ -376,6 +381,7 @@ private:
     void updateUniformBuffer(uint32_t currentImage) {
         LUZ_PROFILE_FUNC();
         for (Model* model : SceneManager::GetModels()) {
+            model->ubo.model = model->transform.GetMatrix();
             BufferManager::Update(model->meshDescriptor.buffers[currentImage], &model->ubo, sizeof(model->ubo));
         }
 
