@@ -11,7 +11,7 @@
 
 void TextureManager::Setup() {
     defaultTexture = new TextureResource();
-    defaultTexture->path = "assets/models/default.png";
+    defaultTexture->path = "assets/default.png";
 }
 
 void TextureManager::Create() {

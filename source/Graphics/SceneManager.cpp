@@ -16,14 +16,15 @@ void SceneManager::Setup() {
 
     std::vector<ModelDesc> newModels;
 
-    auto cube = AssetManager::LoadMeshFile("assets/models/cube.obj")[0];
-    cube.texture = AssetManager::LoadImageFile("assets/models/cube.png");
-    AddModel(CreateModel(cube));
+    // auto cube = AssetManager::LoadMeshFile("assets/cube.obj")[0];
+    // cube.texture = AssetManager::LoadImageFile("assets/cube.png");
+    // AddModel(CreateModel(cube));
 
     auto planeCollection = CreateCollection();
     planeCollection->name = "Plane";
 
-    AsyncLoadModels("assets/models/teapot.obj");
+    AsyncLoadModels("assets/teapot.obj");
+    AsyncLoadModels("assets/cube.obj");
     // AsyncLoadModels("assets/models/ignore/sponza/sponza_semitransparent.obj");
 }
 
