@@ -16,10 +16,7 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 ## Gallery
 
 - Asynchronous model loading
-![Alt Text](https://hadryansalles.github.io/assets/luz/polygon.gif)
-
-- Graphics Pipeline configuration at runtime
-![Alt Text](https://hadryansalles.github.io/assets/luz/polygon.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/async.gif)
 
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 ![Alt Text](https://hadryansalles.github.io/assets/luz/cameras.gif)
