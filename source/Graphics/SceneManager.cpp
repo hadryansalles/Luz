@@ -16,9 +16,12 @@ void SceneManager::Setup() {
 
     std::vector<ModelDesc> newModels;
 
-    // auto cube = AssetManager::LoadMeshFile("assets/models/cube.obj")[0];
-    // cube.texture = AssetManager::LoadImageFile("assets/models/cube.png");
-    // AddModel(CreateModel(cube));
+    auto cube = AssetManager::LoadMeshFile("assets/models/cube.obj")[0];
+    cube.texture = AssetManager::LoadImageFile("assets/models/cube.png");
+    AddModel(CreateModel(cube));
+
+    auto planeCollection = CreateCollection();
+    planeCollection->name = "Plane";
 
     AsyncLoadModels("assets/models/teapot.obj");
     // AsyncLoadModels("assets/models/ignore/sponza/sponza_semitransparent.obj");
@@ -98,10 +101,7 @@ void SceneManager::AddModel(Model* model, Collection* collection) {
 
 void SceneManager::SetCollection(Model* model, Collection* collection) {
     if (model->collection != nullptr) {
-        auto it = std::find(model->collection->models.begin(), model->collection->models.end(), model);
-        if (it != model->collection->models.end()) {
-            model->collection->models.erase(it);
-        }
+        DeleteModelFromCollection(model);
     }
     if (collection == nullptr) {
         collection = &mainCollection;
@@ -164,6 +164,10 @@ void SceneManager::ModelOnImgui(Model* model) {
 
     selected = ImGui::Selectable(model->name.c_str(), &selected);
 
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        SelectModel(model);
+    }
+
     if(selected) {
         selectedModel = model;
         selectedTransform = &model->transform;
@@ -189,6 +193,17 @@ void SceneManager::CollectionOnImgui(Collection* collection, int id) {
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         selectedTransform = &collection->transform;
         selectedModel = nullptr;
+        selectedCollection = collection;
+    }
+
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        SelectCollection(collection);
+    }
+
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("collection", &collection, sizeof(Collection*));
+        ImGui::Text(collection->name.c_str());
+        ImGui::EndDragDropSource();
     }
 
     if (ImGui::BeginDragDropTarget()) {
@@ -203,6 +218,13 @@ void SceneManager::CollectionOnImgui(Collection* collection, int id) {
         if (modelPayload) {
             Model* model = *(Model**) modelPayload->Data;
             SetCollection(model, collection);
+            ImGui::EndDragDropTarget();
+        }
+
+        const ImGuiPayload* collectionPayload = ImGui::AcceptDragDropPayload("collection");
+        if (collectionPayload) {
+            Collection* childCollection = *(Collection**) collectionPayload->Data;
+            SetCollectionParent(childCollection, collection);
             ImGui::EndDragDropTarget();
         }
     }
@@ -226,27 +248,48 @@ void SceneManager::OnImgui() {
     ImGui::SameLine(totalWidth*3.0f/5.0);
     ImGui::Text(path.string().c_str());
     if (ImGui::CollapsingHeader("Collections")) {
+        bool openRightClickPopup = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+        openRightClickPopup &= !ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        openRightClickPopup &= ImGui::IsWindowHovered();
         CollectionOnImgui(&mainCollection, -1);
-    }
-    if (ImGui::CollapsingHeader("Hierarchy")) {
-        for (auto& model : models) {
-            bool selected = model == selectedModel;
-            ImGui::PushID(model->id);
-            if (ImGui::Selectable(model->name.c_str(), &selected)) {
-                selectedModel = model;
-                selectedTransform = &model->transform;
-            }
-            ImGui::PopID();
+        if (openRightClickPopup) {
+            ImGui::OpenPopup("right_click_hierarchy");
         }
-        if (ImGui::BeginDragDropTarget()) {
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("mesh");
-            if (payload) {
-                std::string meshPath((const char*) payload->Data, payload->DataSize);
-                AsyncLoadModels(meshPath);
-                ImGui::EndDragDropTarget();
+        if (ImGui::BeginPopup("right_click_hierarchy")) {
+            if (selectedModel != nullptr) {
+                if (ImGui::MenuItem("Delete")) {
+                    DeleteModel(selectedModel);
+                    SelectModel(nullptr);
+                }
             }
+            if (selectedCollection != nullptr) {
+                if (ImGui::MenuItem("Delete")) {
+                    DeleteCollection(selectedCollection);
+                    SelectCollection(nullptr);
+                }
+            }
+            ImGui::EndPopup();
         }
     }
+    // if (ImGui::CollapsingHeader("Hierarchy")) {
+    //     for (auto& model : models) {
+    //         bool selected = model == selectedModel;
+    //         ImGui::PushID(model->id);
+    //         if (ImGui::Selectable(model->name.c_str(), &selected)) {
+    //             selectedModel = model;
+    //             selectedTransform = &model->transform;
+    //         }
+    //         ImGui::PopID();
+    //     }
+    //     if (ImGui::BeginDragDropTarget()) {
+    //         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("mesh");
+    //         if (payload) {
+    //             std::string meshPath((const char*) payload->Data, payload->DataSize);
+    //             AsyncLoadModels(meshPath);
+    //             ImGui::EndDragDropTarget();
+    //         }
+    //     }
+    // }
     if (ImGui::CollapsingHeader("Files")) {
         ImGui::Text("Auto Reload");
         ImGui::SameLine(totalWidth*3.0f/5.0f);
@@ -262,9 +305,94 @@ Collection* SceneManager::CreateCollection(Collection* parent) {
         parent = &mainCollection;
     }
     Collection* collection = new Collection();
+    collection->name = "New Collection";
     collection->parent = parent;
     collection->transform.parent = &parent->transform;
     parent->children.push_back(collection);
     collections.push_back(collection);
     return collection;
+}
+
+void SceneManager::SetCollectionParent(Collection* child, Collection* parent) {
+    if (!CollectionCanBeChild(child, parent)) {
+        LOG_WARN("Trying to set invalid collection child-parent.");
+        return;
+    }
+    RemoveCollectionFromParent(child);
+    child->parent = parent;
+    child->transform.parent = &parent->transform;
+    parent->children.push_back(child);
+}
+
+void SceneManager::RemoveCollectionFromParent(Collection* collection) {
+    Collection* oldParent = collection->parent;
+    if (oldParent != nullptr) {
+        auto it = std::find(oldParent->children.begin(), oldParent->children.end(), collection);
+        if (it == oldParent->children.end()) {
+            LOG_ERROR("Trying to remove invalid collection from parent...");
+            return;
+        }
+        oldParent->children.erase(it);
+    }
+    collection->parent = nullptr;
+    collection->transform.parent = nullptr;
+}
+
+bool SceneManager::CollectionCanBeChild(Collection* child, Collection* parent) {
+    bool cant = child == parent;
+    while (parent != nullptr) {
+        cant |= parent->parent == child;
+        parent = parent->parent;
+    }
+    return !cant;
+}
+
+void SceneManager::DeleteCollection(Collection* collection) {
+    auto it = std::find(collections.begin(), collections.end(), collection);
+    if (it == collections.end()) {
+        LOG_ERROR("Truing to delete invalid collection from scene...");
+    }
+    collections.erase(it);
+    RemoveCollectionFromParent(collection);
+    for (int i = 0; i < collection->children.size(); i++) {
+        DeleteCollection(collection->children[i]);
+    }
+    for (int i = 0; i < collection->models.size(); i++) {
+        DeleteModel(collection->models[i]);
+    }
+    delete collection;
+}
+
+void SceneManager::DeleteModelFromCollection(Model* model) {
+    auto it = std::find(model->collection->models.begin(), model->collection->models.end(), model);
+    if (it == model->collection->models.end()) {
+        LOG_ERROR("Trying to delete invalid model from collection...");
+        return;
+    }
+    model->collection->models.erase(it);
+}
+
+void SceneManager::DeleteModel(Model* model) {
+    DeleteModelFromCollection(model);
+
+    auto it = std::find(models.begin(), models.end(), model);
+    if (it == models.end()) {
+        LOG_ERROR("Trying to delete invalid model from scene...");
+        return;
+    }
+    models.erase(it);
+
+    delete model;
+}
+
+void SceneManager::SelectCollection(Collection* collection) {
+    selectedModel = nullptr;
+    selectedCollection = collection;
+    selectedTransform = collection != nullptr ? &collection->transform : nullptr;
+}
+
+void SceneManager::SelectModel(Model* model) {
+    selectedCollection = nullptr;
+    selectedModel = model;
+    selectedTransform = model != nullptr ? &model->transform : nullptr;
 }
