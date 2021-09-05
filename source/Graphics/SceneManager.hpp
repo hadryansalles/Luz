@@ -27,15 +27,22 @@ private:
 
     static inline Model* selectedModel = nullptr;
     static inline Transform* selectedTransform = nullptr;
+    static inline Collection* selectedCollection = nullptr;
 
     static inline std::vector<ModelDesc> preloadedModels;
     static inline std::mutex preloadedModelsLock;
 
     static void AddModel(Model* model, Collection* collection = nullptr);
+
     static void SetCollection(Model* model, Collection* collection = nullptr);
+    static void SetCollectionParent(Collection* child, Collection* parent);
+    static bool CollectionCanBeChild(Collection* child, Collection* parent);
 
     static void CollectionOnImgui(Collection* collection, int id);
     static void ModelOnImgui(Model* model);
+
+    static void SelectCollection(Collection* collection);
+    static void SelectModel(Model* model);
 
 public:
     static void Setup();
@@ -46,9 +53,15 @@ public:
     static void OnImgui();
 
     static Model* CreateModel(ModelDesc& desc);
+
+    static void DeleteModelFromCollection(Model* model);
+    static void DeleteModel(Model* model);
+
     static void SetTexture(Model* model, TextureResource* texture);
 
     static Collection* CreateCollection(Collection* parent = nullptr);
+    static void DeleteCollection(Collection* collection);
+    static void RemoveCollectionFromParent(Collection* collection);
 
     static void LoadModels(std::filesystem::path path, Collection* collection = nullptr);
     static void AsyncLoadModels(std::filesystem::path path, Collection* collection = nullptr);
