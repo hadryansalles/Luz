@@ -72,3 +72,4 @@ make run -j
 - [spdlog](https://github.com/gabime/spdlog) used as the logging library
 - [stb_image](https://github.com/nothings/stb) used to load image files
 - [tiny_obj_loader](https://github.com/tinyobjloader/tinyobjloader) used to load wavefront .obj files
+- [optick](https://github.com/bombomby/optick) used to profile the engine
