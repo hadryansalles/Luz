@@ -1,5 +1,6 @@
 # Luz Engine
 A Vulkan engine that I'm developing to study and implement modern rendering techniques used by AAA games.
+- [Videos on Youtube](https://www.youtube.com/user/HadryanSalles/videos)
 - [Features](#features)
 - [How to build and run](#build)
 - [References and credits](#references)
@@ -7,21 +8,25 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 <a name="features"/>
 
 ## Features
+- Scene hierarchy
+- Asynchronous OBJ model loading
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 - Widgets for adjusting Vulkan settings at runtime
 
 ## Gallery
 
+- Asynchronous model loading
+![Alt Text](https://hadryansalles.github.io/assets/luz/async.gif)
+
 - Graphics Pipeline configuration at runtime
-![Alt Text](assets/gifs/polygon.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/polygon.gif)
 
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
-![Alt Text](assets/gifs/cameras.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/cameras.gif)
 
 - ImGui and ImGuizmo integration
-![Alt Text](assets/gifs/imgui.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/imgui.gif)
 
-- [More videos](https://www.youtube.com/user/HadryanSalles/videos)
 
 <a name="build"/>
 
@@ -67,3 +72,4 @@ make run -j
 - [spdlog](https://github.com/gabime/spdlog) used as the logging library
 - [stb_image](https://github.com/nothings/stb) used to load image files
 - [tiny_obj_loader](https://github.com/tinyobjloader/tinyobjloader) used to load wavefront .obj files
+- [optick](https://github.com/bombomby/optick) used to profile the engine
