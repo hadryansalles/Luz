@@ -1,9 +1,9 @@
 # Luz Engine
 A Vulkan engine that I'm developing to study and implement modern rendering techniques used by AAA games.
+- [Videos on Youtube](https://www.youtube.com/user/HadryanSalles/videos)
 - [Features](#features)
 - [How to build and run](#build)
 - [References and credits](#references)
-- [Videos](https://www.youtube.com/user/HadryanSalles/videos)
 
 <a name="features"/>
 
