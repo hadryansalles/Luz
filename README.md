@@ -3,25 +3,30 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 - [Features](#features)
 - [How to build and run](#build)
 - [References and credits](#references)
+- [Videos](https://www.youtube.com/user/HadryanSalles/videos)
 
 <a name="features"/>
 
 ## Features
+- Scene hierarchy
+- Asynchronous OBJ model loading
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 - Widgets for adjusting Vulkan settings at runtime
 
 ## Gallery
 
+- Asynchronous model loading
+![Alt Text](https://hadryansalles.github.io/assets/luz/polygon.gif)
+
 - Graphics Pipeline configuration at runtime
-![Alt Text](assets/gifs/polygon.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/polygon.gif)
 
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
-![Alt Text](assets/gifs/cameras.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/cameras.gif)
 
 - ImGui and ImGuizmo integration
-![Alt Text](assets/gifs/imgui.gif)
+![Alt Text](https://hadryansalles.github.io/assets/luz/imgui.gif)
 
-- [More videos](https://www.youtube.com/user/HadryanSalles/videos)
 
 <a name="build"/>
 
