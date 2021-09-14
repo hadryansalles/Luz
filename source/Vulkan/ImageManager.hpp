@@ -8,6 +8,8 @@ struct ImageResource {
     VkImage image;
     VkImageView view;
     VkDeviceMemory memory;
+    uint32_t width;
+    uint32_t height;
 };
 
 struct ImageDesc {

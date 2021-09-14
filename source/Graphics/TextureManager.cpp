@@ -7,6 +7,7 @@
 #include "LogicalDevice.hpp"
 #include "Instance.hpp"
 
+#include "imgui/imgui_impl_vulkan.h"
 #include <stb_image.h>
 
 void TextureManager::Setup() {
@@ -19,12 +20,14 @@ void TextureManager::Create() {
     TextureResource* newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(defaultTexture->path));
     defaultTexture->image = newTexture->image;
     defaultTexture->sampler = newTexture->sampler;
+    defaultTexture->imguiTexture = nullptr;
     DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
     textures.pop_back();
     for (TextureResource* texture : textures) {
         newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(texture->path));
         texture->image = newTexture->image;
         texture->sampler = newTexture->sampler;
+        texture->imguiTexture = nullptr;
         DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
         textures.pop_back();
     }
@@ -115,5 +118,33 @@ TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
     stbi_image_free(desc.data);
     res->path = desc.path;
 
+    res->imguiTexture = ImGui_ImplVulkan_AddTexture(res->sampler, res->image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     return res;
+}
+
+void TextureManager::OnImgui() {
+    if(ImGui::CollapsingHeader("Textures")) {
+        ImGui::PushID("texture scale");
+        ImGui::SliderFloat("", &imguiTextureScale, 0.01f, 10.0f);
+        ImGui::PopID();
+        for (int i = 0; i < textures.size(); i++) {
+            ImGui::PushID(i);
+            if (ImGui::TreeNode(textures[i]->path.string().c_str())) {
+                ImVec2 size = ImVec2(textures[i]->image.width, textures[i]->image.height);
+                size = ImVec2(size.x * imguiTextureScale, size.y * imguiTextureScale);
+                ImGui::Image(textures[i]->imguiTexture, size);
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        }
+    }
+}
+
+void TextureManager::CreateImguiTextureDescriptors() {
+    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    defaultTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(defaultTexture->sampler, defaultTexture->image.view, layout);
+    for (TextureResource* texture : textures) {
+        texture->imguiTexture = ImGui_ImplVulkan_AddTexture(texture->sampler, texture->image.view, layout);
+    }
 }
