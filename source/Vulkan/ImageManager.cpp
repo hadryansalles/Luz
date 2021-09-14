@@ -9,6 +9,9 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
 
+    res.width = desc.width;
+    res.height = desc.height;
+
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -63,6 +66,9 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
 void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
+
+    res.width = desc.width;
+    res.height = desc.height;
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
