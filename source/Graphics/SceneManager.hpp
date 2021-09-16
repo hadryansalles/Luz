@@ -29,6 +29,8 @@ private:
     static inline Transform* selectedTransform = nullptr;
     static inline Collection* selectedCollection = nullptr;
 
+    static inline bool openSceneItemMenu = false;
+
     static inline std::vector<ModelDesc> preloadedModels;
     static inline std::mutex preloadedModelsLock;
 
@@ -57,6 +59,8 @@ public:
     static void DeleteModelFromCollection(Model* model);
     static void DeleteModel(Model* model);
 
+    static void AsyncLoadAndSetTexture(Model* model, std::filesystem::path path);
+    static void LoadAndSetTexture(Model* model, std::filesystem::path path);
     static void SetTexture(Model* model, TextureResource* texture);
 
     static Collection* CreateCollection(Collection* parent = nullptr);

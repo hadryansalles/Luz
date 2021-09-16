@@ -148,3 +148,19 @@ void TextureManager::CreateImguiTextureDescriptors() {
         texture->imguiTexture = ImGui_ImplVulkan_AddTexture(texture->sampler, texture->image.view, layout);
     }
 }
+
+void TextureManager::DrawOnImgui(TextureResource* texture) {
+    float hSpace = ImGui::GetContentRegionAvailWidth();
+    ImVec2 size = ImVec2(texture->image.width, texture->image.height);
+    size = ImVec2(hSpace, size.y * hSpace / size.x);
+    ImGui::Image(texture->imguiTexture, size);
+}
+
+TextureResource* TextureManager::GetTexture(std::filesystem::path path) {
+    for (int i = 0; i < textures.size(); i++) {
+        if (path == textures[i]->path) {
+            return textures[i];
+        }
+    }
+    return nullptr;
+}

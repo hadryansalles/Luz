@@ -196,55 +196,57 @@ private:
         }
         ImGui::End();
 
-        ImGuizmo::BeginFrame();
-        static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
-        static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
+        if (ImGui::Begin("Inspector")) {
 
-        Transform* selectedTransform = SceneManager::GetSelectedTransform();
+            Transform* selectedTransform = SceneManager::GetSelectedTransform();
 
-        if (selectedTransform != nullptr) {
-            if (ImGui::Begin("Transform")) {
+            if (selectedTransform != nullptr) {
                 Transform& transform = *selectedTransform;
-     
-                if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
-                    currentGizmoOperation = ImGuizmo::TRANSLATE;
-                }
-                if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
-                    currentGizmoOperation = ImGuizmo::ROTATE;
-                }
-                if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
-                    currentGizmoOperation = ImGuizmo::SCALE;
-                }
-                if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
-                    currentGizmoOperation = ImGuizmo::TRANSLATE;
-                }
-                ImGui::SameLine();
-                if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
-                    currentGizmoOperation = ImGuizmo::ROTATE;
-                }
-                ImGui::SameLine();
-                if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
-                    currentGizmoOperation = ImGuizmo::SCALE;
-                }
+                ImGuizmo::BeginFrame();
+                static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
+                static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-                ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
-                ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
-                ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
+                if (ImGui::CollapsingHeader("Transform")) {
+                    if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+                        currentGizmoOperation = ImGuizmo::TRANSLATE;
+                    }
+                    if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+                        currentGizmoOperation = ImGuizmo::ROTATE;
+                    }
+                    if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+                        currentGizmoOperation = ImGuizmo::SCALE;
+                    }
+                    if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
+                        currentGizmoOperation = ImGuizmo::TRANSLATE;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
+                        currentGizmoOperation = ImGuizmo::ROTATE;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
+                        currentGizmoOperation = ImGuizmo::SCALE;
+                    }
+
+                    ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
+                    ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
+                    ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
+
+                    if (currentGizmoOperation != ImGuizmo::SCALE) {
+                        if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
+                            currentGizmoMode = ImGuizmo::LOCAL;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
+                            currentGizmoMode = ImGuizmo::WORLD;
+                        }
+                    } else {
+                        currentGizmoMode = ImGuizmo::LOCAL;
+                    }
+                }
                 glm::mat4 modelMat = transform.GetMatrix();
                 // ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
                 //     glm::value_ptr(transform.scale), glm::value_ptr(transform.transform));
-
-                if (currentGizmoOperation != ImGuizmo::SCALE) {
-                    if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
-                        currentGizmoMode = ImGuizmo::LOCAL;
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
-                        currentGizmoMode = ImGuizmo::WORLD;
-                    }
-                } else {
-                    currentGizmoMode = ImGuizmo::LOCAL;
-                }
 
                 glm::mat4 guizmoProj(sceneUBO.proj);
                 guizmoProj[1][1] *= -1;
@@ -252,7 +254,7 @@ private:
                 ImGuiIO& io = ImGui::GetIO();
                 ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
                 ImGuizmo::Manipulate(glm::value_ptr(sceneUBO.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
-                    currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
+                currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
 
                 if (transform.parent != nullptr) {
                     modelMat = glm::inverse(transform.parent->GetMatrix()) * modelMat;
@@ -262,8 +264,23 @@ private:
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
                     glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
             }
-            ImGui::End();
+
+            Model* selectedModel = SceneManager::GetSelectedModel();
+            if (selectedModel != nullptr) {
+                if (ImGui::CollapsingHeader("Texture")) {
+                    if (ImGui::BeginDragDropTarget()) {
+                        const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
+                        if (texturePayload) {
+                            std::string texturePath((const char*)texturePayload->Data, texturePayload->DataSize);
+                            SceneManager::LoadAndSetTexture(selectedModel, texturePath);
+                            ImGui::EndDragDropTarget();
+                        }
+                    }
+                    TextureManager::DrawOnImgui(selectedModel->texture);
+                }
+            }
         }
+        ImGui::End();
 
         ImGui::ShowDemoWindow();
 

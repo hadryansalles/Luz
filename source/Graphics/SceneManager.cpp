@@ -152,6 +152,13 @@ void DirOnImgui(std::filesystem::path path) {
                         ImGui::EndDragDropSource();
                     }
                 }
+                if (AssetManager::IsTextureFile(entry.path())) {
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                        ImGui::SetDragDropPayload("texture", filePath.c_str(), filePath.size());
+                        ImGui::Text(fileName.c_str());
+                        ImGui::EndDragDropSource();
+                    }
+                }
                 ImGui::PopID();
             }
         }
@@ -167,11 +174,11 @@ void SceneManager::ModelOnImgui(Model* model) {
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
         SelectModel(model);
+        openSceneItemMenu = true;
     }
 
     if(selected) {
-        selectedModel = model;
-        selectedTransform = &model->transform;
+        SelectModel(model);
     }
 
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
@@ -192,13 +199,12 @@ void SceneManager::CollectionOnImgui(Collection* collection, int id) {
     bool open = ImGui::TreeNodeEx(collection->name.c_str(), nodeFlags);
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        selectedTransform = &collection->transform;
-        selectedModel = nullptr;
-        selectedCollection = collection;
+        SelectCollection(collection);
     }
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
         SelectCollection(collection);
+        openSceneItemMenu = true;
     }
 
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
@@ -249,11 +255,9 @@ void SceneManager::OnImgui() {
     ImGui::SameLine(totalWidth*3.0f/5.0);
     ImGui::Text(path.string().c_str());
     if (ImGui::CollapsingHeader("Collections")) {
-        bool openRightClickPopup = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
-        openRightClickPopup &= !ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-        openRightClickPopup &= ImGui::IsWindowHovered();
+        openSceneItemMenu &= !ImGui::IsMouseClicked(ImGuiMouseButton_Left);
         CollectionOnImgui(&mainCollection, -1);
-        if (openRightClickPopup) {
+        if (openSceneItemMenu) {
             ImGui::OpenPopup("right_click_hierarchy");
         }
         if (ImGui::BeginPopup("right_click_hierarchy")) {
@@ -272,25 +276,6 @@ void SceneManager::OnImgui() {
             ImGui::EndPopup();
         }
     }
-    // if (ImGui::CollapsingHeader("Hierarchy")) {
-    //     for (auto& model : models) {
-    //         bool selected = model == selectedModel;
-    //         ImGui::PushID(model->id);
-    //         if (ImGui::Selectable(model->name.c_str(), &selected)) {
-    //             selectedModel = model;
-    //             selectedTransform = &model->transform;
-    //         }
-    //         ImGui::PopID();
-    //     }
-    //     if (ImGui::BeginDragDropTarget()) {
-    //         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("mesh");
-    //         if (payload) {
-    //             std::string meshPath((const char*) payload->Data, payload->DataSize);
-    //             AsyncLoadModels(meshPath);
-    //             ImGui::EndDragDropTarget();
-    //         }
-    //     }
-    // }
     if (ImGui::CollapsingHeader("Files")) {
         ImGui::Text("Auto Reload");
         ImGui::SameLine(totalWidth*3.0f/5.0f);
@@ -396,4 +381,20 @@ void SceneManager::SelectModel(Model* model) {
     selectedCollection = nullptr;
     selectedModel = model;
     selectedTransform = model != nullptr ? &model->transform : nullptr;
+}
+
+void SceneManager::LoadAndSetTexture(Model* model, std::filesystem::path path) {
+    TextureResource* texture = TextureManager::GetTexture(path);
+    if (texture == nullptr) {
+        TextureDesc textureDesc = AssetManager::LoadImageFile(path);
+        texture = TextureManager::CreateTexture(textureDesc);
+        if (texture == nullptr) {
+            LOG_ERROR("Error loading texture.");
+        }
+    }
+    SetTexture(model, texture);
+}
+
+void SceneManager::AsyncLoadAndSetTexture(Model* model, std::filesystem::path path) {
+    std::thread(LoadAndSetTexture, model, path).detach();
 }
