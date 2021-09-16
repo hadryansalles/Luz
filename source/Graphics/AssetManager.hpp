@@ -13,6 +13,8 @@ public:
     static void Destroy();
 
     static bool IsMeshFile(std::filesystem::path path);
+    static bool IsTextureFile(std::filesystem::path path);
+
     static std::vector<ModelDesc> LoadMeshFile(std::filesystem::path path);
     static std::vector<ModelDesc> LoadObjFile(std::filesystem::path path);
 

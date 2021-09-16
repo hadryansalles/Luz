@@ -40,6 +40,11 @@ bool AssetManager::IsMeshFile(std::filesystem::path path) {
     return extension == ".obj" || extension == ".OBJ";
 }
 
+bool AssetManager::IsTextureFile(std::filesystem::path path) {
+    std::string extension = path.extension().string();
+    return extension == ".JPG" || extension == ".jpg" || extension == ".png";
+}
+
 std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;

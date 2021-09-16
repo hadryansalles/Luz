@@ -33,7 +33,9 @@ public:
     static void OnImgui();
 
     static void CreateImguiTextureDescriptors();
+    static void DrawOnImgui(TextureResource* texture);
 
+    static TextureResource* GetTexture(std::filesystem::path);
     static TextureResource* CreateTexture(TextureDesc& desc);
     static inline TextureResource* GetDefaultTexture() { return defaultTexture; }
 };
