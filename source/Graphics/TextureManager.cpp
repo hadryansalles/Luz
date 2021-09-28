@@ -6,6 +6,7 @@
 #include "PhysicalDevice.hpp"
 #include "LogicalDevice.hpp"
 #include "Instance.hpp"
+#include "GraphicsPipelineManager.hpp"
 
 #include "imgui/imgui_impl_vulkan.h"
 #include <stb_image.h>
@@ -119,6 +120,8 @@ TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
     res->path = desc.path;
 
     res->imguiTexture = ImGui_ImplVulkan_AddTexture(res->sampler, res->image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    res->descriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+    GraphicsPipelineManager::UpdateTextureDescriptor(res->descriptor, res);
 
     return res;
 }
@@ -133,7 +136,19 @@ void TextureManager::OnImgui() {
             if (ImGui::TreeNode(textures[i]->path.string().c_str())) {
                 ImVec2 size = ImVec2(textures[i]->image.width, textures[i]->image.height);
                 size = ImVec2(size.x * imguiTextureScale, size.y * imguiTextureScale);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                    std::string texturePath = textures[i]->path.string();
+                    ImGui::SetDragDropPayload("texture", texturePath.c_str(), texturePath.size());
+                    ImGui::Image(textures[i]->imguiTexture, size);
+                    ImGui::EndDragDropSource();
+                }
                 ImGui::Image(textures[i]->imguiTexture, size);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    std::string texturePath = textures[i]->path.string();
+                    ImGui::SetDragDropPayload("texture", texturePath.c_str(), texturePath.size());
+                    ImGui::Image(textures[i]->imguiTexture, size);
+                    ImGui::EndDragDropSource();
+                }
                 ImGui::TreePop();
             }
             ImGui::PopID();
@@ -141,11 +156,15 @@ void TextureManager::OnImgui() {
     }
 }
 
-void TextureManager::CreateImguiTextureDescriptors() {
+void TextureManager::CreateTextureDescriptors() {
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     defaultTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(defaultTexture->sampler, defaultTexture->image.view, layout);
+    defaultTexture->descriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+    GraphicsPipelineManager::UpdateTextureDescriptor(defaultTexture->descriptor, defaultTexture);
     for (TextureResource* texture : textures) {
         texture->imguiTexture = ImGui_ImplVulkan_AddTexture(texture->sampler, texture->image.view, layout);
+        texture->descriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+        GraphicsPipelineManager::UpdateTextureDescriptor(texture->descriptor, texture);
     }
 }
 

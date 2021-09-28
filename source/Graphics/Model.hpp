@@ -27,7 +27,6 @@ struct Model {
     MeshResource* mesh = nullptr;
     TextureResource* texture = nullptr;
     BufferDescriptor meshDescriptor;
-    TextureDescriptor materialDescriptor;
     ModelUBO ubo;
     unsigned int id;
 };

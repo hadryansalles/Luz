@@ -46,11 +46,7 @@ public:
 
 private:
     SceneUBO sceneUBO;
-
-    // imgui
     ImDrawData* imguiDrawData = nullptr;
-
-    // camera 
     Camera camera;
 
     void WaitToInit(float seconds) {
@@ -90,7 +86,7 @@ private:
         CreateImgui();
         createUniformProjection();
         TextureManager::Create();
-        TextureManager::CreateImguiTextureDescriptors();
+        TextureManager::CreateTextureDescriptors();
         MeshManager::Create();
         SceneManager::Create();
     }
@@ -277,6 +273,14 @@ private:
                         }
                     }
                     TextureManager::DrawOnImgui(selectedModel->texture);
+                    if (ImGui::BeginDragDropTarget()) {
+                        const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
+                        if (texturePayload) {
+                            std::string texturePath((const char*)texturePayload->Data, texturePayload->DataSize);
+                            SceneManager::LoadAndSetTexture(selectedModel, texturePath);
+                            ImGui::EndDragDropTarget();
+                        }
+                    }
                 }
             }
         }
@@ -337,7 +341,7 @@ private:
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
-                    1, &model->materialDescriptor.descriptors[frameIndex], 0, nullptr);
+                    1, &model->texture->descriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
@@ -386,7 +390,7 @@ private:
         SceneManager::Create();
         CreateImgui();
         createUniformProjection();
-        TextureManager::CreateImguiTextureDescriptors();
+        TextureManager::CreateTextureDescriptors();
     }
 
     void createUniformProjection() {
