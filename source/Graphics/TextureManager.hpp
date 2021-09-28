@@ -18,6 +18,7 @@ struct TextureResource {
     ImageResource         image;
     VkSampler             sampler = VK_NULL_HANDLE;
     ImTextureID           imguiTexture;
+    TextureDescriptor     descriptor;
 };
 
 class TextureManager {
@@ -32,7 +33,7 @@ public:
     static void Finish();
     static void OnImgui();
 
-    static void CreateImguiTextureDescriptors();
+    static void CreateTextureDescriptors();
     static void DrawOnImgui(TextureResource* texture);
 
     static TextureResource* GetTexture(std::filesystem::path);

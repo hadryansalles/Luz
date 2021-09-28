@@ -38,7 +38,6 @@ void SceneManager::AsyncLoadModels(std::filesystem::path path, Collection* colle
 
 void CreateModelDescriptors(Model* model) {
     model->meshDescriptor = GraphicsPipelineManager::CreateMeshDescriptor(sizeof(ModelUBO));
-    model->materialDescriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
     GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
 }
 
@@ -114,7 +113,6 @@ void SceneManager::SetCollection(Model* model, Collection* collection) {
 
 void SceneManager::SetTexture(Model* model, TextureResource* texture) {
     model->texture = texture;
-    GraphicsPipelineManager::UpdateTextureDescriptor(model->materialDescriptor, texture);
 }
 
 Model* SceneManager::CreateModel(ModelDesc& desc) {
