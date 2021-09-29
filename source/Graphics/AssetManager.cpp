@@ -42,7 +42,7 @@ bool AssetManager::IsMeshFile(std::filesystem::path path) {
 
 bool AssetManager::IsTextureFile(std::filesystem::path path) {
     std::string extension = path.extension().string();
-    return extension == ".JPG" || extension == ".jpg" || extension == ".png";
+    return extension == ".JPG" || extension == ".jpg" || extension == ".png" || extension == ".tga";
 }
 
 std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {

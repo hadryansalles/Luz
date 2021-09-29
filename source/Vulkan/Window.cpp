@@ -95,6 +95,9 @@ void Window::Destroy() {
 }
 
 void Window::Update() {
+    for (int i = 0; i < GLFW_KEY_LAST + 1; i++) {
+        lastKeyState[i] = glfwGetKey(window, i);
+    }
     deltaScroll = 0;
     auto newTime = std::chrono::high_resolution_clock::now();
     deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(newTime - lastTime).count();
@@ -236,4 +239,8 @@ void Window::OnImgui() {
 void Window::UpdateFramebufferSize() {
     framebufferResized = false;
     glfwGetFramebufferSize(window, &width, &height);
+}
+
+bool Window::IsKeyPressed(uint16_t keyCode) {
+    return lastKeyState[keyCode] && !glfwGetKey(window, keyCode);
 }

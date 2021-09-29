@@ -8,6 +8,7 @@
 #include "Instance.hpp"
 #include "LogicalDevice.hpp"
 #include "Camera.hpp"
+#include "Window.hpp"
 
 #include <future>
 
@@ -211,28 +212,7 @@ void SceneManager::CollectionOnImgui(Collection* collection, int id) {
         ImGui::EndDragDropSource();
     }
 
-    if (ImGui::BeginDragDropTarget()) {
-        const ImGuiPayload* meshPayload = ImGui::AcceptDragDropPayload("mesh");
-        if (meshPayload) {
-            std::string meshPath((const char*) meshPayload->Data, meshPayload->DataSize);
-            AsyncLoadModels(meshPath, collection);
-            ImGui::EndDragDropTarget();
-        }
-
-        const ImGuiPayload* modelPayload = ImGui::AcceptDragDropPayload("model");
-        if (modelPayload) {
-            Model* model = *(Model**) modelPayload->Data;
-            SetCollection(model, collection);
-            ImGui::EndDragDropTarget();
-        }
-
-        const ImGuiPayload* collectionPayload = ImGui::AcceptDragDropPayload("collection");
-        if (collectionPayload) {
-            Collection* childCollection = *(Collection**) collectionPayload->Data;
-            SetCollectionParent(childCollection, collection);
-            ImGui::EndDragDropTarget();
-        }
-    }
+    CollectionDragDropTarget(collection);
 
     if(open) {
         for (int i = 0; i < collection->children.size(); i++) {
@@ -252,23 +232,91 @@ void SceneManager::OnImgui() {
     ImGui::Text("Path");
     ImGui::SameLine(totalWidth*3.0f/5.0);
     ImGui::Text(path.string().c_str());
-    if (ImGui::CollapsingHeader("Collections")) {
+    if (ImGui::CollapsingHeader("Collections", ImGuiTreeNodeFlags_DefaultOpen)) {
+        CollectionDragDropTarget(&mainCollection);
         openSceneItemMenu &= !ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-        CollectionOnImgui(&mainCollection, -1);
+        for (int i = 0; i < mainCollection.children.size(); i++) {
+            CollectionOnImgui(mainCollection.children[i], i);
+        }
+        for (int i = 0; i < mainCollection.models.size(); i++) {
+            ModelOnImgui(mainCollection.models[i]);
+        }
+        bool controlPressed = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL);
+        if (controlPressed && Window::IsKeyPressed(GLFW_KEY_C)) {
+            if (selectedCollection != nullptr && selectedModel != nullptr) {
+                LOG_WARN("Selected model and collection simultaneously");
+            }
+            if (selectedCollection != nullptr && selectedCollection != &mainCollection) {
+                SetCopiedCollection(selectedCollection);
+            } else if (selectedModel != nullptr) {
+                SetCopiedModel(selectedModel);
+            }
+        }
+        if (controlPressed && Window::IsKeyPressed(GLFW_KEY_V)) {
+            if (copiedCollection != nullptr && copiedModel != nullptr) {
+                LOG_WARN("Copied model and collection simultaneously");
+            }
+            if (copiedCollection != nullptr) {
+                Collection* collection = CreateCollectionCopy(copiedCollection);
+                if (selectedCollection != nullptr) {
+                    SetCollectionParent(collection, selectedCollection);
+                }
+                SelectCollection(collection);
+            } else if (copiedModel != nullptr) {
+                Model* model = AddModelCopy(copiedModel);
+                if (selectedCollection != nullptr) {
+                    SetCollection(model, selectedCollection);
+                }
+                else {
+                    SetCollection(model, copiedModel->collection);
+                }
+                SelectModel(model);
+            }
+        }
+        if (Window::IsKeyPressed(GLFW_KEY_X)) {
+            if (selectedModel != nullptr) {
+                DeleteModel(selectedModel);
+            }
+            if (selectedCollection != nullptr) {
+                DeleteCollection(selectedCollection);
+            }
+        }
         if (openSceneItemMenu) {
             ImGui::OpenPopup("right_click_hierarchy");
         }
         if (ImGui::BeginPopup("right_click_hierarchy")) {
             if (selectedModel != nullptr) {
+                if (ImGui::MenuItem("Copy")) {
+                    SetCopiedModel(selectedModel);
+                }
                 if (ImGui::MenuItem("Delete")) {
                     DeleteModel(selectedModel);
-                    SelectModel(nullptr);
                 }
             }
             if (selectedCollection != nullptr) {
+                if (ImGui::MenuItem("New")) {
+                    CreateCollection(selectedCollection);
+                }
+                if (copiedModel != nullptr) {
+                    if (ImGui::MenuItem("Paste")) {
+                        Model* copy = AddModelCopy(copiedModel);
+                        SetCollection(copy, selectedCollection);
+                        SelectModel(copy);
+                    }
+                }
+                if (copiedCollection != nullptr) {
+                    if (ImGui::MenuItem("Paste")) {
+                        Collection* copy = CreateCollectionCopy(copiedCollection, selectedCollection);
+                        SelectCollection(copy);
+                    }
+                }
+            }
+            if (selectedCollection != nullptr && selectedCollection != &mainCollection) {
+                if (ImGui::MenuItem("Copy")) {
+                    SetCopiedCollection(selectedCollection);
+                }
                 if (ImGui::MenuItem("Delete")) {
                     DeleteCollection(selectedCollection);
-                    SelectCollection(nullptr);
                 }
             }
             ImGui::EndPopup();
@@ -332,17 +380,23 @@ bool SceneManager::CollectionCanBeChild(Collection* child, Collection* parent) {
 }
 
 void SceneManager::DeleteCollection(Collection* collection) {
+    if (selectedCollection == collection) {
+        SelectCollection(nullptr);
+    }
+    if (copiedCollection == selectedCollection) {
+        copiedCollection = nullptr;
+    }
     auto it = std::find(collections.begin(), collections.end(), collection);
     if (it == collections.end()) {
-        LOG_ERROR("Truing to delete invalid collection from scene...");
+        LOG_ERROR("Trying to delete invalid collection from scene...");
     }
     collections.erase(it);
     RemoveCollectionFromParent(collection);
     for (int i = 0; i < collection->children.size(); i++) {
         DeleteCollection(collection->children[i]);
     }
-    for (int i = 0; i < collection->models.size(); i++) {
-        DeleteModel(collection->models[i]);
+    while (!collection->models.empty()) {
+        DeleteModel(*collection->models.begin());
     }
     delete collection;
 }
@@ -357,6 +411,15 @@ void SceneManager::DeleteModelFromCollection(Model* model) {
 }
 
 void SceneManager::DeleteModel(Model* model) {
+    vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+
+    if (selectedModel == model) {
+        SelectModel(nullptr);
+    }
+    if (copiedModel == model) {
+        copiedModel = nullptr;
+    }
+
     DeleteModelFromCollection(model);
 
     auto it = std::find(models.begin(), models.end(), model);
@@ -365,6 +428,10 @@ void SceneManager::DeleteModel(Model* model) {
         return;
     }
     models.erase(it);
+
+    for (BufferResource& buffer : model->meshDescriptor.buffers) {
+        BufferManager::Destroy(buffer);
+    }
 
     delete model;
 }
@@ -381,6 +448,16 @@ void SceneManager::SelectModel(Model* model) {
     selectedTransform = model != nullptr ? &model->transform : nullptr;
 }
 
+void SceneManager::SetCopiedCollection(Collection* collection) {
+    copiedModel = nullptr;
+    copiedCollection = collection;
+}
+
+void SceneManager::SetCopiedModel(Model* model) {
+    copiedCollection = nullptr;
+    copiedModel = model;
+}
+
 void SceneManager::LoadAndSetTexture(Model* model, std::filesystem::path path) {
     TextureResource* texture = TextureManager::GetTexture(path);
     if (texture == nullptr) {
@@ -395,4 +472,51 @@ void SceneManager::LoadAndSetTexture(Model* model, std::filesystem::path path) {
 
 void SceneManager::AsyncLoadAndSetTexture(Model* model, std::filesystem::path path) {
     std::thread(LoadAndSetTexture, model, path).detach();
+}
+
+Collection* SceneManager::CreateCollectionCopy(Collection* copy, Collection* parent) {
+    Collection* collection = CreateCollection(parent);
+    collection->name = copy->name;
+    for (Model* model : copy->models) {
+        SetCollection(AddModelCopy(model), collection);
+    }
+    return collection;
+}
+
+Model* SceneManager::AddModelCopy(Model* copy) {
+    Model* model = new Model();
+    model->mesh = copy->mesh;
+    model->name = copy->name;
+    model->id = modelID++;
+    model->transform = copy->transform;
+    CreateModelDescriptors(model);
+    SetTexture(model, copy->texture);
+    models.push_back(model);
+    SetCollection(model, nullptr);
+    return model;
+}
+
+void SceneManager::CollectionDragDropTarget(Collection* collection) {
+    if (ImGui::BeginDragDropTarget()) {
+        const ImGuiPayload* meshPayload = ImGui::AcceptDragDropPayload("mesh");
+        if (meshPayload) {
+            std::string meshPath((const char*) meshPayload->Data, meshPayload->DataSize);
+            AsyncLoadModels(meshPath, collection);
+            ImGui::EndDragDropTarget();
+        }
+
+        const ImGuiPayload* modelPayload = ImGui::AcceptDragDropPayload("model");
+        if (modelPayload) {
+            Model* model = *(Model**) modelPayload->Data;
+            SetCollection(model, collection);
+            ImGui::EndDragDropTarget();
+        }
+
+        const ImGuiPayload* collectionPayload = ImGui::AcceptDragDropPayload("collection");
+        if (collectionPayload) {
+            Collection* childCollection = *(Collection**) collectionPayload->Data;
+            SetCollectionParent(childCollection, collection);
+            ImGui::EndDragDropTarget();
+        }
+    }
 }
