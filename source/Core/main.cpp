@@ -16,10 +16,12 @@
 #include "TextureManager.hpp"
 #include "AssetManager.hpp"
 
+
 #include <stb_image.h>
 
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui_stdlib.h>
 #ifdef _DEBUG
 #define IMGUI_VULKAN_DEBUG_REPORT
 #endif
@@ -193,8 +195,30 @@ private:
         ImGui::End();
 
         if (ImGui::Begin("Inspector")) {
+            
+            const float totalWidth = ImGui::GetContentRegionAvailWidth();
 
+            Collection* selectedCollection = SceneManager::GetSelectedCollection();
+            Model* selectedModel = SceneManager::GetSelectedModel();
             Transform* selectedTransform = SceneManager::GetSelectedTransform();
+
+            if (selectedCollection != nullptr) {
+                ImGui::Text("Name");
+                ImGui::SameLine(totalWidth/5.0, -1);
+                ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
+                ImGui::PushID("name");
+                ImGui::InputText("", &selectedCollection->name);
+                ImGui::PopID();
+            }
+
+            if (selectedModel != nullptr) {
+                ImGui::Text("Name");
+                ImGui::SameLine(totalWidth/5.0, -1);
+                ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
+                ImGui::PushID("name");
+                ImGui::InputText("", &selectedModel->name);
+                ImGui::PopID();
+            }
 
             if (selectedTransform != nullptr) {
                 Transform& transform = *selectedTransform;
@@ -202,7 +226,7 @@ private:
                 static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
                 static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-                if (ImGui::CollapsingHeader("Transform")) {
+                if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
                         currentGizmoOperation = ImGuizmo::TRANSLATE;
                     }
@@ -261,9 +285,8 @@ private:
                     glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
             }
 
-            Model* selectedModel = SceneManager::GetSelectedModel();
             if (selectedModel != nullptr) {
-                if (ImGui::CollapsingHeader("Texture")) {
+                if (ImGui::CollapsingHeader("Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (ImGui::BeginDragDropTarget()) {
                         const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
                         if (texturePayload) {

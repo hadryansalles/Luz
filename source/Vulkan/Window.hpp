@@ -26,6 +26,8 @@ private:
     static inline glm::vec2 mousePos      = glm::vec2(.0f, .0f);
     static inline glm::vec2 deltaMousePos = glm::vec2(.0f, .0f);
 
+    static inline char lastKeyState[GLFW_KEY_LAST + 1];
+
     enum class Mode {
         Windowed,
         WindowedFullScreen,
@@ -50,6 +52,7 @@ public:
     static void Destroy();
     static void ApplyChanges();
     static void UpdateFramebufferSize();
+    static bool IsKeyPressed(uint16_t keyCode);
 
     static inline GLFWwindow* GetGLFWwindow()                  { return window;                                 }
     static inline bool        IsDirty()                        { return dirty;                                  }

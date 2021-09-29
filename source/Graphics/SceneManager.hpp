@@ -28,6 +28,8 @@ private:
     static inline Model* selectedModel = nullptr;
     static inline Transform* selectedTransform = nullptr;
     static inline Collection* selectedCollection = nullptr;
+    static inline Model* copiedModel = nullptr;
+    static inline Collection* copiedCollection = nullptr;
 
     static inline bool openSceneItemMenu = false;
 
@@ -45,6 +47,10 @@ private:
 
     static void SelectCollection(Collection* collection);
     static void SelectModel(Model* model);
+    static void SetCopiedCollection(Collection* collection);
+    static void SetCopiedModel(Model* model);
+
+    static void CollectionDragDropTarget(Collection* collection);
 
 public:
     static void Setup();
@@ -55,6 +61,7 @@ public:
     static void OnImgui();
 
     static Model* CreateModel(ModelDesc& desc);
+    static Model* AddModelCopy(Model* copy);
 
     static void DeleteModelFromCollection(Model* model);
     static void DeleteModel(Model* model);
@@ -64,6 +71,7 @@ public:
     static void SetTexture(Model* model, TextureResource* texture);
 
     static Collection* CreateCollection(Collection* parent = nullptr);
+    static Collection* CreateCollectionCopy(Collection* copy, Collection* parent = nullptr);
     static void DeleteCollection(Collection* collection);
     static void RemoveCollectionFromParent(Collection* collection);
 
@@ -71,8 +79,9 @@ public:
     static void AsyncLoadModels(std::filesystem::path path, Collection* collection = nullptr);
     static void AddPreloadedModel(ModelDesc desc);
 
-    static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;   }
-    static inline std::vector<Model*>& GetModels()       { return models;            }
-    static inline Model* GetSelectedModel()              { return selectedModel;     }
-    static inline Transform* GetSelectedTransform()      { return selectedTransform; }
+    static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;    }
+    static inline std::vector<Model*>& GetModels()       { return models;             }
+    static inline Model* GetSelectedModel()              { return selectedModel;      }
+    static inline Transform* GetSelectedTransform()      { return selectedTransform;  }
+    static inline Collection* GetSelectedCollection()    { return selectedCollection; }
 };
