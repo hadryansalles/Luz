@@ -133,7 +133,7 @@ void TextureManager::OnImgui() {
         ImGui::PopID();
         for (int i = 0; i < textures.size(); i++) {
             ImGui::PushID(i);
-            if (ImGui::TreeNode(textures[i]->path.string().c_str())) {
+            if (ImGui::TreeNode(textures[i]->path.stem().string().c_str())) {
                 ImVec2 size = ImVec2(textures[i]->image.width, textures[i]->image.height);
                 size = ImVec2(size.x * imguiTextureScale, size.y * imguiTextureScale);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {

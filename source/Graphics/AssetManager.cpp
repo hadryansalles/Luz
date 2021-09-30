@@ -222,3 +222,46 @@ TextureDesc AssetManager::LoadImageFile(std::filesystem::path path) {
 
     return desc;
 }
+
+void DirOnImgui(std::filesystem::path path) {
+    if (ImGui::TreeNode(path.filename().string().c_str())) {
+        for (const auto& entry : std::filesystem::directory_iterator(path)) {
+            if (entry.is_directory()) {
+                DirOnImgui(entry.path());
+            }
+            else {
+                std::string filePath = entry.path().string();
+                std::string fileName = entry.path().filename().string();
+                ImGui::PushID(filePath.c_str());
+                if (ImGui::Selectable(fileName.c_str())) {
+                }
+                if (AssetManager::IsMeshFile(entry.path())) {
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                        ImGui::SetDragDropPayload("mesh", filePath.c_str(), filePath.size());
+                        ImGui::Text(fileName.c_str());
+                        ImGui::EndDragDropSource();
+                    }
+                }
+                if (AssetManager::IsTextureFile(entry.path())) {
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                        ImGui::SetDragDropPayload("texture", filePath.c_str(), filePath.size());
+                        ImGui::Text(fileName.c_str());
+                        ImGui::EndDragDropSource();
+                    }
+                }
+                ImGui::PopID();
+            }
+        }
+        ImGui::TreePop();
+    }
+}
+
+void AssetManager::OnImgui() {
+    const float totalWidth = ImGui::GetContentRegionAvailWidth();
+    ImGui::Text("Path");
+    ImGui::SameLine(totalWidth*3.0f/5.0);
+    ImGui::Text(SceneManager::GetPath().stem().string().c_str());
+    if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) {
+        DirOnImgui(SceneManager::GetPath().parent_path());
+    }
+}

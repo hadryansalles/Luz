@@ -11,6 +11,7 @@ private:
 public:
     static void Create();
     static void Destroy();
+    static void OnImgui();
 
     static bool IsMeshFile(std::filesystem::path path);
     static bool IsTextureFile(std::filesystem::path path);

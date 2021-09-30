@@ -84,4 +84,5 @@ public:
     static inline Model* GetSelectedModel()              { return selectedModel;      }
     static inline Transform* GetSelectedTransform()      { return selectedTransform;  }
     static inline Collection* GetSelectedCollection()    { return selectedCollection; }
+    static inline std::filesystem::path GetPath()        { return path;               }
 };
