@@ -13,8 +13,9 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 - Widgets for adjusting Vulkan settings at runtime
 
-## Gallery- Textures drag and drop
+## Gallery
 
+- Textures drag and drop
 ![Alt Text](https://hadryansalles.github.io/assets/luz/texture_dragndrop.gif)
 
 - Asynchronous model loading
