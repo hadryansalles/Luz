@@ -132,38 +132,6 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
     return model;
 }
 
-void DirOnImgui(std::filesystem::path path) {
-    if (ImGui::TreeNode(path.filename().string().c_str())) {
-        for (const auto& entry : std::filesystem::directory_iterator(path)) {
-            if (entry.is_directory()) {
-                DirOnImgui(entry.path());
-            }
-            else {
-                std::string filePath = entry.path().string();
-                std::string fileName = entry.path().filename().string();
-                ImGui::PushID(filePath.c_str());
-                if (ImGui::Selectable(fileName.c_str())) {
-                }
-                if (AssetManager::IsMeshFile(entry.path())) {
-                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-                        ImGui::SetDragDropPayload("mesh", filePath.c_str(), filePath.size());
-                        ImGui::Text(fileName.c_str());
-                        ImGui::EndDragDropSource();
-                    }
-                }
-                if (AssetManager::IsTextureFile(entry.path())) {
-                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-                        ImGui::SetDragDropPayload("texture", filePath.c_str(), filePath.size());
-                        ImGui::Text(fileName.c_str());
-                        ImGui::EndDragDropSource();
-                    }
-                }
-                ImGui::PopID();
-            }
-        }
-        ImGui::TreePop();
-    }
-}
 
 void SceneManager::ModelOnImgui(Model* model) {
     bool selected = model == selectedModel;
@@ -229,9 +197,6 @@ void SceneManager::CollectionOnImgui(Collection* collection, int id) {
 
 void SceneManager::OnImgui() {
     const float totalWidth = ImGui::GetContentRegionAvailWidth();
-    ImGui::Text("Path");
-    ImGui::SameLine(totalWidth*3.0f/5.0);
-    ImGui::Text(path.string().c_str());
     if (ImGui::CollapsingHeader("Collections", ImGuiTreeNodeFlags_DefaultOpen)) {
         CollectionDragDropTarget(&mainCollection);
         openSceneItemMenu &= !ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -258,9 +223,9 @@ void SceneManager::OnImgui() {
             }
             if (copiedCollection != nullptr) {
                 Collection* collection = CreateCollectionCopy(copiedCollection);
-                if (selectedCollection != nullptr) {
-                    SetCollectionParent(collection, selectedCollection);
-                }
+                // if (selectedCollection != nullptr) {
+                //     SetCollectionParent(collection, selectedCollection);
+                // }
                 SelectCollection(collection);
             } else if (copiedModel != nullptr) {
                 Model* model = AddModelCopy(copiedModel);
@@ -321,14 +286,6 @@ void SceneManager::OnImgui() {
             }
             ImGui::EndPopup();
         }
-    }
-    if (ImGui::CollapsingHeader("Files")) {
-        ImGui::Text("Auto Reload");
-        ImGui::SameLine(totalWidth*3.0f/5.0f);
-        ImGui::PushID("autoReload");
-        ImGui::Checkbox("", &autoReloadFiles);
-        ImGui::PopID();
-        DirOnImgui(path.parent_path());
     }
 }
 
@@ -477,6 +434,7 @@ void SceneManager::AsyncLoadAndSetTexture(Model* model, std::filesystem::path pa
 Collection* SceneManager::CreateCollectionCopy(Collection* copy, Collection* parent) {
     Collection* collection = CreateCollection(parent);
     collection->name = copy->name;
+    collection->transform = copy->transform;
     for (Model* model : copy->models) {
         SetCollection(AddModelCopy(model), collection);
     }

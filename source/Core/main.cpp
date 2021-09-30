@@ -176,21 +176,32 @@ private:
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
     
-        if (ImGui::Begin("Vulkan")) {
-            Window::OnImgui();
-            Instance::OnImgui();
-            PhysicalDevice::OnImgui();
-            LogicalDevice::OnImgui();
-            SwapChain::OnImgui();
-            UnlitGraphicsPipeline::OnImgui();
-            camera.OnImgui();
+
+        if (ImGui::Begin("Luz Engine")) {
+            if (ImGui::BeginTabBar("LuzEngineMainTab")) {
+                if (ImGui::BeginTabItem("Configuration")) {
+                    Window::OnImgui();
+                    Instance::OnImgui();
+                    PhysicalDevice::OnImgui();
+                    LogicalDevice::OnImgui();
+                    SwapChain::OnImgui();
+                    UnlitGraphicsPipeline::OnImgui();
+                    camera.OnImgui();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Assets")) {
+                    AssetManager::OnImgui();
+                    MeshManager::OnImgui();
+                    TextureManager::OnImgui();
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
         }
         ImGui::End();
 
         if (ImGui::Begin("Scene")) {
             SceneManager::OnImgui();
-            MeshManager::OnImgui();
-            TextureManager::OnImgui();
         }
         ImGui::End();
 
