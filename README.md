@@ -15,6 +15,9 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 
 ## Gallery
 
+- Textures drag and drop
+![Alt Text](https://hadryansalles.github.io/assets/luz/texture_dragndrop.gif)
+
 - Asynchronous model loading
 ![Alt Text](https://hadryansalles.github.io/assets/luz/async.gif)
 
