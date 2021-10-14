@@ -2,6 +2,10 @@
 
 #include "GraphicsPipelineManager.hpp"
 
+struct UnlitMaterialUBO {
+    glm::vec4 color;
+};
+
 class UnlitGraphicsPipeline {
     static inline GraphicsPipelineDesc desc{};
     static inline GraphicsPipelineResource res{};
@@ -13,4 +17,7 @@ public:
 
     static inline bool IsDirty()                          { return res.dirty; }
     static inline GraphicsPipelineResource& GetResource() { return res;       }
+
+    static BufferDescriptor CreateMaterialDescriptor();
+    static TextureDescriptor CreateTextureDescriptor();
 };

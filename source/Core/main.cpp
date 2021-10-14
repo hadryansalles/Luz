@@ -16,7 +16,6 @@
 #include "TextureManager.hpp"
 #include "AssetManager.hpp"
 
-
 #include <stb_image.h>
 
 #include <imgui/imgui_impl_glfw.h>
@@ -36,7 +35,7 @@ void CheckVulkanResult(VkResult res) {
     }
 }
 
-class VulkanTutorialApplication {
+class LuzApplication {
 public:
     void run() {
         WaitToInit(4);
@@ -297,23 +296,30 @@ private:
             }
 
             if (selectedModel != nullptr) {
-                if (ImGui::CollapsingHeader("Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if (ImGui::BeginDragDropTarget()) {
-                        const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
-                        if (texturePayload) {
-                            std::string texturePath((const char*)texturePayload->Data, texturePayload->DataSize);
-                            SceneManager::LoadAndSetTexture(selectedModel, texturePath);
-                            ImGui::EndDragDropTarget();
+                if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if(ImGui::TreeNodeEx("Diffuse", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Text("Color");
+                        ImGui::SameLine();
+                        ImGui::PushID("diffuseColor");
+                        ImGui::ColorEdit4("", glm::value_ptr(selectedModel->material.diffuseColor));
+                        ImGui::PopID();
+                        ImGui::Text("Use texture");
+                        ImGui::SameLine();
+                        ImGui::PushID("useDiffuseTexture");
+                        ImGui::Checkbox("", &selectedModel->material.useDiffuseTexture);
+                        ImGui::PopID();
+                        if (selectedModel->material.useDiffuseTexture) {
+                            TextureManager::DrawOnImgui(selectedModel->material.diffuseTexture);
+                            if (ImGui::BeginDragDropTarget()) {
+                                const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
+                                if (texturePayload) {
+                                    std::string texturePath((const char*)texturePayload->Data, texturePayload->DataSize);
+                                    SceneManager::LoadAndSetTexture(selectedModel, texturePath);
+                                    ImGui::EndDragDropTarget();
+                                }
+                            }
                         }
-                    }
-                    TextureManager::DrawOnImgui(selectedModel->texture);
-                    if (ImGui::BeginDragDropTarget()) {
-                        const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
-                        if (texturePayload) {
-                            std::string texturePath((const char*)texturePayload->Data, texturePayload->DataSize);
-                            SceneManager::LoadAndSetTexture(selectedModel, texturePath);
-                            ImGui::EndDragDropTarget();
-                        }
+                        ImGui::TreePop();
                     }
                 }
             }
@@ -375,7 +381,14 @@ private:
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
-                    1, &model->texture->descriptor.descriptors[frameIndex], 0, nullptr);
+                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
+                if (model->material.useDiffuseTexture) {
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 3,
+                        1, &model->material.diffuseTexture->descriptor.descriptors[frameIndex], 0, nullptr);
+                } else {
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 3,
+                        1, &TextureManager::GetWhiteTexture()->descriptor.descriptors[frameIndex], 0, nullptr);
+                }
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
@@ -439,6 +452,7 @@ private:
         for (Model* model : SceneManager::GetModels()) {
             model->ubo.model = model->transform.GetMatrix();
             BufferManager::Update(model->meshDescriptor.buffers[currentImage], &model->ubo, sizeof(model->ubo));
+            BufferManager::Update(model->material.materialDescriptor.buffers[currentImage], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
         }
 
         sceneUBO.view = camera.GetView();
@@ -569,7 +583,7 @@ private:
 
 int main() {
     Log::Init();
-    VulkanTutorialApplication app;
+    LuzApplication app;
     try {
         app.run();
     }

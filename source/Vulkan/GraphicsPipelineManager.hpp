@@ -27,6 +27,7 @@ struct GraphicsPipelineResource {
     VkDescriptorSetLayout sceneDescriptorSetLayout    = VK_NULL_HANDLE;
     VkDescriptorSetLayout meshDescriptorSetLayout     = VK_NULL_HANDLE;
     VkDescriptorSetLayout materialDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textureDescriptorSetLayout  = VK_NULL_HANDLE;
     bool                  dirty                       = false;
 };
 
@@ -34,6 +35,7 @@ class GraphicsPipelineManager {
     static inline VkDescriptorPool sceneDescriptorPool    = VK_NULL_HANDLE;
     static inline VkDescriptorPool meshDescriptorPool     = VK_NULL_HANDLE;
     static inline VkDescriptorPool materialDescriptorPool = VK_NULL_HANDLE;
+    static inline VkDescriptorPool textureDescriptorPool  = VK_NULL_HANDLE;
     static inline VkDescriptorPool imguiDescriptorPool    = VK_NULL_HANDLE;
 
 public:
@@ -45,7 +47,8 @@ public:
 
     static BufferDescriptor  CreateSceneDescriptor(uint32_t size);
     static BufferDescriptor  CreateMeshDescriptor(uint32_t size);
-    static TextureDescriptor CreateMaterialDescriptor();
+    static BufferDescriptor  CreateMaterialDescriptor(uint32_t size);
+    static TextureDescriptor CreateTextureDescriptor(VkDescriptorSetLayout setLayout);
 
     static void UpdateBufferDescriptor(BufferDescriptor& descriptor, void* data, uint32_t size);
     static void UpdateTextureDescriptor(TextureDescriptor& descriptor, TextureResource* texture);

@@ -23,6 +23,7 @@ struct TextureResource {
 
 class TextureManager {
     static inline TextureResource* defaultTexture = nullptr;
+    static inline TextureResource* whiteTexture   = nullptr;
     static inline std::vector<TextureResource*> textures;
 
     static inline float imguiTextureScale = 1.0f;
@@ -39,4 +40,5 @@ public:
     static TextureResource* GetTexture(std::filesystem::path);
     static TextureResource* CreateTexture(TextureDesc& desc);
     static inline TextureResource* GetDefaultTexture() { return defaultTexture; }
+    static inline TextureResource* GetWhiteTexture()   { return whiteTexture;   }
 };

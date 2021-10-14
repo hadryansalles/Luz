@@ -39,7 +39,9 @@ void SceneManager::AsyncLoadModels(std::filesystem::path path, Collection* colle
 
 void CreateModelDescriptors(Model* model) {
     model->meshDescriptor = GraphicsPipelineManager::CreateMeshDescriptor(sizeof(ModelUBO));
+    model->material.materialDescriptor = UnlitGraphicsPipeline::CreateMaterialDescriptor();
     GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
+    GraphicsPipelineManager::UpdateBufferDescriptor(model->material.materialDescriptor, (UnlitMaterialUBO*)&model->material, sizeof(UnlitMaterialUBO));
 }
 
 void SceneManager::AddPreloadedModel(ModelDesc desc) {
@@ -54,9 +56,6 @@ void SceneManager::Create() {
 
     for (Model* model : models) {
         CreateModelDescriptors(model);
-        if (model->texture) {
-            SceneManager::SetTexture(model, model->texture);
-        }
     }
 }
 
@@ -67,6 +66,9 @@ void SceneManager::Destroy() {
 
     for (Model* model : models) {
         for (BufferResource& buffer : model->meshDescriptor.buffers) {
+            BufferManager::Destroy(buffer);
+        }
+        for (BufferResource& buffer : model->material.materialDescriptor.buffers) {
             BufferManager::Destroy(buffer);
         }
     }
@@ -113,7 +115,7 @@ void SceneManager::SetCollection(Model* model, Collection* collection) {
 }
 
 void SceneManager::SetTexture(Model* model, TextureResource* texture) {
-    model->texture = texture;
+    model->material.diffuseTexture = texture;
 }
 
 Model* SceneManager::CreateModel(ModelDesc& desc) {
@@ -131,7 +133,6 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
     }
     return model;
 }
-
 
 void SceneManager::ModelOnImgui(Model* model) {
     bool selected = model == selectedModel;
@@ -389,6 +390,9 @@ void SceneManager::DeleteModel(Model* model) {
     for (BufferResource& buffer : model->meshDescriptor.buffers) {
         BufferManager::Destroy(buffer);
     }
+    for (BufferResource& buffer : model->material.materialDescriptor.buffers) {
+        BufferManager::Destroy(buffer);
+    }
 
     delete model;
 }
@@ -448,7 +452,7 @@ Model* SceneManager::AddModelCopy(Model* copy) {
     model->id = modelID++;
     model->transform = copy->transform;
     CreateModelDescriptors(model);
-    SetTexture(model, copy->texture);
+    model->material = copy->material;
     models.push_back(model);
     SetCollection(model, nullptr);
     return model;

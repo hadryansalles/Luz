@@ -70,7 +70,7 @@ void UnlitGraphicsPipeline::Setup() {
     desc.colorBlendState.blendConstants[2] = 0.0f;
     desc.colorBlendState.blendConstants[3] = 0.0f;
 
-    desc.bindings.resize(3);
+    desc.bindings.resize(4);
     desc.bindings[0].binding = 0;
     desc.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[0].descriptorCount = 1;
@@ -82,12 +82,17 @@ void UnlitGraphicsPipeline::Setup() {
     desc.bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     desc.bindings[2].binding = 0;
+    desc.bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[2].descriptorCount = 1;
-    desc.bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    // only relevant for image sampling related descriptors
-    desc.bindings[2].pImmutableSamplers = nullptr;
-    // here we specify in which shader stages the buffer will by referenced
     desc.bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    desc.bindings[3].binding = 0;
+    desc.bindings[3].descriptorCount = 1;
+    desc.bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    // only relevant for image sampling related descriptors
+    desc.bindings[3].pImmutableSamplers = nullptr;
+    // here we specify in which shader stages the buffer will by referenced
+    desc.bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 }
 
 void UnlitGraphicsPipeline::Create() {
@@ -101,4 +106,12 @@ void UnlitGraphicsPipeline::Destroy() {
 
 void UnlitGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
+}
+
+BufferDescriptor UnlitGraphicsPipeline::CreateMaterialDescriptor() {
+    return GraphicsPipelineManager::CreateMaterialDescriptor(sizeof(UnlitMaterialUBO));
+}
+
+TextureDescriptor UnlitGraphicsPipeline::CreateTextureDescriptor() {
+    return GraphicsPipelineManager::CreateTextureDescriptor(res.textureDescriptorSetLayout);
 }

@@ -7,6 +7,7 @@
 #include "LogicalDevice.hpp"
 #include "Instance.hpp"
 #include "GraphicsPipelineManager.hpp"
+#include "UnlitGraphicsPipeline.hpp"
 
 #include "imgui/imgui_impl_vulkan.h"
 #include <stb_image.h>
@@ -14,6 +15,8 @@
 void TextureManager::Setup() {
     defaultTexture = new TextureResource();
     defaultTexture->path = "assets/default.png";
+    whiteTexture = new TextureResource();
+    whiteTexture->path = "assets/white.png";
 }
 
 void TextureManager::Create() {
@@ -22,6 +25,11 @@ void TextureManager::Create() {
     defaultTexture->image = newTexture->image;
     defaultTexture->sampler = newTexture->sampler;
     defaultTexture->imguiTexture = nullptr;
+    DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
+    newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(whiteTexture->path));
+    whiteTexture->image = newTexture->image;
+    whiteTexture->sampler = newTexture->sampler;
+    whiteTexture->imguiTexture = nullptr;
     DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
     textures.pop_back();
     for (TextureResource* texture : textures) {
@@ -37,6 +45,8 @@ void TextureManager::Create() {
 void TextureManager::Destroy() {
     ImageManager::Destroy(defaultTexture->image);
     vkDestroySampler(LogicalDevice::GetVkDevice(), defaultTexture->sampler, Instance::GetAllocator());
+    ImageManager::Destroy(whiteTexture->image);
+    vkDestroySampler(LogicalDevice::GetVkDevice(), whiteTexture->sampler, Instance::GetAllocator());
     for (TextureResource* texture : textures) {
         ImageManager::Destroy(texture->image);
         vkDestroySampler(LogicalDevice::GetVkDevice(), texture->sampler, Instance::GetAllocator());
@@ -120,7 +130,7 @@ TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
     res->path = desc.path;
 
     res->imguiTexture = ImGui_ImplVulkan_AddTexture(res->sampler, res->image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    res->descriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+    res->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
     GraphicsPipelineManager::UpdateTextureDescriptor(res->descriptor, res);
 
     return res;
@@ -158,12 +168,19 @@ void TextureManager::OnImgui() {
 
 void TextureManager::CreateTextureDescriptors() {
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    defaultTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(defaultTexture->sampler, defaultTexture->image.view, layout);
-    defaultTexture->descriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
-    GraphicsPipelineManager::UpdateTextureDescriptor(defaultTexture->descriptor, defaultTexture);
+    {
+        defaultTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(defaultTexture->sampler, defaultTexture->image.view, layout);
+        defaultTexture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
+        GraphicsPipelineManager::UpdateTextureDescriptor(defaultTexture->descriptor, defaultTexture);
+    }
+    {
+        whiteTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(whiteTexture->sampler, whiteTexture->image.view, layout);
+        whiteTexture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
+        GraphicsPipelineManager::UpdateTextureDescriptor(whiteTexture->descriptor, whiteTexture);
+    }
     for (TextureResource* texture : textures) {
         texture->imguiTexture = ImGui_ImplVulkan_AddTexture(texture->sampler, texture->image.view, layout);
-        texture->descriptor = GraphicsPipelineManager::CreateMaterialDescriptor();
+        texture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
         GraphicsPipelineManager::UpdateTextureDescriptor(texture->descriptor, texture);
     }
 }

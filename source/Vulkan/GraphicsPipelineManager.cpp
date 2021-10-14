@@ -15,7 +15,8 @@ void GraphicsPipelineManager::Create() {
 
     VkDescriptorPoolSize scenePoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
     VkDescriptorPoolSize meshPoolSizes[]     = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
-    VkDescriptorPoolSize materialPoolSizes[] = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024} };
+    VkDescriptorPoolSize materialPoolSizes[] = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
+    VkDescriptorPoolSize texturePoolSizes[]  = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024} };
     VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
 
     VkDescriptorPoolCreateInfo scenePoolInfo{};
@@ -48,6 +49,16 @@ void GraphicsPipelineManager::Create() {
     result = vkCreateDescriptorPool(device, &materialPoolInfo, allocator, &materialDescriptorPool);
     DEBUG_VK(result, "Failed to create material descriptor pool!");
 
+    VkDescriptorPoolCreateInfo texturePoolInfo{};
+    texturePoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    texturePoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    texturePoolInfo.maxSets = (uint32_t)(1024);
+    texturePoolInfo.poolSizeCount = 1;
+    texturePoolInfo.pPoolSizes = texturePoolSizes;
+
+    result = vkCreateDescriptorPool(device, &texturePoolInfo, allocator, &textureDescriptorPool);
+    DEBUG_VK(result, "Failed to create texture descriptor pool!");
+
     VkDescriptorPoolCreateInfo imguiPoolInfo{};
     imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -63,6 +74,7 @@ void GraphicsPipelineManager::Destroy() {
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), sceneDescriptorPool, Instance::GetAllocator());
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), meshDescriptorPool, Instance::GetAllocator());
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), materialDescriptorPool, Instance::GetAllocator());
+    vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), textureDescriptorPool, Instance::GetAllocator());
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), imguiDescriptorPool, Instance::GetAllocator());
 }
 
@@ -120,7 +132,6 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     auto vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.sceneDescriptorSetLayout);
     DEBUG_VK(vkRes, "Failed to create scene descriptor set layout!");
 
-    descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     descriptorLayoutInfo.bindingCount = 1;
     descriptorLayoutInfo.pBindings = &desc.bindings[1];
 
@@ -131,9 +142,15 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     descriptorLayoutInfo.pBindings = &desc.bindings[2];
 
     vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.materialDescriptorSetLayout);
+    DEBUG_VK(vkRes, "Failed to create material descriptor set layout!");
+
+    descriptorLayoutInfo.bindingCount = 1;
+    descriptorLayoutInfo.pBindings = &desc.bindings[3];
+
+    vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.textureDescriptorSetLayout);
     DEBUG_VK(vkRes, "Failed to create texture descriptor set layout!");
 
-    VkDescriptorSetLayout setLayouts[] = { res.sceneDescriptorSetLayout, res.meshDescriptorSetLayout, res.materialDescriptorSetLayout };
+    VkDescriptorSetLayout setLayouts[] = { res.sceneDescriptorSetLayout, res.meshDescriptorSetLayout, res.materialDescriptorSetLayout, res.textureDescriptorSetLayout };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -181,6 +198,7 @@ void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
     vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.sceneDescriptorSetLayout, Instance::GetAllocator());
     vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.meshDescriptorSetLayout, Instance::GetAllocator());
     vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.materialDescriptorSetLayout, Instance::GetAllocator());
+    vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.textureDescriptorSetLayout, Instance::GetAllocator());
 }
 
 void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
@@ -348,18 +366,50 @@ BufferDescriptor GraphicsPipelineManager::CreateMeshDescriptor(uint32_t size) {
     return uniform;
 }
 
-TextureDescriptor GraphicsPipelineManager::CreateMaterialDescriptor() {
+BufferDescriptor GraphicsPipelineManager::CreateMaterialDescriptor(uint32_t size) {
     auto numFrames = SwapChain::GetNumFrames();
     auto device = LogicalDevice::GetVkDevice();
     auto unlitGPO = UnlitGraphicsPipeline::GetResource();
 
-    TextureDescriptor uniform;
+    BufferDescriptor uniform;
 
-    std::vector<VkDescriptorSetLayout> matLayouts(numFrames, unlitGPO.materialDescriptorSetLayout);
+    std::vector<VkDescriptorSetLayout> layouts(numFrames, unlitGPO.materialDescriptorSetLayout);
 
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = materialDescriptorPool;
+    allocInfo.descriptorPool = GraphicsPipelineManager::materialDescriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
+    allocInfo.pSetLayouts = layouts.data();
+
+    uniform.descriptors.resize(numFrames);
+    auto vkRes = vkAllocateDescriptorSets(device, &allocInfo, uniform.descriptors.data());
+    DEBUG_VK(vkRes, "Failed to allocate transform descriptor sets!");
+
+    uniform.buffers.resize(numFrames);
+    for (size_t i = 0; i < numFrames; i++) {
+
+        BufferDesc uniformDesc;
+        uniformDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        uniformDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        uniformDesc.size = size;
+
+        BufferManager::Create(uniformDesc, uniform.buffers[i]);
+    }
+    
+    return uniform;
+}
+
+TextureDescriptor GraphicsPipelineManager::CreateTextureDescriptor(VkDescriptorSetLayout setLayout) {
+    auto numFrames = SwapChain::GetNumFrames();
+    auto device = LogicalDevice::GetVkDevice();
+
+    TextureDescriptor uniform;
+
+    std::vector<VkDescriptorSetLayout> matLayouts(numFrames, setLayout);
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = textureDescriptorPool;
     allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
     allocInfo.pSetLayouts = matLayouts.data();
 
