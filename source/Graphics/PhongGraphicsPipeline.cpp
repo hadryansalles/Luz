@@ -1,17 +1,17 @@
 #include "Luzpch.hpp"
 
-#include "MeshManager.hpp"
-#include "UnlitGraphicsPipeline.hpp"
+#include "PhongGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
+#include "MeshManager.hpp"
 
-void UnlitGraphicsPipeline::Setup() {
-    desc.name = "Unlit";
+void PhongGraphicsPipeline::Setup() {
+    desc.name = "Phong";
 
     desc.shaderStages.resize(2);
-    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/unlit.vert.spv");
+    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/phong.vert.spv");
     desc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/unlit.frag.spv");
+    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/phong.frag.spv");
     desc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     desc.bindingDesc = MeshVertex::getBindingDescription();
@@ -70,7 +70,7 @@ void UnlitGraphicsPipeline::Setup() {
     desc.colorBlendState.blendConstants[2] = 0.0f;
     desc.colorBlendState.blendConstants[3] = 0.0f;
 
-    desc.bindings.resize(4);
+    desc.bindings.resize(5);
     desc.bindings[0].binding = 0;
     desc.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[0].descriptorCount = 1;
@@ -93,25 +93,30 @@ void UnlitGraphicsPipeline::Setup() {
     desc.bindings[3].pImmutableSamplers = nullptr;
     // here we specify in which shader stages the buffer will by referenced
     desc.bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    desc.bindings[4].binding = 0;
+    desc.bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    desc.bindings[4].descriptorCount = 1;
+    desc.bindings[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 }
 
-void UnlitGraphicsPipeline::Create() {
+void PhongGraphicsPipeline::Create() {
     desc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
     GraphicsPipelineManager::CreatePipeline(desc, res);
 }
 
-void UnlitGraphicsPipeline::Destroy() {
+void PhongGraphicsPipeline::Destroy() {
     GraphicsPipelineManager::DestroyPipeline(res);
 }
 
-void UnlitGraphicsPipeline::OnImgui() {
+void PhongGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
 }
 
-BufferDescriptor UnlitGraphicsPipeline::CreateMaterialDescriptor() {
-    return GraphicsPipelineManager::CreateMaterialDescriptor(sizeof(UnlitMaterialUBO));
+BufferDescriptor PhongGraphicsPipeline::CreateMaterialDescriptor() {
+    return GraphicsPipelineManager::CreateMaterialDescriptor(sizeof(PhongMaterialUBO));
 }
 
-TextureDescriptor UnlitGraphicsPipeline::CreateTextureDescriptor() {
+TextureDescriptor PhongGraphicsPipeline::CreateTextureDescriptor() {
     return GraphicsPipelineManager::CreateTextureDescriptor(res.textureDescriptorSetLayout);
 }

@@ -6,10 +6,12 @@
 
 enum class MaterialType {
     Unlit,
+    Phong,
 };
 
 struct Material {
     glm::vec4 diffuseColor = glm::vec4(1);
+    glm::vec4 specularColor = glm::vec4(1);
 
     MaterialType type = MaterialType::Unlit;
 
@@ -17,9 +19,4 @@ struct Material {
     bool useDiffuseTexture = true;
 
     BufferDescriptor materialDescriptor;
-};
-
-class MaterialManager {
-public:
-    static void OnImgui(const Material& material);
 };

@@ -15,17 +15,21 @@
 void SceneManager::Setup() {
     mainCollection.name = "Root";
 
-    std::vector<ModelDesc> newModels;
+    // std::vector<ModelDesc> newModels;
+    // newModels = AssetManager::LoadMeshFile("assets/ignore/sponza/sponza_semitransparent.obj");
+    // for (auto& modelDesc : newModels) {
+    //     Model* model = CreateModel(modelDesc);
+    //     model->material.type = MaterialType::Phong;
+    //     AddModel(model, modelDesc.collection);
+    // }
 
-    // auto cube = AssetManager::LoadMeshFile("assets/cube.obj")[0];
-    // cube.texture = AssetManager::LoadImageFile("assets/cube.png");
-    // AddModel(CreateModel(cube));
+    ModelDesc modelDesc = AssetManager::LoadMeshFile("assets/cube.obj")[0];
+    Model* model = CreateModel(modelDesc);
+    model->material.type = MaterialType::Phong;
+    AddModel(model, modelDesc.collection);
 
-    auto planeCollection = CreateCollection();
-    planeCollection->name = "Plane";
-
-    AsyncLoadModels("assets/teapot.obj");
-    AsyncLoadModels("assets/cube.obj");
+    // AsyncLoadModels("assets/teapot.obj");
+    // AsyncLoadModels("assets/cube.obj");
     // AsyncLoadModels("assets/models/ignore/sponza/sponza_semitransparent.obj");
 }
 
@@ -451,8 +455,8 @@ Model* SceneManager::AddModelCopy(Model* copy) {
     model->name = copy->name;
     model->id = modelID++;
     model->transform = copy->transform;
-    CreateModelDescriptors(model);
     model->material = copy->material;
+    CreateModelDescriptors(model);
     models.push_back(model);
     SetCollection(model, nullptr);
     return model;

@@ -10,11 +10,13 @@
 #include "Shader.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "UnlitGraphicsPipeline.hpp"
+#include "PhongGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "BufferManager.hpp"
 #include "SceneManager.hpp"
 #include "TextureManager.hpp"
 #include "AssetManager.hpp"
+#include "MaterialManager.hpp"
 
 #include <stb_image.h>
 
@@ -64,6 +66,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         UnlitGraphicsPipeline::Setup();
+        PhongGraphicsPipeline::Setup();
         TextureManager::Setup();
         SetupImgui();
     }
@@ -84,6 +87,7 @@ private:
         DEBUG_TRACE("Finish creating SwapChain.");
         GraphicsPipelineManager::Create();
         UnlitGraphicsPipeline::Create();
+        PhongGraphicsPipeline::Create();
         CreateImgui();
         createUniformProjection();
         TextureManager::Create();
@@ -120,6 +124,7 @@ private:
         LUZ_PROFILE_FUNC();
         SceneManager::Destroy();
         UnlitGraphicsPipeline::Destroy();
+        PhongGraphicsPipeline::Destroy();
         GraphicsPipelineManager::Destroy();
 
         DestroyImgui();
@@ -145,6 +150,10 @@ private:
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
                 UnlitGraphicsPipeline::Destroy();
                 UnlitGraphicsPipeline::Create();
+            } else if (PhongGraphicsPipeline::IsDirty()) {
+                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+                PhongGraphicsPipeline::Destroy();
+                PhongGraphicsPipeline::Create();
             } else if (Window::IsDirty()) {
                 Window::ApplyChanges();
             }
@@ -174,7 +183,6 @@ private:
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-    
 
         if (ImGui::Begin("Luz Engine")) {
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
@@ -185,6 +193,7 @@ private:
                     LogicalDevice::OnImgui();
                     SwapChain::OnImgui();
                     UnlitGraphicsPipeline::OnImgui();
+                    PhongGraphicsPipeline::OnImgui();
                     camera.OnImgui();
                     ImGui::EndTabItem();
                 }
@@ -296,32 +305,7 @@ private:
             }
 
             if (selectedModel != nullptr) {
-                if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if(ImGui::TreeNodeEx("Diffuse", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        ImGui::Text("Color");
-                        ImGui::SameLine();
-                        ImGui::PushID("diffuseColor");
-                        ImGui::ColorEdit4("", glm::value_ptr(selectedModel->material.diffuseColor));
-                        ImGui::PopID();
-                        ImGui::Text("Use texture");
-                        ImGui::SameLine();
-                        ImGui::PushID("useDiffuseTexture");
-                        ImGui::Checkbox("", &selectedModel->material.useDiffuseTexture);
-                        ImGui::PopID();
-                        if (selectedModel->material.useDiffuseTexture) {
-                            TextureManager::DrawOnImgui(selectedModel->material.diffuseTexture);
-                            if (ImGui::BeginDragDropTarget()) {
-                                const ImGuiPayload* texturePayload = ImGui::AcceptDragDropPayload("texture");
-                                if (texturePayload) {
-                                    std::string texturePath((const char*)texturePayload->Data, texturePayload->DataSize);
-                                    SceneManager::LoadAndSetTexture(selectedModel, texturePath);
-                                    ImGui::EndDragDropTarget();
-                                }
-                            }
-                        }
-                        ImGui::TreePop();
-                    }
-                }
+                MaterialManager::OnImgui(selectedModel);
             }
         }
         ImGui::End();
@@ -365,12 +349,13 @@ private:
 
         auto sceneDescriptor = SceneManager::GetSceneDescriptor();
         auto unlitGPO = UnlitGraphicsPipeline::GetResource();
+        auto phongGPO = PhongGraphicsPipeline::GetResource();
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
                     1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
-            if (model->mesh != nullptr) {
+            if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
                 MeshResource* mesh = model->mesh;
                 VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
                 VkDeviceSize offsets[] = { 0 };
@@ -387,6 +372,33 @@ private:
                         1, &model->material.diffuseTexture->descriptor.descriptors[frameIndex], 0, nullptr);
                 } else {
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 3,
+                        1, &TextureManager::GetWhiteTexture()->descriptor.descriptors[frameIndex], 0, nullptr);
+                }
+                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
+            }
+        }
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
+                    1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
+        for (const Model* model : SceneManager::GetModels()) {
+            if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
+                MeshResource* mesh = model->mesh;
+                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                // command buffer, vertex count, instance count, first vertex, first instance
+                // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 1,
+                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 2,
+                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
+                if (model->material.useDiffuseTexture) {
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 3,
+                        1, &model->material.diffuseTexture->descriptor.descriptors[frameIndex], 0, nullptr);
+                } else {
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 3,
                         1, &TextureManager::GetWhiteTexture()->descriptor.descriptors[frameIndex], 0, nullptr);
                 }
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
@@ -434,6 +446,7 @@ private:
         SwapChain::Create();
         GraphicsPipelineManager::Create();
         UnlitGraphicsPipeline::Create();
+        PhongGraphicsPipeline::Create();
         SceneManager::Create();
         CreateImgui();
         createUniformProjection();
