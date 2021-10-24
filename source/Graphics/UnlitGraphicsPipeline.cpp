@@ -5,6 +5,8 @@
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
 
+#include "SceneManager.hpp"
+
 void UnlitGraphicsPipeline::Setup() {
     desc.name = "Unlit";
 
@@ -108,10 +110,18 @@ void UnlitGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
 }
 
+BufferDescriptor UnlitGraphicsPipeline::CreateSceneDescriptor() {
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[0], sizeof(SceneUBO));
+}
+
+BufferDescriptor UnlitGraphicsPipeline::CreateModelDescriptor() {
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[1], sizeof(ModelUBO));
+}
+
 BufferDescriptor UnlitGraphicsPipeline::CreateMaterialDescriptor() {
-    return GraphicsPipelineManager::CreateMaterialDescriptor(sizeof(UnlitMaterialUBO));
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[2], sizeof(UnlitMaterialUBO));
 }
 
 TextureDescriptor UnlitGraphicsPipeline::CreateTextureDescriptor() {
-    return GraphicsPipelineManager::CreateTextureDescriptor(res.textureDescriptorSetLayout);
+    return GraphicsPipelineManager::CreateTextureDescriptor(res.descriptorSetLayouts[3]);
 }

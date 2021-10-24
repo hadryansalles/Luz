@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include "BufferManager.hpp"
 
 struct TextureDescriptor {
     std::vector<VkDescriptorSet> descriptors;

@@ -4,6 +4,7 @@
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
 #include "MeshManager.hpp"
+#include "SceneManager.hpp"
 
 void PhongGraphicsPipeline::Setup() {
     desc.name = "Phong";
@@ -113,10 +114,22 @@ void PhongGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
 }
 
+BufferDescriptor PhongGraphicsPipeline::CreateSceneDescriptor() {
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[0], sizeof(SceneUBO));
+}
+
+BufferDescriptor PhongGraphicsPipeline::CreateModelDescriptor() {
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[1], sizeof(ModelUBO));
+}
+
 BufferDescriptor PhongGraphicsPipeline::CreateMaterialDescriptor() {
-    return GraphicsPipelineManager::CreateMaterialDescriptor(sizeof(PhongMaterialUBO));
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[2], sizeof(PhongMaterialUBO));
 }
 
 TextureDescriptor PhongGraphicsPipeline::CreateTextureDescriptor() {
-    return GraphicsPipelineManager::CreateTextureDescriptor(res.textureDescriptorSetLayout);
+    return GraphicsPipelineManager::CreateTextureDescriptor(res.descriptorSetLayouts[3]);
+}
+
+BufferDescriptor PhongGraphicsPipeline::CreatePointLightDescriptor() {
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[4], sizeof(PointLightUBO));
 }

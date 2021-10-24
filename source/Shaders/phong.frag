@@ -1,5 +1,6 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
+#extension GL_KHR_vulkan_glsl : enable
 
 layout(set = 2, binding = 0) uniform MaterialUBO {
     vec4 color;
@@ -7,11 +8,11 @@ layout(set = 2, binding = 0) uniform MaterialUBO {
 
 layout(set = 3, binding = 0) uniform sampler2D texSampler;
 
-// layout(set = 4, binding = 0) uniform PointLightUBO {
-//     vec4 color;
-//     vec3 position;
-//     float intensity;
-// } light
+layout(set = 4, binding = 0) uniform PointLightUBO {
+    vec4 color;
+    vec3 position;
+    float intensity;
+} light;
 
 layout(location = 0) in vec4 fragPos;
 layout(location = 1) in vec3 fragNormal;
@@ -28,8 +29,6 @@ vec3 EvalPointLight(vec3 color, vec3 position, float intensity) {
 
 void main() {
     vec3 intensity = vec3(0.1, 0.1, 0.1);
-    intensity += EvalPointLight(vec3(1.0, 1.0, 1.0), vec3(0.0, 0.0, 0.0), 10.0);
+    intensity += EvalPointLight(light.color.xyz, light.position, light.intensity);
     outColor = material.color*texture(texSampler, fragTexCoord)*vec4(intensity, 1.0);
-    // outColor = vec4(fragNormal*0.5 + 0.5, 1.0);
-    // outColor = fragPos;
 }

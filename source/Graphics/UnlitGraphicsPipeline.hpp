@@ -18,6 +18,8 @@ public:
     static inline bool IsDirty()                          { return res.dirty; }
     static inline GraphicsPipelineResource& GetResource() { return res;       }
 
+    static BufferDescriptor CreateModelDescriptor();
+    static BufferDescriptor CreateSceneDescriptor();
     static BufferDescriptor CreateMaterialDescriptor();
     static TextureDescriptor CreateTextureDescriptor();
 };

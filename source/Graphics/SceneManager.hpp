@@ -1,9 +1,11 @@
 #pragma once
 
 #include <filesystem>
-#include <Model.hpp>
-#include "Descriptors.hpp"
 #include <thread>
+
+#include "Model.hpp"
+#include "Descriptors.hpp"
+#include "Light.hpp"
 
 // vulkan always expect data to be alligned with multiples of 16
 struct SceneUBO {
@@ -25,7 +27,11 @@ private:
     static inline Collection mainCollection;
     static inline std::vector<Collection*> collections;
 
+    static inline unsigned int lightID = 0;
+    static inline std::vector<Light*> lights;
+
     static inline Model* selectedModel = nullptr;
+    static inline Light* selectedLight = nullptr;
     static inline Transform* selectedTransform = nullptr;
     static inline Collection* selectedCollection = nullptr;
     static inline Model* copiedModel = nullptr;
@@ -37,6 +43,7 @@ private:
     static inline std::mutex preloadedModelsLock;
 
     static void AddModel(Model* model, Collection* collection = nullptr);
+    static void AddLight(Light* light, Collection* collection = nullptr);
 
     static void SetCollection(Model* model, Collection* collection = nullptr);
     static void SetCollectionParent(Collection* child, Collection* parent);
@@ -47,6 +54,8 @@ private:
 
     static void SelectCollection(Collection* collection);
     static void SelectModel(Model* model);
+    static void SelectLight(Light* model);
+
     static void SetCopiedCollection(Collection* collection);
     static void SetCopiedModel(Model* model);
 
@@ -66,6 +75,8 @@ public:
     static void DeleteModelFromCollection(Model* model);
     static void DeleteModel(Model* model);
 
+    static Light* CreateLight();
+
     static void AsyncLoadAndSetTexture(Model* model, std::filesystem::path path);
     static void LoadAndSetTexture(Model* model, std::filesystem::path path);
     static void SetTexture(Model* model, TextureResource* texture);
@@ -81,8 +92,10 @@ public:
 
     static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;    }
     static inline std::vector<Model*>& GetModels()       { return models;             }
+    static inline std::vector<Light*>& GetLights()       { return lights;             }
     static inline Model* GetSelectedModel()              { return selectedModel;      }
     static inline Transform* GetSelectedTransform()      { return selectedTransform;  }
     static inline Collection* GetSelectedCollection()    { return selectedCollection; }
+    static inline Light* GetSelectedLight()              { return selectedLight;      }
     static inline std::filesystem::path GetPath()        { return path;               }
 };

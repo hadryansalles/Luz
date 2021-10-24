@@ -24,19 +24,16 @@ struct GraphicsPipelineDesc {
 struct GraphicsPipelineResource {
     VkPipeline            pipeline                    = VK_NULL_HANDLE;
     VkPipelineLayout      layout                      = VK_NULL_HANDLE;
-    VkDescriptorSetLayout sceneDescriptorSetLayout    = VK_NULL_HANDLE;
-    VkDescriptorSetLayout meshDescriptorSetLayout     = VK_NULL_HANDLE;
-    VkDescriptorSetLayout materialDescriptorSetLayout = VK_NULL_HANDLE;
-    VkDescriptorSetLayout textureDescriptorSetLayout  = VK_NULL_HANDLE;
     bool                  dirty                       = false;
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 };
 
 class GraphicsPipelineManager {
-    static inline VkDescriptorPool sceneDescriptorPool    = VK_NULL_HANDLE;
-    static inline VkDescriptorPool meshDescriptorPool     = VK_NULL_HANDLE;
-    static inline VkDescriptorPool materialDescriptorPool = VK_NULL_HANDLE;
-    static inline VkDescriptorPool textureDescriptorPool  = VK_NULL_HANDLE;
-    static inline VkDescriptorPool imguiDescriptorPool    = VK_NULL_HANDLE;
+    static inline VkDescriptorPool textureDescriptorPool = VK_NULL_HANDLE;
+    static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
+
+    static inline int bufferDescriptors = 0;
+    static inline std::vector<VkDescriptorPool> bufferDescriptorPools;
 
 public:
     static void Create();
@@ -45,10 +42,8 @@ public:
     static void DestroyPipeline(GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
 
-    static BufferDescriptor  CreateSceneDescriptor(uint32_t size);
-    static BufferDescriptor  CreateMeshDescriptor(uint32_t size);
-    static BufferDescriptor  CreateMaterialDescriptor(uint32_t size);
-    static TextureDescriptor CreateTextureDescriptor(VkDescriptorSetLayout setLayout);
+    static BufferDescriptor CreateBufferDescriptor(VkDescriptorSetLayout layout, uint32_t size);
+    static TextureDescriptor CreateTextureDescriptor(VkDescriptorSetLayout layout);
 
     static void UpdateBufferDescriptor(BufferDescriptor& descriptor, void* data, uint32_t size);
     static void UpdateTextureDescriptor(TextureDescriptor& descriptor, TextureResource* texture);

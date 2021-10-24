@@ -219,6 +219,7 @@ private:
 
             Collection* selectedCollection = SceneManager::GetSelectedCollection();
             Model* selectedModel = SceneManager::GetSelectedModel();
+            Light* selectedLight = SceneManager::GetSelectedLight();
             Transform* selectedTransform = SceneManager::GetSelectedTransform();
 
             if (selectedCollection != nullptr) {
@@ -307,6 +308,9 @@ private:
             if (selectedModel != nullptr) {
                 MaterialManager::OnImgui(selectedModel);
             }
+            if (selectedLight) {
+                LightManager::OnImgui(selectedLight);
+            }
         }
         ImGui::End();
 
@@ -381,6 +385,9 @@ private:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
                     1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 4,
+                    1, &(SceneManager::GetLights()[0]->descriptor.descriptors[frameIndex]), 0, nullptr);
+
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
                 MeshResource* mesh = model->mesh;
@@ -466,6 +473,10 @@ private:
             model->ubo.model = model->transform.GetMatrix();
             BufferManager::Update(model->meshDescriptor.buffers[currentImage], &model->ubo, sizeof(model->ubo));
             BufferManager::Update(model->material.materialDescriptor.buffers[currentImage], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
+        }
+
+        for (Light* light : SceneManager::GetLights()) {
+            BufferManager::Update(light->descriptor.buffers[currentImage], &light->GetPointLightUBO(), sizeof(PointLightUBO));
         }
 
         sceneUBO.view = camera.GetView();

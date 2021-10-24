@@ -5,6 +5,7 @@
 #include "GraphicsPipelineManager.hpp"
 #include "SwapChain.hpp"
 #include "UnlitGraphicsPipeline.hpp"
+#include "PhongGraphicsPipeline.hpp"
 #include "Instance.hpp"
 #include "LogicalDevice.hpp"
 #include "Camera.hpp"
@@ -15,19 +16,20 @@
 void SceneManager::Setup() {
     mainCollection.name = "Root";
 
-    // std::vector<ModelDesc> newModels;
-    // newModels = AssetManager::LoadMeshFile("assets/ignore/sponza/sponza_semitransparent.obj");
-    // for (auto& modelDesc : newModels) {
-    //     Model* model = CreateModel(modelDesc);
-    //     model->material.type = MaterialType::Phong;
-    //     AddModel(model, modelDesc.collection);
-    // }
+    std::vector<ModelDesc> newModels;
+    newModels = AssetManager::LoadMeshFile("assets/ignore/sponza/sponza_semitransparent.obj");
+    for (auto& modelDesc : newModels) {
+        Model* model = CreateModel(modelDesc);
+        model->material.type = MaterialType::Phong;
+        AddModel(model, modelDesc.collection);
+    }
 
     ModelDesc modelDesc = AssetManager::LoadMeshFile("assets/cube.obj")[0];
     Model* model = CreateModel(modelDesc);
     model->material.type = MaterialType::Phong;
     AddModel(model, modelDesc.collection);
 
+    AddLight(CreateLight());
     // AsyncLoadModels("assets/teapot.obj");
     // AsyncLoadModels("assets/cube.obj");
     // AsyncLoadModels("assets/models/ignore/sponza/sponza_semitransparent.obj");
@@ -42,10 +44,17 @@ void SceneManager::AsyncLoadModels(std::filesystem::path path, Collection* colle
 }
 
 void CreateModelDescriptors(Model* model) {
-    model->meshDescriptor = GraphicsPipelineManager::CreateMeshDescriptor(sizeof(ModelUBO));
+    model->meshDescriptor = UnlitGraphicsPipeline::CreateModelDescriptor();
     model->material.materialDescriptor = UnlitGraphicsPipeline::CreateMaterialDescriptor();
     GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
     GraphicsPipelineManager::UpdateBufferDescriptor(model->material.materialDescriptor, (UnlitMaterialUBO*)&model->material, sizeof(UnlitMaterialUBO));
+}
+
+void CreateLightDescriptors(Light* light) {
+    if (light->type == LightType::PointLight) {
+        light->descriptor = PhongGraphicsPipeline::CreateMaterialDescriptor();
+        GraphicsPipelineManager::UpdateBufferDescriptor(light->descriptor, &light->GetPointLightUBO(), sizeof(PointLightUBO));
+    }
 }
 
 void SceneManager::AddPreloadedModel(ModelDesc desc) {
@@ -55,11 +64,15 @@ void SceneManager::AddPreloadedModel(ModelDesc desc) {
 }
 
 void SceneManager::Create() {
-    sceneDescriptor = GraphicsPipelineManager::CreateSceneDescriptor(sizeof(SceneUBO));
+    sceneDescriptor = UnlitGraphicsPipeline::CreateSceneDescriptor();
     GraphicsPipelineManager::UpdateBufferDescriptor(sceneDescriptor, &sceneUBO, sizeof(sceneUBO));
 
     for (Model* model : models) {
         CreateModelDescriptors(model);
+    }
+
+    for (Light* light : lights) {
+        CreateLightDescriptors(light);
     }
 }
 
@@ -76,6 +89,12 @@ void SceneManager::Destroy() {
             BufferManager::Destroy(buffer);
         }
     }
+
+    for (Light* light : lights) {
+        for (BufferResource& buffer : light->descriptor.buffers) {
+            BufferManager::Destroy(buffer);
+        }
+    }
 }
 
 void SceneManager::Finish() {
@@ -85,6 +104,10 @@ void SceneManager::Finish() {
 
     for (Collection* collection : collections) {
         delete collection;
+    }
+
+    for (Light* light : lights) {
+        delete light;
     }
 }
 
@@ -136,6 +159,13 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
         SetTexture(model, TextureManager::GetDefaultTexture());
     }
     return model;
+}
+
+Light* SceneManager::CreateLight() {
+    Light* light = new Light();
+    light->id = lightID++;
+    CreateLightDescriptors(light);
+    return light;
 }
 
 void SceneManager::ModelOnImgui(Model* model) {
@@ -292,6 +322,13 @@ void SceneManager::OnImgui() {
             ImGui::EndPopup();
         }
     }
+    if (ImGui::CollapsingHeader("Lights", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (Light* light : lights) {
+            if (ImGui::Selectable(light->name.c_str(), light == selectedLight)) {
+                SelectLight(light);
+            }
+        }
+    }
 }
 
 Collection* SceneManager::CreateCollection(Collection* parent) {
@@ -403,14 +440,23 @@ void SceneManager::DeleteModel(Model* model) {
 
 void SceneManager::SelectCollection(Collection* collection) {
     selectedModel = nullptr;
+    selectedLight = nullptr;
     selectedCollection = collection;
     selectedTransform = collection != nullptr ? &collection->transform : nullptr;
 }
 
 void SceneManager::SelectModel(Model* model) {
     selectedCollection = nullptr;
+    selectedLight = nullptr;
     selectedModel = model;
     selectedTransform = model != nullptr ? &model->transform : nullptr;
+}
+
+void SceneManager::SelectLight(Light* light) {
+    selectedCollection = nullptr;
+    selectedModel = nullptr;
+    selectedLight = light;
+    selectedTransform = light != nullptr ? &light->transform : nullptr;
 }
 
 void SceneManager::SetCopiedCollection(Collection* collection) {
@@ -485,4 +531,8 @@ void SceneManager::CollectionDragDropTarget(Collection* collection) {
             ImGui::EndDragDropTarget();
         }
     }
+}
+
+void SceneManager::AddLight(Light* light, Collection* collection) {
+    lights.push_back(light);
 }
