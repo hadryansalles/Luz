@@ -27,6 +27,6 @@ void main() {
     fragPos = transform.model * vec4(inPosition, 1.0);
     gl_Position = scene.proj * scene.view * fragPos;
     // fragNormal = vec3(inverse(transform.model)*vec4(inNormal, 0.0));
-    fragNormal = vec3(transpose(inverse(transform.model))*vec4(inNormal, 1.0));
+    fragNormal = normalize(vec3(transpose(inverse(transform.model))*vec4(inNormal, 1.0)));
     fragTexCoord = inTexCoord;
 }
