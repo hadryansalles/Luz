@@ -14,6 +14,7 @@ struct TextureDesc {
 };
 
 struct TextureResource {
+    int                   id;
     std::filesystem::path path;
     ImageResource         image;
     VkSampler             sampler = VK_NULL_HANDLE;
@@ -27,6 +28,9 @@ class TextureManager {
     static inline std::vector<TextureResource*> textures;
 
     static inline float imguiTextureScale = 1.0f;
+
+    static void UpdateTexturesDescriptors();
+
 public:
     static void Setup();
     static void Create();
@@ -39,6 +43,6 @@ public:
 
     static TextureResource* GetTexture(std::filesystem::path);
     static TextureResource* CreateTexture(TextureDesc& desc);
-    static inline TextureResource* GetDefaultTexture() { return defaultTexture; }
-    static inline TextureResource* GetWhiteTexture()   { return whiteTexture;   }
+    static inline TextureResource* GetDefaultTexture() { return defaultTexture;     }
+    static inline TextureResource* GetWhiteTexture()   { return whiteTexture;       }
 };

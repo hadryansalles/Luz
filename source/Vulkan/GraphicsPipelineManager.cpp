@@ -8,12 +8,13 @@
 #include "VulkanUtils.hpp"
 #include "UnlitGraphicsPipeline.hpp"
 
+
 void GraphicsPipelineManager::Create() {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
     auto numFrames = SwapChain::GetNumFrames();
 
-    VkDescriptorPoolSize texturePoolSizes[]  = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024} };
+    VkDescriptorPoolSize texturePoolSizes[]  = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2048} };
     VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
 
     VkDescriptorPoolSize bufferPoolSizes[]   = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
@@ -48,14 +49,77 @@ void GraphicsPipelineManager::Create() {
 
     result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
     DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+
+    // create bindless resources
+    {
+        const int MAX_TEXTURES = 65536;
+
+        // create descriptor set pool for bindless resources
+        VkDescriptorPoolSize bindlessPoolSizes[]  = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES} };
+
+        VkDescriptorPoolCreateInfo bindlessPoolInfo{};
+        bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        bindlessPoolInfo.maxSets = 1;
+        bindlessPoolInfo.poolSizeCount = 1;
+        bindlessPoolInfo.pPoolSizes = bindlessPoolSizes;
+
+        result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+        DEBUG_VK(result, "Failed to create bindless descriptor pool!");
+
+        // create descriptor set layout for bindless resources
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        std::vector<VkDescriptorBindingFlags> bindingFlags;
+
+        VkDescriptorSetLayoutBinding texturesBinding{};
+        texturesBinding.binding = 0;
+        texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texturesBinding.descriptorCount = MAX_TEXTURES;
+        texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(texturesBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+        setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        setLayoutBindingFlags.bindingCount = bindingFlags.size();
+        setLayoutBindingFlags.pBindingFlags = bindingFlags.data();
+
+        VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
+        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorLayoutInfo.bindingCount = bindings.size();
+        descriptorLayoutInfo.pBindings = bindings.data();
+        descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
+
+        result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
+        DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
+
+        // create descriptor set for bindless resources
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = bindlessDescriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &bindlessDescriptorLayout;
+
+        result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
+        DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+
+    }
 }
 
 void GraphicsPipelineManager::Destroy() {
     for (int i = 0; i < bufferDescriptorPools.size(); i++) {
         vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), bufferDescriptorPools[i], Instance::GetAllocator());
     }
+    bufferDescriptorPools.clear();
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), textureDescriptorPool, Instance::GetAllocator());
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), imguiDescriptorPool, Instance::GetAllocator());
+
+    // bindless resources
+    {
+        vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), bindlessDescriptorPool, Instance::GetAllocator());
+        vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), bindlessDescriptorLayout, Instance::GetAllocator());
+    }
 }
 
 void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
@@ -106,6 +170,7 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
 
     res.descriptorSetLayouts.clear();
     res.descriptorSetLayouts.resize(desc.bindings.size());
+
     for (int i = 0; i < desc.bindings.size(); i++) {
         VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
         descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -116,12 +181,20 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
         DEBUG_VK(vkRes, "Failed to create descriptor set layout {}!", i);
     }
 
+    std::vector<VkDescriptorSetLayout> layouts(res.descriptorSetLayouts);
+    layouts.push_back(bindlessDescriptorLayout);
+
+    VkPushConstantRange pushConstant{};
+    pushConstant.offset = 0;
+    pushConstant.size = 128;
+    pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = res.descriptorSetLayouts.size();
-    pipelineLayoutInfo.pSetLayouts = res.descriptorSetLayouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
-    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+    pipelineLayoutInfo.setLayoutCount = layouts.size();
+    pipelineLayoutInfo.pSetLayouts = layouts.data();
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
 
     auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &res.layout);
     DEBUG_VK(vkRes, "Failed to create pipeline layout!");

@@ -8,6 +8,8 @@
 #include "Instance.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "UnlitGraphicsPipeline.hpp"
+#include "PhongGraphicsPipeline.hpp"
+#include "SwapChain.hpp"
 
 #include "imgui/imgui_impl_vulkan.h"
 #include <stb_image.h>
@@ -166,6 +168,10 @@ void TextureManager::OnImgui() {
     }
 }
 
+void TextureManager::UpdateTexturesDescriptors() {
+
+}
+
 void TextureManager::CreateTextureDescriptors() {
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     {
@@ -182,6 +188,26 @@ void TextureManager::CreateTextureDescriptors() {
         texture->imguiTexture = ImGui_ImplVulkan_AddTexture(texture->sampler, texture->image.view, layout);
         texture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
         GraphicsPipelineManager::UpdateTextureDescriptor(texture->descriptor, texture);
+    }
+
+    std::vector<TextureResource*> defaultTextures = { defaultTexture, whiteTexture };
+
+    for (int i = 0; i < defaultTextures.size(); i++) {
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = defaultTextures[i]->image.view;
+        imageInfo.sampler = defaultTextures[i]->sampler;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        write.dstBinding = 0;
+        write.dstArrayElement = i;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), 1, &write, 0, nullptr);
     }
 }
 

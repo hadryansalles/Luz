@@ -382,11 +382,13 @@ private:
             }
         }
 
+        auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
                     1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 4,
                     1, &(SceneManager::GetLights()[0]->descriptor.descriptors[frameIndex]), 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 5, 1, &GraphicsPipelineManager::GetBindlessDescriptorSet(), 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
@@ -408,6 +410,9 @@ private:
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 3,
                         1, &TextureManager::GetWhiteTexture()->descriptor.descriptors[frameIndex], 0, nullptr);
                 }
+                BindlessPushConstant pc;
+                pc.textureID = 0;
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }

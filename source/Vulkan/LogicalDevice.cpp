@@ -49,6 +49,13 @@ void LogicalDevice::Create() {
         }
     }
 
+    VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
+    descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+    descriptorIndexingFeatures.runtimeDescriptorArray = true;
+    descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
+    descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+    descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -56,6 +63,7 @@ void LogicalDevice::Create() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
     createInfo.pEnabledFeatures = &features;
+    createInfo.pNext = &descriptorIndexingFeatures;
 
     // specify the required layers to the device 
     if (Instance::IsValidationLayersEnabled()) {

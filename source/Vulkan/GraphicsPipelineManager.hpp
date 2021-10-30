@@ -28,9 +28,18 @@ struct GraphicsPipelineResource {
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 };
 
+struct BindlessPushConstant {
+    int textureID;
+};
+
 class GraphicsPipelineManager {
     static inline VkDescriptorPool textureDescriptorPool = VK_NULL_HANDLE;
     static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
+
+    // bindless resources
+    static inline VkDescriptorSet bindlessDescriptorSet          = VK_NULL_HANDLE;
+    static inline VkDescriptorPool bindlessDescriptorPool        = VK_NULL_HANDLE;
+    static inline VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
 
     static inline int bufferDescriptors = 0;
     static inline std::vector<VkDescriptorPool> bufferDescriptorPools;
@@ -48,5 +57,8 @@ public:
     static void UpdateBufferDescriptor(BufferDescriptor& descriptor, void* data, uint32_t size);
     static void UpdateTextureDescriptor(TextureDescriptor& descriptor, TextureResource* texture);
 
-    static inline VkDescriptorPool GetImguiDescriptorPool() { return imguiDescriptorPool; }
+    static inline VkDescriptorPool GetTexturesDescriptorPool() { return textureDescriptorPool; }
+    static inline VkDescriptorPool GetImguiDescriptorPool()    { return imguiDescriptorPool;   }
+
+    static inline VkDescriptorSet& GetBindlessDescriptorSet() { return bindlessDescriptorSet; }
 };

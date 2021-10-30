@@ -7,9 +7,13 @@ class PhysicalDevice {
 private:
     static inline std::vector<PhysicalDevice> allDevices;
     static inline PhysicalDevice*             device             = nullptr;
-    static inline std::vector<const char*>    requiredExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
     static inline int                         index              = -1;
     static inline bool                        isDirty            = true;
+
+    static inline std::vector<const char*> requiredExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME 
+    };
 
     bool suitable       = false;
     int  presentFamily  = -1;
