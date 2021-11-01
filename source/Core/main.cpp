@@ -60,7 +60,6 @@ private:
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             t1 = std::chrono::high_resolution_clock::now();
         }
-        
     }
 
     void Setup() {
@@ -91,7 +90,6 @@ private:
         CreateImgui();
         createUniformProjection();
         TextureManager::Create();
-        TextureManager::CreateTextureDescriptors();
         MeshManager::Create();
         SceneManager::Create();
     }
@@ -111,7 +109,7 @@ private:
         auto instance = Instance::GetVkInstance();
 
         DestroyFrameResources();
-
+        GraphicsPipelineManager::Destroy();
         MeshManager::Destroy();
         TextureManager::Destroy();
         LogicalDevice::Destroy();
@@ -125,7 +123,7 @@ private:
         SceneManager::Destroy();
         UnlitGraphicsPipeline::Destroy();
         PhongGraphicsPipeline::Destroy();
-        GraphicsPipelineManager::Destroy();
+        // GraphicsPipelineManager::Destroy();
 
         DestroyImgui();
 
@@ -357,6 +355,9 @@ private:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
                     1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
+        auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 4, 1, &descriptorSet, 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
@@ -371,24 +372,23 @@ private:
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
+                BindlessPushConstant pc;
                 if (model->material.useDiffuseTexture) {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 3,
-                        1, &model->material.diffuseTexture->descriptor.descriptors[frameIndex], 0, nullptr);
+                    pc.textureID = model->material.diffuseTexture;
                 } else {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 3,
-                        1, &TextureManager::GetWhiteTexture()->descriptor.descriptors[frameIndex], 0, nullptr);
+                    pc.textureID = 1;
                 }
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
 
-        auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
                     1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 4,
                     1, &(SceneManager::GetLights()[0]->descriptor.descriptors[frameIndex]), 0, nullptr);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 5, 1, &GraphicsPipelineManager::GetBindlessDescriptorSet(), 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 5, 1, &descriptorSet, 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
@@ -403,15 +403,12 @@ private:
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 2,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
-                if (model->material.useDiffuseTexture) {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 3,
-                        1, &model->material.diffuseTexture->descriptor.descriptors[frameIndex], 0, nullptr);
-                } else {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 3,
-                        1, &TextureManager::GetWhiteTexture()->descriptor.descriptors[frameIndex], 0, nullptr);
-                }
                 BindlessPushConstant pc;
-                pc.textureID = 0;
+                if (model->material.useDiffuseTexture) {
+                    pc.textureID = model->material.diffuseTexture;
+                } else {
+                    pc.textureID = 1;
+                }
                 vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
@@ -456,13 +453,13 @@ private:
         DestroyFrameResources();
         PhysicalDevice::OnSurfaceUpdate();
         SwapChain::Create();
-        GraphicsPipelineManager::Create();
+        // GraphicsPipelineManager::Create();
         UnlitGraphicsPipeline::Create();
         PhongGraphicsPipeline::Create();
         SceneManager::Create();
         CreateImgui();
         createUniformProjection();
-        TextureManager::CreateTextureDescriptors();
+        // TextureManager::UpdateDescriptor();
     }
 
     void createUniformProjection() {

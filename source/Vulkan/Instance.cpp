@@ -78,9 +78,9 @@ void Instance::Create() {
         // get all available layers
         uint32_t layerCount;
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-        validationLayers.resize(layerCount);
-        activeValidationLayers.resize(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, validationLayers.data());
+        layers.resize(layerCount);
+        activeLayers.resize(layerCount);
+        vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
         // get all available extensions
         uint32_t extensionCount = 0;
@@ -94,16 +94,16 @@ void Instance::Create() {
 
         // active default khronos validation layer
         bool khronosAvailable = false;
-        for (size_t i = 0; i < validationLayers.size(); i++) {
-            activeValidationLayers[i] = false;
-            if (strcmp("VK_LAYER_KHRONOS_validation", validationLayers[i].layerName) == 0) {
-                activeValidationLayers[i] = true;
+        for (size_t i = 0; i < layers.size(); i++) {
+            activeLayers[i] = false;
+            if (strcmp("VK_LAYER_KHRONOS_validation", layers[i].layerName) == 0) {
+                activeLayers[i] = true;
                 khronosAvailable = true;
                 break;
             }
         }
 
-        if (enableValidationLayers && !khronosAvailable) { 
+        if (enableLayers && !khronosAvailable) { 
             LOG_ERROR("Default validation layer not available!");
         }
     }
@@ -112,10 +112,10 @@ void Instance::Create() {
     allocator = nullptr;
 
     // get the name of all layers if they are enabled
-    if (enableValidationLayers) {
-        for (size_t i = 0; i < validationLayers.size(); i++) { 
-            if (activeValidationLayers[i]) {
-                activeValidationLayersNames.push_back(validationLayers[i].layerName);
+    if (enableLayers) {
+        for (size_t i = 0; i < layers.size(); i++) { 
+            if (activeLayers[i]) {
+                activeLayersNames.push_back(layers[i].layerName);
             }
         }
     }
@@ -142,7 +142,7 @@ void Instance::Create() {
     auto requiredExtensions = std::vector<const char*>(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
     // include the extensions required by us
-    if (enableValidationLayers) {
+    if (enableLayers) {
         requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
@@ -170,9 +170,9 @@ void Instance::Create() {
 
     // which validation layers we need
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-    if (enableValidationLayers) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(activeValidationLayersNames.size());
-        createInfo.ppEnabledLayerNames = activeValidationLayersNames.data();
+    if (enableLayers) {
+        createInfo.enabledLayerCount = static_cast<uint32_t>(activeLayersNames.size());
+        createInfo.ppEnabledLayerNames = activeLayersNames.data();
 
         // we need to set up a separate logger just for the instance creation/destruction
         // because our "default" logger is created after
@@ -189,7 +189,7 @@ void Instance::Create() {
 
     DEBUG_TRACE("Created instance.");
     
-    if (enableValidationLayers) {
+    if (enableLayers) {
         VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
         PopulateDebugMessengerCreateInfo(messengerInfo);
 
@@ -207,7 +207,7 @@ void Instance::Create() {
 }
 
 void Instance::Destroy() {
-    activeValidationLayersNames.clear();
+    activeLayersNames.clear();
     activeExtensionsNames.clear();
     if (debugMessenger) {
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
@@ -242,17 +242,17 @@ void Instance::OnImgui() {
         ImGui::Text("Enable Validation Layers");
         ImGui::SameLine(totalWidth/2);
         ImGui::PushID("enableValidation");
-        ImGui::Checkbox("", &enableValidationLayers);
+        ImGui::Checkbox("", &enableLayers);
         ImGui::PopID();
         ImGui::Separator();
-        if (ImGui::TreeNode("Validation Layers")) {
-            for (size_t i = 0; i < validationLayers.size(); i++) {
+        if (ImGui::TreeNode("Layers")) {
+            for (size_t i = 0; i < layers.size(); i++) {
                 ImGui::PushID(i);
-                bool active = activeValidationLayers[i];
+                bool active = activeLayers[i];
                 ImGui::Checkbox("", &active);
-                activeValidationLayers[i] = active;
+                activeLayers[i] = active;
                 ImGui::SameLine();
-                const auto& layer = validationLayers[i];
+                const auto& layer = layers[i];
                 if (ImGui::TreeNode(layer.layerName)) {
                     // description
                     ImGui::Dummy(ImVec2(5.0f, .0f));

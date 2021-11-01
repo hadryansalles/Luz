@@ -1,8 +1,27 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <cstdint>
+#include <glm/glm.hpp>
+
+using u8  = typename uint8_t;
+using u16 = typename uint16_t;
+using u32 = typename uint32_t;
+using u32 = typename uint32_t;
+using u64 = typename uint64_t;
+using i8  = typename int8_t;
+using i16 = typename int16_t;
+using i32 = typename int32_t;
+using i64 = typename int64_t;
+using f32 = typename float;
+using f64 = typename double;
+using RID = typename u16;
 
 #ifdef _WIN32
+    #ifndef _WIN64
+        #error "x86 not supported!"
+    #endif
+
 	#define LUZ_PLATFORM_WINDOWS
 #endif
 

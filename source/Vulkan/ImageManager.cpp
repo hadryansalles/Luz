@@ -228,6 +228,28 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     DEBUG_VK(result, "Failed to create image view!");
 }
 
+void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res) {
+    ImageDesc imageDesc{};
+    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+    imageDesc.width = width;
+    imageDesc.height = height;
+    imageDesc.mipLevels = mipLevels;
+    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+    imageDesc.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageDesc.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageDesc.size = (u64) width * height * channels;
+
+    BufferResource staging;
+    BufferManager::CreateStagingBuffer(staging, data, imageDesc.size);
+    Create(imageDesc, res, staging);
+    BufferManager::Destroy(staging);
+}
+
 void ImageManager::Destroy(ImageResource& res) {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();

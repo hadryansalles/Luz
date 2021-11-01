@@ -103,7 +103,6 @@ void GraphicsPipelineManager::Create() {
 
         result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
         DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
-
     }
 }
 
@@ -119,6 +118,9 @@ void GraphicsPipelineManager::Destroy() {
     {
         vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), bindlessDescriptorPool, Instance::GetAllocator());
         vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), bindlessDescriptorLayout, Instance::GetAllocator());
+        bindlessDescriptorSet = VK_NULL_HANDLE;
+        bindlessDescriptorPool = VK_NULL_HANDLE;
+        bindlessDescriptorLayout = VK_NULL_HANDLE;
     }
 }
 
@@ -340,7 +342,7 @@ BufferDescriptor GraphicsPipelineManager::CreateBufferDescriptor(VkDescriptorSet
     auto numFrames = SwapChain::GetNumFrames();
     auto device = LogicalDevice::GetVkDevice();
 
-    if (bufferDescriptors >= 1024) {
+    if (bufferDescriptors+numFrames >= 1024) {
         VkDescriptorPoolSize bufferPoolSizes[]   = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
         VkDescriptorPoolCreateInfo bufferPoolInfo{};
         bufferPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;

@@ -16,23 +16,24 @@
 void SceneManager::Setup() {
     mainCollection.name = "Root";
 
-    std::vector<ModelDesc> newModels;
-    newModels = AssetManager::LoadMeshFile("assets/ignore/sponza/sponza_semitransparent.obj");
-    for (auto& modelDesc : newModels) {
-        Model* model = CreateModel(modelDesc);
-        model->material.type = MaterialType::Phong;
-        AddModel(model, modelDesc.collection);
-    }
+    // std::vector<ModelDesc> newModels;
+    // newModels = AssetManager::LoadMeshFile("assets/ignore/sponza/sponza_semitransparent.obj");
+    // for (auto& modelDesc : newModels) {
+    //     Model* model = CreateModel(modelDesc);
+    //     model->material.type = MaterialType::Phong;
+    //     AddModel(model, modelDesc.collection);
+    // }
 
-    ModelDesc modelDesc = AssetManager::LoadMeshFile("assets/cube.obj")[0];
-    Model* model = CreateModel(modelDesc);
-    model->material.type = MaterialType::Phong;
-    AddModel(model, modelDesc.collection);
+    // ModelDesc modelDesc = AssetManager::LoadMeshFile("assets/cube.obj")[0];
+    // Model* model = CreateModel(modelDesc);
+    // model->material.type = MaterialType::Phong;
+    // AddModel(model, modelDesc.collection);
 
     AddLight(CreateLight());
-    // AsyncLoadModels("assets/teapot.obj");
+    // AsyncLoadModels("assets/ignore/dragon.obj");
     // AsyncLoadModels("assets/cube.obj");
-    // AsyncLoadModels("assets/models/ignore/sponza/sponza_semitransparent.obj");
+    // AsyncLoadModels("assets/teapot.obj");
+    AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
 }
 
 void SceneManager::LoadModels(std::filesystem::path path, Collection* collection) {
@@ -141,10 +142,6 @@ void SceneManager::SetCollection(Model* model, Collection* collection) {
     model->collection = collection;
 }
 
-void SceneManager::SetTexture(Model* model, TextureResource* texture) {
-    model->material.diffuseTexture = texture;
-}
-
 Model* SceneManager::CreateModel(ModelDesc& desc) {
     Model* model = new Model();
     model->mesh = MeshManager::CreateMesh(desc.mesh);
@@ -153,10 +150,13 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
     model->transform.position += model->mesh->center;
     CreateModelDescriptors(model);
     if (desc.texture.data != nullptr) {
-        SetTexture(model, TextureManager::CreateTexture(desc.texture));
+        model->material.diffuseTexture = TextureManager::GetTexture(desc.texture.path);
+        if (model->material.diffuseTexture == 0) {
+            model->material.diffuseTexture = TextureManager::CreateTexture(desc.texture);
+        }
     }
     else {
-        SetTexture(model, TextureManager::GetDefaultTexture());
+        model->material.diffuseTexture = 0;
     }
     return model;
 }
@@ -470,15 +470,15 @@ void SceneManager::SetCopiedModel(Model* model) {
 }
 
 void SceneManager::LoadAndSetTexture(Model* model, std::filesystem::path path) {
-    TextureResource* texture = TextureManager::GetTexture(path);
-    if (texture == nullptr) {
+    RID texture = TextureManager::GetTexture(path);
+    if (texture == 0) {
         TextureDesc textureDesc = AssetManager::LoadImageFile(path);
         texture = TextureManager::CreateTexture(textureDesc);
-        if (texture == nullptr) {
+        if (texture == 0) {
             LOG_ERROR("Error loading texture.");
         }
     }
-    SetTexture(model, texture);
+    model->material.diffuseTexture = texture;
 }
 
 void SceneManager::AsyncLoadAndSetTexture(Model* model, std::filesystem::path path) {

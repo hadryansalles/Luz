@@ -14,22 +14,24 @@ struct TextureDesc {
 };
 
 struct TextureResource {
-    int                   id;
-    std::filesystem::path path;
     ImageResource         image;
-    VkSampler             sampler = VK_NULL_HANDLE;
-    ImTextureID           imguiTexture;
-    TextureDescriptor     descriptor;
+    std::filesystem::path path      = "Invalid";
+    VkSampler             sampler   = VK_NULL_HANDLE;
+    ImTextureID           imguiRID  = nullptr;
 };
 
 class TextureManager {
-    static inline TextureResource* defaultTexture = nullptr;
-    static inline TextureResource* whiteTexture   = nullptr;
-    static inline std::vector<TextureResource*> textures;
+public:
+    static inline constexpr int MAX_TEXTURES = 2048;
 
+private:
     static inline float imguiTextureScale = 1.0f;
 
-    static void UpdateTexturesDescriptors();
+    static inline TextureResource resources[MAX_TEXTURES];
+    static inline RID             nextRID = 0;
+
+    static void InitTexture(RID rid, TextureDesc& desc);
+    static void UpdateDescriptor(RID first, RID last);
 
 public:
     static void Setup();
@@ -38,11 +40,11 @@ public:
     static void Finish();
     static void OnImgui();
 
-    static void CreateTextureDescriptors();
-    static void DrawOnImgui(TextureResource* texture);
+    static void DrawOnImgui(RID textureRID);
 
-    static TextureResource* GetTexture(std::filesystem::path);
-    static TextureResource* CreateTexture(TextureDesc& desc);
-    static inline TextureResource* GetDefaultTexture() { return defaultTexture;     }
-    static inline TextureResource* GetWhiteTexture()   { return whiteTexture;       }
+    static RID GetTexture(std::filesystem::path);
+    static RID CreateTexture(TextureDesc& desc);
+    static VkSampler CreateSampler(f32 maxLod);
+
+    static void UpdateImguiResources();
 };

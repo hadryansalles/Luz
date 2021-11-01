@@ -13,9 +13,9 @@ struct Material {
     glm::vec4 diffuseColor = glm::vec4(1);
     glm::vec4 specularColor = glm::vec4(1);
 
-    MaterialType type = MaterialType::Unlit;
+    MaterialType type = MaterialType::Phong;
 
-    TextureResource* diffuseTexture = nullptr;
+    RID diffuseTexture = 0;
     bool useDiffuseTexture = true;
 
     BufferDescriptor materialDescriptor;

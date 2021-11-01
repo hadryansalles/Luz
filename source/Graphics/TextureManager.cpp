@@ -15,85 +15,42 @@
 #include <stb_image.h>
 
 void TextureManager::Setup() {
-    defaultTexture = new TextureResource();
-    defaultTexture->path = "assets/default.png";
-    whiteTexture = new TextureResource();
-    whiteTexture->path = "assets/white.png";
+    resources[0].path = "assets/default.png";
+    resources[1].path = "assets/white.png";
+    nextRID = 2;
 }
 
 void TextureManager::Create() {
     LUZ_PROFILE_FUNC();
-    TextureResource* newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(defaultTexture->path));
-    defaultTexture->image = newTexture->image;
-    defaultTexture->sampler = newTexture->sampler;
-    defaultTexture->imguiTexture = nullptr;
-    DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
-    newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(whiteTexture->path));
-    whiteTexture->image = newTexture->image;
-    whiteTexture->sampler = newTexture->sampler;
-    whiteTexture->imguiTexture = nullptr;
-    DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
-    textures.pop_back();
-    for (TextureResource* texture : textures) {
-        newTexture = TextureManager::CreateTexture(AssetManager::LoadImageFile(texture->path));
-        texture->image = newTexture->image;
-        texture->sampler = newTexture->sampler;
-        texture->imguiTexture = nullptr;
-        DEBUG_ASSERT(textures[textures.size() - 1] == newTexture, "New texture is different than last texture on buffer!");
-        textures.pop_back();
+
+    for (int i = 0; i < nextRID; i++) {
+        TextureDesc desc = AssetManager::LoadImageFile(resources[i].path);
+        DEBUG_ASSERT(desc.data != nullptr, "Image '{}' not loaded. Can't create texture for it!", desc.path.string().c_str());
+        InitTexture(i, desc);
     }
+
+    UpdateDescriptor(0, nextRID);
 }
 
 void TextureManager::Destroy() {
-    ImageManager::Destroy(defaultTexture->image);
-    vkDestroySampler(LogicalDevice::GetVkDevice(), defaultTexture->sampler, Instance::GetAllocator());
-    ImageManager::Destroy(whiteTexture->image);
-    vkDestroySampler(LogicalDevice::GetVkDevice(), whiteTexture->sampler, Instance::GetAllocator());
-    for (TextureResource* texture : textures) {
-        ImageManager::Destroy(texture->image);
-        vkDestroySampler(LogicalDevice::GetVkDevice(), texture->sampler, Instance::GetAllocator());
-        texture->sampler = VK_NULL_HANDLE;
+    for (int i = 0; i < nextRID; i++) {
+        ImageManager::Destroy(resources[i].image);
+        vkDestroySampler(LogicalDevice::GetVkDevice(), resources[i].sampler, Instance::GetAllocator());
+        resources[i].sampler = VK_NULL_HANDLE;
+        resources[i].imguiRID = nullptr;
     }
 }
 
 void TextureManager::Finish() {
-    for (TextureResource* texture : textures) {
-        delete texture;
+    for (int i = 0; i < nextRID; i++) {
+        DEBUG_ASSERT(resources[i].imguiRID == nullptr, "Finish texture manager without destroying textures!");
+        DEBUG_ASSERT(resources[i].sampler == nullptr, "Finish texture manager without destroying textures!");
+        resources[i].path = "Invalid";
     }
-    textures.clear();
+    nextRID = 0;
 }
 
-TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
-    for (int i = 0; i < textures.size(); i++) {
-        if (desc.path == textures[i]->path && textures[i]->sampler != VK_NULL_HANDLE) {
-            return textures[i];
-        }
-    }
-    auto device = LogicalDevice::GetVkDevice();
-    auto instance = Instance::GetVkInstance();
-
-    ImageDesc imageDesc{};
-    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
-    imageDesc.width = desc.width;
-    imageDesc.height = desc.height;
-    imageDesc.mipLevels = (uint32_t)(std::floor(std::log2(std::max(desc.width, desc.height)))) + 1;
-    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
-    imageDesc.format = VK_FORMAT_R8G8B8A8_UNORM;
-    imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageDesc.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageDesc.size = (uint32_t)(desc.width * desc.height * 4);
-
-    TextureResource* res = new TextureResource();
-
-    BufferResource staging;
-    BufferManager::CreateStagingBuffer(staging, desc.data, imageDesc.size);
-    ImageManager::Create(imageDesc, res->image, staging);
-    BufferManager::Destroy(staging);
-
+VkSampler TextureManager::CreateSampler(f32 maxLod) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -121,21 +78,34 @@ TextureResource* TextureManager::CreateTexture(TextureDesc& desc) {
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerInfo.mipLodBias = 0.0f;
     samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = static_cast<float>(imageDesc.mipLevels);
+    samplerInfo.maxLod = maxLod;
 
-    auto vkRes = vkCreateSampler(device, &samplerInfo, nullptr, &res->sampler);
+    VkSampler sampler = VK_NULL_HANDLE;
+    auto vkRes = vkCreateSampler(LogicalDevice::GetVkDevice(), &samplerInfo, nullptr, &sampler);
     DEBUG_VK(vkRes, "Failed to create texture sampler!");
 
-    textures.push_back(res);
+    return sampler;
+}
 
+void TextureManager::InitTexture(RID rid, TextureDesc& desc) {
+    TextureResource& res = resources[rid];
+    res.path = desc.path;
+    u32 mipLevels = (u32)(std::floor(std::log2(std::max(desc.width, desc.height)))) + 1;
+    ImageManager::Create(desc.data, desc.width, desc.height, 4, mipLevels, res.image);
     stbi_image_free(desc.data);
-    res->path = desc.path;
+    res.sampler = CreateSampler(mipLevels);
+}
 
-    res->imguiTexture = ImGui_ImplVulkan_AddTexture(res->sampler, res->image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    res->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
-    GraphicsPipelineManager::UpdateTextureDescriptor(res->descriptor, res);
+RID TextureManager::CreateTexture(TextureDesc& desc) {
+    if (nextRID >= MAX_TEXTURES) {
+        LOG_ERROR("Can't create new texture! Max number of textures exceed!");
+        return 0;
+    }
 
-    return res;
+    InitTexture(nextRID, desc);
+    UpdateDescriptor(nextRID, nextRID + 1);
+
+    return nextRID++;
 }
 
 void TextureManager::OnImgui() {
@@ -143,22 +113,22 @@ void TextureManager::OnImgui() {
         ImGui::PushID("texture scale");
         ImGui::SliderFloat("", &imguiTextureScale, 0.01f, 10.0f);
         ImGui::PopID();
-        for (int i = 0; i < textures.size(); i++) {
+        for (int i = 0; i < nextRID; i++) {
             ImGui::PushID(i);
-            if (ImGui::TreeNode(textures[i]->path.stem().string().c_str())) {
-                ImVec2 size = ImVec2(textures[i]->image.width, textures[i]->image.height);
+            if (ImGui::TreeNode(resources[i].path.stem().string().c_str())) {
+                ImVec2 size = ImVec2(resources[i].image.width, resources[i].image.height);
                 size = ImVec2(size.x * imguiTextureScale, size.y * imguiTextureScale);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-                    std::string texturePath = textures[i]->path.string();
+                    std::string texturePath = resources[i].path.string();
                     ImGui::SetDragDropPayload("texture", texturePath.c_str(), texturePath.size());
-                    ImGui::Image(textures[i]->imguiTexture, size);
+                    ImGui::Image(resources[i].imguiRID, size);
                     ImGui::EndDragDropSource();
                 }
-                ImGui::Image(textures[i]->imguiTexture, size);
+                ImGui::Image(resources[i].imguiRID, size);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    std::string texturePath = textures[i]->path.string();
+                    std::string texturePath = resources[i].path.string();
                     ImGui::SetDragDropPayload("texture", texturePath.c_str(), texturePath.size());
-                    ImGui::Image(textures[i]->imguiTexture, size);
+                    ImGui::Image(resources[i].imguiRID, size);
                     ImGui::EndDragDropSource();
                 }
                 ImGui::TreePop();
@@ -168,61 +138,56 @@ void TextureManager::OnImgui() {
     }
 }
 
-void TextureManager::UpdateTexturesDescriptors() {
-
-}
-
-void TextureManager::CreateTextureDescriptors() {
+void TextureManager::UpdateDescriptor(RID first, RID last) {
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    {
-        defaultTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(defaultTexture->sampler, defaultTexture->image.view, layout);
-        defaultTexture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
-        GraphicsPipelineManager::UpdateTextureDescriptor(defaultTexture->descriptor, defaultTexture);
-    }
-    {
-        whiteTexture->imguiTexture = ImGui_ImplVulkan_AddTexture(whiteTexture->sampler, whiteTexture->image.view, layout);
-        whiteTexture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
-        GraphicsPipelineManager::UpdateTextureDescriptor(whiteTexture->descriptor, whiteTexture);
-    }
-    for (TextureResource* texture : textures) {
-        texture->imguiTexture = ImGui_ImplVulkan_AddTexture(texture->sampler, texture->image.view, layout);
-        texture->descriptor = UnlitGraphicsPipeline::CreateTextureDescriptor();
-        GraphicsPipelineManager::UpdateTextureDescriptor(texture->descriptor, texture);
-    }
+    const RID count = last - first;
+    std::vector<VkDescriptorImageInfo> imageInfos(count);
+    std::vector<VkWriteDescriptorSet> writes(count);
 
-    std::vector<TextureResource*> defaultTextures = { defaultTexture, whiteTexture };
+    VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
 
-    for (int i = 0; i < defaultTextures.size(); i++) {
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = defaultTextures[i]->image.view;
-        imageInfo.sampler = defaultTextures[i]->sampler;
+    for (RID i = 0; i < count; i++) {
+        DEBUG_ASSERT(resources[i].sampler != VK_NULL_HANDLE, "Texture not loaded!");
+        RID rid = first + i;
+        resources[rid].imguiRID = ImGui_ImplVulkan_AddTexture(resources[rid].sampler, resources[rid].image.view, layout);
 
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-        write.dstBinding = 0;
-        write.dstArrayElement = i;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write.descriptorCount = 1;
-        write.pImageInfo = &imageInfo;
+        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[i].imageView = resources[rid].image.view;
+        imageInfos[i].sampler = resources[rid].sampler;
 
-        vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), 1, &write, 0, nullptr);
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = bindlessDescriptorSet;
+        writes[i].dstBinding = 0;
+        writes[i].dstArrayElement = rid;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[i].descriptorCount = 1;
+        writes[i].pImageInfo = &imageInfos[i];
     }
+    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
 }
 
-void TextureManager::DrawOnImgui(TextureResource* texture) {
+void TextureManager::DrawOnImgui(RID rid) {
+    DEBUG_ASSERT(rid < nextRID, "Trying to draw invalid texture {}", rid);
     float hSpace = ImGui::GetContentRegionAvailWidth();
-    ImVec2 size = ImVec2(texture->image.width, texture->image.height);
+    ImVec2 size = ImVec2(resources[rid].image.width, resources[rid].image.height);
     size = ImVec2(hSpace, size.y * hSpace / size.x);
-    ImGui::Image(texture->imguiTexture, size);
+    ImGui::Image(resources[rid].imguiRID, size);
 }
 
-TextureResource* TextureManager::GetTexture(std::filesystem::path path) {
-    for (int i = 0; i < textures.size(); i++) {
-        if (path == textures[i]->path) {
-            return textures[i];
+RID TextureManager::GetTexture(std::filesystem::path path) {
+    for (RID i = 0; i < nextRID; i++) {
+        if (path == resources[i].path) {
+            return i;
         }
     }
-    return nullptr;
+    return 0;
+}
+
+void TextureManager::UpdateImguiResources() {
+    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    for (RID i = 0; i < nextRID; i++) {
+        DEBUG_ASSERT(resources[i].sampler != VK_NULL_HANDLE, "Texture not loaded!");
+        resources[i].imguiRID = ImGui_ImplVulkan_AddTexture(resources[i].sampler, resources[i].image.view, layout);
+    }
 }

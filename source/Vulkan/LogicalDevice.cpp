@@ -66,8 +66,8 @@ void LogicalDevice::Create() {
     createInfo.pNext = &descriptorIndexingFeatures;
 
     // specify the required layers to the device 
-    if (Instance::IsValidationLayersEnabled()) {
-        auto& layers = Instance::GetValidationLayers();
+    if (Instance::IsLayersEnabled()) {
+        auto& layers = Instance::GetActiveLayers();
         createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
         createInfo.ppEnabledLayerNames = layers.data();
     }

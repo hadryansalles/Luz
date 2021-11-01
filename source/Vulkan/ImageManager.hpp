@@ -5,11 +5,11 @@
 #include "BufferManager.hpp"
 
 struct ImageResource {
-    VkImage image;
-    VkImageView view;
-    VkDeviceMemory memory;
-    uint32_t width;
-    uint32_t height;
+    VkImage image         = VK_NULL_HANDLE;
+    VkImageView view      = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    uint32_t width  = 0;
+    uint32_t height = 0;
 };
 
 struct ImageDesc {
@@ -31,5 +31,6 @@ class ImageManager {
 public:
     static void Create(const ImageDesc& desc, ImageResource& res);
     static void Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer);
+    static void Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res);
     static void Destroy(ImageResource& res);
 };

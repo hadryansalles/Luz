@@ -36,13 +36,13 @@ class GraphicsPipelineManager {
     static inline VkDescriptorPool textureDescriptorPool = VK_NULL_HANDLE;
     static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
 
+    static inline int bufferDescriptors = 0;
+    static inline std::vector<VkDescriptorPool> bufferDescriptorPools;
+
     // bindless resources
     static inline VkDescriptorSet bindlessDescriptorSet          = VK_NULL_HANDLE;
     static inline VkDescriptorPool bindlessDescriptorPool        = VK_NULL_HANDLE;
     static inline VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
-
-    static inline int bufferDescriptors = 0;
-    static inline std::vector<VkDescriptorPool> bufferDescriptorPools;
 
 public:
     static void Create();
@@ -60,5 +60,6 @@ public:
     static inline VkDescriptorPool GetTexturesDescriptorPool() { return textureDescriptorPool; }
     static inline VkDescriptorPool GetImguiDescriptorPool()    { return imguiDescriptorPool;   }
 
+    // bindless resources
     static inline VkDescriptorSet& GetBindlessDescriptorSet() { return bindlessDescriptorSet; }
 };

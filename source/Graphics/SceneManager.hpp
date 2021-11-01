@@ -79,7 +79,6 @@ public:
 
     static void AsyncLoadAndSetTexture(Model* model, std::filesystem::path path);
     static void LoadAndSetTexture(Model* model, std::filesystem::path path);
-    static void SetTexture(Model* model, TextureResource* texture);
 
     static Collection* CreateCollection(Collection* parent = nullptr);
     static Collection* CreateCollectionCopy(Collection* copy, Collection* parent = nullptr);
