@@ -45,6 +45,4 @@ public:
     static RID GetTexture(std::filesystem::path);
     static RID CreateTexture(TextureDesc& desc);
     static VkSampler CreateSampler(f32 maxLod);
-
-    static void UpdateImguiResources();
 };

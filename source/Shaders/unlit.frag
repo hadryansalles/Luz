@@ -9,7 +9,9 @@ layout(set = 2, binding = 0) uniform MaterialUBO {
 layout(set = 3, binding = 0) uniform sampler2D texSampler;
 
 layout(set = 4, binding = 0) uniform sampler2D colorTextures[];
+
 layout(push_constant) uniform PushConstant {
+    int frameID;
     int textureID;
 };
 

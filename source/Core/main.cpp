@@ -40,7 +40,7 @@ void CheckVulkanResult(VkResult res) {
 class LuzApplication {
 public:
     void run() {
-        WaitToInit(4);
+        // WaitToInit(4);
         Setup();
         Create();
         MainLoop();
@@ -92,11 +92,13 @@ private:
         TextureManager::Create();
         MeshManager::Create();
         SceneManager::Create();
+        LightManager::Create();
     }
 
     void Finish() {
         LUZ_PROFILE_FUNC();
         DestroyVulkan();
+        LightManager::Finish();
         SceneManager::Finish();
         MeshManager::Finish();
         TextureManager::Finish();
@@ -120,10 +122,10 @@ private:
 
     void DestroyFrameResources() {
         LUZ_PROFILE_FUNC();
+        LightManager::Destroy();
         SceneManager::Destroy();
         UnlitGraphicsPipeline::Destroy();
         PhongGraphicsPipeline::Destroy();
-        // GraphicsPipelineManager::Destroy();
 
         DestroyImgui();
 
@@ -208,6 +210,7 @@ private:
 
         if (ImGui::Begin("Scene")) {
             SceneManager::OnImgui();
+            LightManager::OnImgui();
         }
         ImGui::End();
 
@@ -308,6 +311,7 @@ private:
             }
             if (selectedLight) {
                 LightManager::OnImgui(selectedLight);
+                LightManager::SetDirty();
             }
         }
         ImGui::End();
@@ -373,6 +377,8 @@ private:
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
                 BindlessPushConstant pc;
+                pc.frameID = frameIndex;
+                pc.numFrames = SwapChain::GetNumFrames();
                 if (model->material.useDiffuseTexture) {
                     pc.textureID = model->material.diffuseTexture;
                 } else {
@@ -386,8 +392,8 @@ private:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
                     1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 4,
-                    1, &(SceneManager::GetLights()[0]->descriptor.descriptors[frameIndex]), 0, nullptr);
+        // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 4,
+        //             1, &(SceneManager::GetLights()[0]->descriptor.descriptors[frameIndex]), 0, nullptr);
         vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 5, 1, &descriptorSet, 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
@@ -404,8 +410,10 @@ private:
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 2,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
                 BindlessPushConstant pc;
+                pc.frameID = frameIndex;
                 if (model->material.useDiffuseTexture) {
                     pc.textureID = model->material.diffuseTexture;
+                    pc.numFrames = SwapChain::GetNumFrames();
                 } else {
                     pc.textureID = 1;
                 }
@@ -453,13 +461,12 @@ private:
         DestroyFrameResources();
         PhysicalDevice::OnSurfaceUpdate();
         SwapChain::Create();
-        // GraphicsPipelineManager::Create();
         UnlitGraphicsPipeline::Create();
         PhongGraphicsPipeline::Create();
         SceneManager::Create();
+        LightManager::Create();
         CreateImgui();
         createUniformProjection();
-        // TextureManager::UpdateDescriptor();
     }
 
     void createUniformProjection() {
@@ -477,9 +484,7 @@ private:
             BufferManager::Update(model->material.materialDescriptor.buffers[currentImage], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
         }
 
-        for (Light* light : SceneManager::GetLights()) {
-            BufferManager::Update(light->descriptor.buffers[currentImage], &light->GetPointLightUBO(), sizeof(PointLightUBO));
-        }
+        LightManager::UpdateBufferIfDirty(currentImage);
 
         sceneUBO.view = camera.GetView();
         sceneUBO.proj = camera.GetProj();

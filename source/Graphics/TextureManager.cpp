@@ -139,6 +139,7 @@ void TextureManager::OnImgui() {
 }
 
 void TextureManager::UpdateDescriptor(RID first, RID last) {
+    LUZ_PROFILE_FUNC();
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     const RID count = last - first;
     std::vector<VkDescriptorImageInfo> imageInfos(count);
@@ -169,25 +170,19 @@ void TextureManager::UpdateDescriptor(RID first, RID last) {
 
 void TextureManager::DrawOnImgui(RID rid) {
     DEBUG_ASSERT(rid < nextRID, "Trying to draw invalid texture {}", rid);
-    float hSpace = ImGui::GetContentRegionAvailWidth();
-    ImVec2 size = ImVec2(resources[rid].image.width, resources[rid].image.height);
-    size = ImVec2(hSpace, size.y * hSpace / size.x);
+    float hSpace = ImGui::GetContentRegionAvailWidth()/2.5f;
+    f32 maxSize = std::max(resources[rid].image.width, resources[rid].image.height);
+    ImVec2 size = ImVec2((f32)resources[rid].image.width/maxSize, (f32)resources[rid].image.height/maxSize);
+    size = ImVec2(size.x*hSpace, size.y * hSpace);
     ImGui::Image(resources[rid].imguiRID, size);
 }
 
 RID TextureManager::GetTexture(std::filesystem::path path) {
+    LUZ_PROFILE_FUNC();
     for (RID i = 0; i < nextRID; i++) {
         if (path == resources[i].path) {
             return i;
         }
     }
     return 0;
-}
-
-void TextureManager::UpdateImguiResources() {
-    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    for (RID i = 0; i < nextRID; i++) {
-        DEBUG_ASSERT(resources[i].sampler != VK_NULL_HANDLE, "Texture not loaded!");
-        resources[i].imguiRID = ImGui_ImplVulkan_AddTexture(resources[i].sampler, resources[i].image.view, layout);
-    }
 }

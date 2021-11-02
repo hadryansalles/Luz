@@ -57,6 +57,13 @@ void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize size) {
     vkUnmapMemory(LogicalDevice::GetVkDevice(), res.memory);
 }
 
+void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize offset, VkDeviceSize size) {
+    void* dst;
+    vkMapMemory(LogicalDevice::GetVkDevice(), res.memory, offset, size, 0, &dst);
+    memcpy(dst, data, size);
+    vkUnmapMemory(LogicalDevice::GetVkDevice(), res.memory);
+}
+
 void BufferManager::CreateStaged(const BufferDesc& desc, BufferResource& res, void* data) {
     BufferResource staging;
     BufferManager::Create(desc, res);

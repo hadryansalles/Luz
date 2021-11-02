@@ -55,7 +55,10 @@ void GraphicsPipelineManager::Create() {
         const int MAX_TEXTURES = 65536;
 
         // create descriptor set pool for bindless resources
-        VkDescriptorPoolSize bindlessPoolSizes[]  = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES} };
+        VkDescriptorPoolSize bindlessPoolSizes[] = { 
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_TEXTURES}
+        };
 
         VkDescriptorPoolCreateInfo bindlessPoolInfo{};
         bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -72,12 +75,20 @@ void GraphicsPipelineManager::Create() {
         std::vector<VkDescriptorBindingFlags> bindingFlags;
 
         VkDescriptorSetLayoutBinding texturesBinding{};
-        texturesBinding.binding = 0;
+        texturesBinding.binding = TEXTURES_BINDING;
         texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         texturesBinding.descriptorCount = MAX_TEXTURES;
         texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(texturesBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding uniformBuffersBinding{};
+        uniformBuffersBinding.binding = BUFFERS_BINDING;
+        uniformBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uniformBuffersBinding.descriptorCount = MAX_TEXTURES;
+        uniformBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(uniformBuffersBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
         setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;

@@ -21,6 +21,7 @@ public:
 
     static void Copy(VkBuffer src, VkBuffer dst, VkDeviceSize size);
     static void Update(BufferResource& res, void* data, VkDeviceSize size);
+    static void Update(BufferResource& res, void* data, VkDeviceSize offet, VkDeviceSize size);
 
     static void CreateStagingBuffer(BufferResource& res, void* data, VkDeviceSize size);
     static void CreateIndexBuffer(BufferResource& res, void* data, VkDeviceSize size);

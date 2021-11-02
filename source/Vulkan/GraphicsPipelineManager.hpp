@@ -29,6 +29,8 @@ struct GraphicsPipelineResource {
 };
 
 struct BindlessPushConstant {
+    int frameID;
+    int numFrames;
     int textureID;
 };
 
@@ -62,4 +64,9 @@ public:
 
     // bindless resources
     static inline VkDescriptorSet& GetBindlessDescriptorSet() { return bindlessDescriptorSet; }
+
+    static inline constexpr int TEXTURES_BINDING = 0;
+    static inline constexpr int BUFFERS_BINDING = 1;
+    static inline constexpr int SCENE_BUFFER_INDEX = 0;
+    static inline constexpr int LIGHTS_BUFFER_INDEX = 0;
 };

@@ -29,11 +29,12 @@ void SceneManager::Setup() {
     // model->material.type = MaterialType::Phong;
     // AddModel(model, modelDesc.collection);
 
-    AddLight(CreateLight());
+    AddLight(LightManager::CreateLight());
+    AddLight(LightManager::CreateLight());
     // AsyncLoadModels("assets/ignore/dragon.obj");
-    // AsyncLoadModels("assets/cube.obj");
+    AsyncLoadModels("assets/cube.obj");
     // AsyncLoadModels("assets/teapot.obj");
-    AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
+    // AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
 }
 
 void SceneManager::LoadModels(std::filesystem::path path, Collection* collection) {
@@ -52,10 +53,10 @@ void CreateModelDescriptors(Model* model) {
 }
 
 void CreateLightDescriptors(Light* light) {
-    if (light->type == LightType::PointLight) {
-        light->descriptor = PhongGraphicsPipeline::CreateMaterialDescriptor();
-        GraphicsPipelineManager::UpdateBufferDescriptor(light->descriptor, &light->GetPointLightUBO(), sizeof(PointLightUBO));
-    }
+    // if (light->type == LightType::PointLight) {
+    //     light->descriptor = PhongGraphicsPipeline::CreateMaterialDescriptor();
+    //     GraphicsPipelineManager::UpdateBufferDescriptor(light->descriptor, &light->GetPointLightUBO(), sizeof(PointLightUBO));
+    // }
 }
 
 void SceneManager::AddPreloadedModel(ModelDesc desc) {
@@ -105,10 +106,6 @@ void SceneManager::Finish() {
 
     for (Collection* collection : collections) {
         delete collection;
-    }
-
-    for (Light* light : lights) {
-        delete light;
     }
 }
 
@@ -163,8 +160,8 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
 
 Light* SceneManager::CreateLight() {
     Light* light = new Light();
-    light->id = lightID++;
-    CreateLightDescriptors(light);
+    // light->id = lightID++;
+    // CreateLightDescriptors(light);
     return light;
 }
 
@@ -323,10 +320,12 @@ void SceneManager::OnImgui() {
         }
     }
     if (ImGui::CollapsingHeader("Lights", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (Light* light : lights) {
-            if (ImGui::Selectable(light->name.c_str(), light == selectedLight)) {
-                SelectLight(light);
+        for (int i = 0; i < lights.size(); i++) {
+            ImGui::PushID(i);
+            if (ImGui::Selectable(lights[i]->name.c_str(), lights[i] == selectedLight)) {
+                SelectLight(lights[i]);
             }
+            ImGui::PopID();
         }
     }
 }

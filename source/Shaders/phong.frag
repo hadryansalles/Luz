@@ -17,15 +17,25 @@ layout(set = 4, binding = 0) uniform PointLightUBO {
 
 layout(set = 5, binding = 0) uniform sampler2D colorTextures[];
 
+struct PointLight {
+    vec4 color;
+    vec3 position;
+    float intensity;
+};
+
+layout(set = 5, binding = 1) uniform LightsBuffer {
+    PointLight pointLights[10];
+    vec3 ambientColor;
+    int numPointLights;
+    float ambientIntensity;
+} lightsBuffers[];
+
 layout(push_constant) uniform PushConstant {
+    int frameID;
+    int numFrames;
     int textureID;
 };
 
-// struct PointLight {
-//     vec4 color;
-//     vec3 position;
-//     float intensity;
-// };
 // 
 // struct DirectionalLight {
 //     vec4 color;
@@ -37,13 +47,6 @@ layout(push_constant) uniform PushConstant {
 //     mat4 view;
 //     mat4 proj;
 // } sceneBuffers[];
-// 
-// layout(binding = 0) restrict readonly buffer LightBuffer {
-//     PointLight pointLights[100];
-//     DirectionalLight directionalLights[100];
-//     int numPointLights;
-//     int numDirectionalLights;
-// } lightBuffers[];
 // 
 // struct PBRMaterial {
 //     vec4 albedo;
@@ -86,11 +89,11 @@ layout(location = 2) in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 outColor;
 
-vec3 EvalPointLight(vec3 color, vec3 position, float intensity) {
-    vec3 lightVec = position - vec3(fragPos);
+vec3 EvalPointLight(PointLight pointLight) {
+    vec3 lightVec = pointLight.position - vec3(fragPos);
     float dist2 = dot(lightVec, lightVec);
     lightVec = normalize(lightVec);
-    return color*clamp(dot(lightVec, fragNormal), 0.0, 1.0)*intensity/dist2;
+    return pointLight.color.xyz*clamp(dot(lightVec, fragNormal), 0.0, 1.0)*pointLight.intensity/dist2;
 }
 
 vec3 EvalDirectionalLight(vec3 color, vec3 position, float intensity) {
@@ -100,8 +103,13 @@ vec3 EvalDirectionalLight(vec3 color, vec3 position, float intensity) {
     return color*clamp(dot(lightVec, fragNormal), 0.0, 1.0)*intensity/dist2;
 }
 
+#define LIGHT_BUFFER_INDEX 0
+#define lights lightsBuffers[numFrames*LIGHT_BUFFER_INDEX + frameID]
+
 void main() {
-    vec3 intensity = vec3(0.1, 0.1, 0.1);
-    intensity += EvalPointLight(light.color.xyz, light.position, light.intensity);
+    vec3 intensity = lights.ambientColor*lights.ambientIntensity;
+    for(int i = 0; i < lights.numPointLights; i++) {
+        intensity += EvalPointLight(lights.pointLights[i]);
+    }
     outColor = material.color*texture(colorTextures[textureID], fragTexCoord)*vec4(intensity, 1.0);
 }
