@@ -52,12 +52,13 @@ void GraphicsPipelineManager::Create() {
 
     // create bindless resources
     {
-        const int MAX_TEXTURES = 65536;
+        const int MAX_UNIFORMS = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorUniformBuffers-10;
+        const int MAX_TEXTURES = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorSampledImages-10;
 
         // create descriptor set pool for bindless resources
         VkDescriptorPoolSize bindlessPoolSizes[] = { 
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_TEXTURES}
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_UNIFORMS}
         };
 
         VkDescriptorPoolCreateInfo bindlessPoolInfo{};
@@ -85,7 +86,7 @@ void GraphicsPipelineManager::Create() {
         VkDescriptorSetLayoutBinding uniformBuffersBinding{};
         uniformBuffersBinding.binding = BUFFERS_BINDING;
         uniformBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uniformBuffersBinding.descriptorCount = MAX_TEXTURES;
+        uniformBuffersBinding.descriptorCount = MAX_UNIFORMS;
         uniformBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(uniformBuffersBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });

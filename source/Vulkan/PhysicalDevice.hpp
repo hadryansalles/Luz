@@ -50,6 +50,7 @@ public:
     static inline VkSampleCountFlags                        GetSampleCounts()       { return device->sampleCounts;   }
     static inline VkSampleCountFlagBits                     GetMaxSamples()         { return device->maxSamples;     }
     static inline VkSurfaceCapabilitiesKHR                  GetCapabilities()       { return device->capabilities;   }
+    static inline VkPhysicalDeviceProperties                GetProperties()         { return device->properties;     }
     static inline const std::vector<const char*>&           GetRequiredExtensions() { return requiredExtensions;     }
     static inline const std::vector<VkPresentModeKHR>&      GetPresentModes()       { return device->presentModes;   }
     static inline const std::vector<VkSurfaceFormatKHR>&    GetSurfaceFormats()     { return device->surfaceFormats; }

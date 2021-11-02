@@ -158,13 +158,6 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
     return model;
 }
 
-Light* SceneManager::CreateLight() {
-    Light* light = new Light();
-    // light->id = lightID++;
-    // CreateLightDescriptors(light);
-    return light;
-}
-
 void SceneManager::ModelOnImgui(Model* model) {
     bool selected = model == selectedModel;
     ImGui::PushID(model->id);

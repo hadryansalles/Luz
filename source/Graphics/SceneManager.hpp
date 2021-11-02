@@ -75,8 +75,6 @@ public:
     static void DeleteModelFromCollection(Model* model);
     static void DeleteModel(Model* model);
 
-    static Light* CreateLight();
-
     static void AsyncLoadAndSetTexture(Model* model, std::filesystem::path path);
     static void LoadAndSetTexture(Model* model, std::filesystem::path path);
 

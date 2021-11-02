@@ -66,8 +66,11 @@ std::vector<ModelDesc> AssetManager::LoadObjFile(std::filesystem::path path) {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
-    Collection* collection = SceneManager::CreateCollection();
-    collection->name = path.filename().string();
+    Collection* collection = nullptr;
+    if (shapes.size() > 1) {
+        collection = SceneManager::CreateCollection();
+        collection->name = path.filename().string();
+    }
     std::vector<ModelDesc> models;
     for (size_t i = 0; i < shapes.size(); i++) {
         MeshDesc* desc = new MeshDesc;
@@ -152,8 +155,11 @@ void AssetManager::AddObjFileToScene(std::filesystem::path path, Collection* par
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
-    Collection* collection = SceneManager::CreateCollection(parent);
-    collection->name = path.filename().string();
+    Collection* collection = nullptr;
+    if (shapes.size() > 1) {
+        collection = SceneManager::CreateCollection();
+        collection->name = path.filename().string();
+    }
     for (size_t i = 0; i < shapes.size(); i++) {
         MeshDesc* desc = new MeshDesc;
         std::unordered_map<MeshVertex, uint32_t> uniqueVertices{};

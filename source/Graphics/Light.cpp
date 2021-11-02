@@ -4,6 +4,7 @@
 #include "SwapChain.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "LogicalDevice.hpp"
+#include "PhysicalDevice.hpp"
 
 void LightManager::Create() {
     auto numFrames = SwapChain::GetNumFrames();
@@ -13,8 +14,14 @@ void LightManager::Create() {
 
     // create a buffer with one section for each frame
     BufferDesc bufferDesc;
+    VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minUniformBufferOffsetAlignment;
     VkDeviceSize uniformSize = sizeof(uniformData);
-    bufferDesc.size = uniformSize * numFrames;
+    VkDeviceSize sizeRemain = uniformSize % minOffset;
+    sectionSize = uniformSize;
+    if (sizeRemain > 0) {
+        sectionSize += minOffset - sizeRemain;
+    }
+    bufferDesc.size = sectionSize * numFrames;
     bufferDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     bufferDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     BufferManager::Create(bufferDesc, buffer);
@@ -24,7 +31,7 @@ void LightManager::Create() {
         UpdateBufferIfDirty(i);
 
         bufferInfos[i].buffer = buffer.buffer;
-        bufferInfos[i].offset = i*uniformSize;
+        bufferInfos[i].offset = i*sectionSize;
         bufferInfos[i].range = uniformSize;
 
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -135,7 +142,7 @@ void LightManager::UpdateBufferIfDirty(int numFrame) {
     DEBUG_ASSERT(numFrame < dirtyBuffer.size(), "Invalid frame number!");
     UpdateUniformIfDirty();
     if (dirtyBuffer[numFrame]) {
-        BufferManager::Update(buffer, &uniformData, numFrame * sizeof(uniformData), sizeof(uniformData));
+        BufferManager::Update(buffer, &uniformData, numFrame * sectionSize, sizeof(uniformData));
         dirtyBuffer[numFrame] = false;
     }
 }

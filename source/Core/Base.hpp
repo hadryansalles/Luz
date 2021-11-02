@@ -4,18 +4,18 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
-using u8  = typename uint8_t;
-using u16 = typename uint16_t;
-using u32 = typename uint32_t;
-using u32 = typename uint32_t;
-using u64 = typename uint64_t;
-using i8  = typename int8_t;
-using i16 = typename int16_t;
-using i32 = typename int32_t;
-using i64 = typename int64_t;
-using f32 = typename float;
-using f64 = typename double;
-using RID = typename u16;
+using u8  = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+using i8  = int8_t;
+using i16 = int16_t;
+using i32 = int32_t;
+using i64 = int64_t;
+using f32 = float;
+using f64 = double;
+using RID = u16;
 
 #ifdef _WIN32
     #ifndef _WIN64

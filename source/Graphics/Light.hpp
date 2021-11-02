@@ -16,7 +16,6 @@ struct LightsUBO {
     glm::vec3 ambientColor = glm::vec3(1.0f);
     u32 numPointLights     = 0;
     f32 ambientIntensity   = 0.1f;
-    u32 PADDING[11];
 };
 
 struct PointLightUBO {
@@ -45,6 +44,7 @@ class LightManager {
     static inline const char* TYPE_NAMES[] = { "Point" };
     static inline LightsUBO uniformData;
     static inline BufferResource buffer;
+    static inline u64 sectionSize;
     static inline std::vector<Light*> lights;
     static inline std::vector<bool> dirtyBuffer;
     static inline bool dirtyUniform = false;
