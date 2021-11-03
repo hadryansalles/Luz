@@ -146,6 +146,8 @@ void Instance::Create() {
         requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
+    requiredExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+
     // set to active all extensions that we enabled
     for (size_t i = 0; i < requiredExtensions.size(); i++) {
         for (size_t j = 0; j < extensions.size(); j++) {

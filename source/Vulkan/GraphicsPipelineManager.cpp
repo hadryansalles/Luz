@@ -52,11 +52,11 @@ void GraphicsPipelineManager::Create() {
 
     // create bindless resources
     {
-        const int MAX_UNIFORMS = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorUniformBuffers-10;
-        const int MAX_TEXTURES = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorSampledImages-10;
+        const u32 MAX_UNIFORMS = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorUniformBuffers-10;
+        const u32 MAX_TEXTURES = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorSampledImages-10;
 
         // create descriptor set pool for bindless resources
-        VkDescriptorPoolSize bindlessPoolSizes[] = { 
+        std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_UNIFORMS}
         };
@@ -65,8 +65,8 @@ void GraphicsPipelineManager::Create() {
         bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
         bindlessPoolInfo.maxSets = 1;
-        bindlessPoolInfo.poolSizeCount = 1;
-        bindlessPoolInfo.pPoolSizes = bindlessPoolSizes;
+        bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
+        bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
 
         result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
         DEBUG_VK(result, "Failed to create bindless descriptor pool!");

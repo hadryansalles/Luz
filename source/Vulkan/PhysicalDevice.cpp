@@ -285,6 +285,9 @@ void PhysicalDevice::OnSurfaceUpdate() {
 }
 
 void PhysicalDevice::UpdateDevice() {
+    if(!allDevices[index].suitable) {
+        LOG_WARN("Selected device {} not suitable!", index);
+    }
     if (index == -1 || !allDevices[index].suitable) {
         // select the first suitable device to use
         for (size_t i = 0; i < allDevices.size(); i++) {
