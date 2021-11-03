@@ -88,4 +88,5 @@ public:
     static void OnImgui();
 
     static MeshResource* CreateMesh(MeshDesc* desc);
+    static MeshResource* GetOrCreateMesh(MeshDesc* desc);
 };

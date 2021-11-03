@@ -23,11 +23,19 @@ struct PointLight {
     float intensity;
 };
 
+struct DirectionalLight {
+    vec4 color;
+    vec3 direction;
+    float intensity;
+};
+
 layout(set = 5, binding = 1) uniform LightsBuffer {
     PointLight pointLights[10];
+    DirectionalLight directionalLights[10];
     vec3 ambientColor;
-    int numPointLights;
     float ambientIntensity;
+    int numPointLights;
+    int numDirectionalLights;
 } lightsBuffers[];
 
 layout(push_constant) uniform PushConstant {
@@ -96,11 +104,8 @@ vec3 EvalPointLight(PointLight pointLight) {
     return pointLight.color.xyz*clamp(dot(lightVec, fragNormal), 0.0, 1.0)*pointLight.intensity/dist2;
 }
 
-vec3 EvalDirectionalLight(vec3 color, vec3 position, float intensity) {
-    vec3 lightVec = position - vec3(fragPos);
-    float dist2 = dot(lightVec, lightVec);
-    lightVec = normalize(lightVec);
-    return color*clamp(dot(lightVec, fragNormal), 0.0, 1.0)*intensity/dist2;
+vec3 EvalDirectionalLight(DirectionalLight dirLight) {
+    return dirLight.color.xyz*clamp(dot(-dirLight.direction, fragNormal), 0.0, 1.0)*dirLight.intensity;
 }
 
 #define LIGHT_BUFFER_INDEX 0
@@ -110,6 +115,9 @@ void main() {
     vec3 intensity = lights.ambientColor*lights.ambientIntensity;
     for(int i = 0; i < lights.numPointLights; i++) {
         intensity += EvalPointLight(lights.pointLights[i]);
+    }
+    for(int i = 0; i < lights.numDirectionalLights; i++) {
+        intensity += EvalDirectionalLight(lights.directionalLights[i]);
     }
     outColor = material.color*texture(colorTextures[textureID], fragTexCoord)*vec4(intensity, 1.0);
 }

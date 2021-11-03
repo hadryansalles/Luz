@@ -30,7 +30,6 @@ void SceneManager::Setup() {
     // AddModel(model, modelDesc.collection);
 
     AddLight(LightManager::CreateLight());
-    AddLight(LightManager::CreateLight());
     // AsyncLoadModels("assets/ignore/dragon.obj");
     AsyncLoadModels("assets/cube.obj");
     // AsyncLoadModels("assets/teapot.obj");
@@ -52,13 +51,6 @@ void CreateModelDescriptors(Model* model) {
     GraphicsPipelineManager::UpdateBufferDescriptor(model->material.materialDescriptor, (UnlitMaterialUBO*)&model->material, sizeof(UnlitMaterialUBO));
 }
 
-void CreateLightDescriptors(Light* light) {
-    // if (light->type == LightType::PointLight) {
-    //     light->descriptor = PhongGraphicsPipeline::CreateMaterialDescriptor();
-    //     GraphicsPipelineManager::UpdateBufferDescriptor(light->descriptor, &light->GetPointLightUBO(), sizeof(PointLightUBO));
-    // }
-}
-
 void SceneManager::AddPreloadedModel(ModelDesc desc) {
     preloadedModelsLock.lock();
     preloadedModels.push_back(desc);
@@ -72,10 +64,6 @@ void SceneManager::Create() {
     for (Model* model : models) {
         CreateModelDescriptors(model);
     }
-
-    for (Light* light : lights) {
-        CreateLightDescriptors(light);
-    }
 }
 
 void SceneManager::Destroy() {
@@ -88,12 +76,6 @@ void SceneManager::Destroy() {
             BufferManager::Destroy(buffer);
         }
         for (BufferResource& buffer : model->material.materialDescriptor.buffers) {
-            BufferManager::Destroy(buffer);
-        }
-    }
-
-    for (Light* light : lights) {
-        for (BufferResource& buffer : light->descriptor.buffers) {
             BufferManager::Destroy(buffer);
         }
     }
@@ -158,6 +140,15 @@ Model* SceneManager::CreateModel(ModelDesc& desc) {
     return model;
 }
 
+Model* SceneManager::CreateGizmoModel(MeshResource* mesh) {
+    Model* model = new Model();
+    model->mesh = mesh;
+    model->transform.position += model->mesh->center;
+    model->material.type = MaterialType::Unlit;
+    CreateModelDescriptors(model);
+    return model;
+}
+
 void SceneManager::ModelOnImgui(Model* model) {
     bool selected = model == selectedModel;
     ImGui::PushID(model->id);
@@ -176,6 +167,30 @@ void SceneManager::ModelOnImgui(Model* model) {
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
         ImGui::SetDragDropPayload("model", &model, sizeof(Model*));
         ImGui::Text(model->name.c_str());
+        ImGui::EndDragDropSource();
+    }
+
+    ImGui::PopID();
+}
+
+void SceneManager::LightOnImgui(Light* light) {
+    bool selected = light == selectedLight;
+    ImGui::PushID(light->id);
+
+    selected = ImGui::Selectable(light->name.c_str(), &selected);
+
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        SelectLight(light);
+        openSceneItemMenu = true;
+    }
+
+    if(selected) {
+        SelectLight(light);
+    }
+
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("light", &light, sizeof(Light*));
+        ImGui::Text(light->name.c_str());
         ImGui::EndDragDropSource();
     }
 
@@ -214,6 +229,9 @@ void SceneManager::CollectionOnImgui(Collection* collection, int id) {
         for (int i = 0; i < collection->models.size(); i++) {
             ModelOnImgui(collection->models[i]);
         }
+        for (int i = 0; i < collection->lights.size(); i++) {
+            LightOnImgui(collection->lights[i]);
+        }
         ImGui::TreePop();
     }
 
@@ -231,6 +249,9 @@ void SceneManager::OnImgui() {
         for (int i = 0; i < mainCollection.models.size(); i++) {
             ModelOnImgui(mainCollection.models[i]);
         }
+        for (int i = 0; i < mainCollection.lights.size(); i++) {
+            LightOnImgui(mainCollection.lights[i]);
+        }
         bool controlPressed = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL);
         if (controlPressed && Window::IsKeyPressed(GLFW_KEY_C)) {
             if (selectedCollection != nullptr && selectedModel != nullptr) {
@@ -240,6 +261,8 @@ void SceneManager::OnImgui() {
                 SetCopiedCollection(selectedCollection);
             } else if (selectedModel != nullptr) {
                 SetCopiedModel(selectedModel);
+            } else if (selectedLight != nullptr) {
+                SetCopiedLight(selectedLight);
             }
         }
         if (controlPressed && Window::IsKeyPressed(GLFW_KEY_V)) {
@@ -248,9 +271,6 @@ void SceneManager::OnImgui() {
             }
             if (copiedCollection != nullptr) {
                 Collection* collection = CreateCollectionCopy(copiedCollection);
-                // if (selectedCollection != nullptr) {
-                //     SetCollectionParent(collection, selectedCollection);
-                // }
                 SelectCollection(collection);
             } else if (copiedModel != nullptr) {
                 Model* model = AddModelCopy(copiedModel);
@@ -261,6 +281,10 @@ void SceneManager::OnImgui() {
                     SetCollection(model, copiedModel->collection);
                 }
                 SelectModel(model);
+            } else if (copiedLight != nullptr) {
+                Light* copy = LightManager::CreateLightCopy(copiedLight);
+                AddLight(copy, copiedLight->collection);
+                SelectLight(copy);
             }
         }
         if (Window::IsKeyPressed(GLFW_KEY_X)) {
@@ -275,23 +299,58 @@ void SceneManager::OnImgui() {
             ImGui::OpenPopup("right_click_hierarchy");
         }
         if (ImGui::BeginPopup("right_click_hierarchy")) {
+            Collection* parentCollection = &mainCollection;
             if (selectedModel != nullptr) {
+                parentCollection = selectedModel->collection;
+            }
+            else if (selectedLight != nullptr) {
+                parentCollection = selectedLight->collection;
+            }
+            if(selectedLight != nullptr || selectedModel != nullptr) {
+                if (ImGui::MenuItem("New collection")) {
+                    CreateCollection(selectedModel->collection);
+                }
+                if (ImGui::MenuItem("New light")) {
+                    Light* newLight = LightManager::CreateLight();
+                    AddLight(newLight, parentCollection);
+                    SelectLight(newLight);
+                }
                 if (ImGui::MenuItem("Copy")) {
-                    SetCopiedModel(selectedModel);
+                    if(selectedModel != nullptr) { 
+                        SetCopiedModel(selectedModel);
+                    } else if (selectedLight != nullptr) {
+                        SetCopiedLight(selectedLight);
+                    }
                 }
                 if (ImGui::MenuItem("Delete")) {
-                    DeleteModel(selectedModel);
+                    if(selectedModel != nullptr) { 
+                        DeleteModel(selectedModel);
+                    } else if (selectedLight != nullptr) {
+                        DeleteLight(selectedLight);
+                    }
                 }
             }
             if (selectedCollection != nullptr) {
-                if (ImGui::MenuItem("New")) {
+                if (ImGui::MenuItem("New collection")) {
                     CreateCollection(selectedCollection);
+                }
+                if (ImGui::MenuItem("New light")) {
+                    Light* newLight = LightManager::CreateLight();
+                    AddLight(newLight);
+                    SelectLight(newLight);
                 }
                 if (copiedModel != nullptr) {
                     if (ImGui::MenuItem("Paste")) {
                         Model* copy = AddModelCopy(copiedModel);
                         SetCollection(copy, selectedCollection);
                         SelectModel(copy);
+                    }
+                }
+                if (copiedCollection != nullptr) {
+                    if (ImGui::MenuItem("Paste")) {
+                        Light* copy = LightManager::CreateLightCopy(copiedLight);
+                        AddLight(copy, copiedLight->collection);
+                        SelectLight(copy);
                     }
                 }
                 if (copiedCollection != nullptr) {
@@ -310,15 +369,6 @@ void SceneManager::OnImgui() {
                 }
             }
             ImGui::EndPopup();
-        }
-    }
-    if (ImGui::CollapsingHeader("Lights", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < lights.size(); i++) {
-            ImGui::PushID(i);
-            if (ImGui::Selectable(lights[i]->name.c_str(), lights[i] == selectedLight)) {
-                SelectLight(lights[i]);
-            }
-            ImGui::PopID();
         }
     }
 }
@@ -389,6 +439,9 @@ void SceneManager::DeleteCollection(Collection* collection) {
     while (!collection->models.empty()) {
         DeleteModel(*collection->models.begin());
     }
+    while (!collection->lights.empty()) {
+        LightManager::DestroyLight(*collection->lights.begin());
+    }
     delete collection;
 }
 
@@ -399,6 +452,18 @@ void SceneManager::DeleteModelFromCollection(Model* model) {
         return;
     }
     model->collection->models.erase(it);
+}
+
+void SceneManager::DestroyModel(Model* model) {
+    vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+
+    for (BufferResource& buffer : model->meshDescriptor.buffers) {
+        BufferManager::Destroy(buffer);
+    }
+    for (BufferResource& buffer : model->material.materialDescriptor.buffers) {
+        BufferManager::Destroy(buffer);
+    }
+    delete model;
 }
 
 void SceneManager::DeleteModel(Model* model) {
@@ -430,6 +495,21 @@ void SceneManager::DeleteModel(Model* model) {
     delete model;
 }
 
+void SceneManager::DeleteLight(Light* light) {
+    vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+
+    if (selectedLight == light) {
+        SelectModel(nullptr);
+    }
+    if (copiedLight == light) {
+        copiedModel = nullptr;
+    }
+
+    DeleteLightFromCollection(light);
+
+    LightManager::DestroyLight(light);
+}
+
 void SceneManager::SelectCollection(Collection* collection) {
     selectedModel = nullptr;
     selectedLight = nullptr;
@@ -459,6 +539,13 @@ void SceneManager::SetCopiedCollection(Collection* collection) {
 void SceneManager::SetCopiedModel(Model* model) {
     copiedCollection = nullptr;
     copiedModel = model;
+    copiedLight = nullptr;
+}
+
+void SceneManager::SetCopiedLight(Light* light) {
+    copiedCollection = nullptr;
+    copiedModel = nullptr;
+    copiedLight = light;
 }
 
 void SceneManager::LoadAndSetTexture(Model* model, std::filesystem::path path) {
@@ -487,14 +574,19 @@ Collection* SceneManager::CreateCollectionCopy(Collection* copy, Collection* par
     return collection;
 }
 
-Model* SceneManager::AddModelCopy(Model* copy) {
+Model* SceneManager::CreateModelCopy(const Model* copy) {
     Model* model = new Model();
     model->mesh = copy->mesh;
     model->name = copy->name;
-    model->id = modelID++;
     model->transform = copy->transform;
     model->material = copy->material;
     CreateModelDescriptors(model);
+    return model;
+}
+
+Model* SceneManager::AddModelCopy(const Model* copy) {
+    Model* model = CreateModelCopy(copy);
+    model->id = modelID++;
     models.push_back(model);
     SetCollection(model, nullptr);
     return model;
@@ -516,6 +608,13 @@ void SceneManager::CollectionDragDropTarget(Collection* collection) {
             ImGui::EndDragDropTarget();
         }
 
+        const ImGuiPayload* lightPayload = ImGui::AcceptDragDropPayload("light");
+        if (lightPayload) {
+            Light* light = *(Light**)lightPayload->Data;
+            SetCollection(light, collection);
+            ImGui::EndDragDropTarget();
+        }
+
         const ImGuiPayload* collectionPayload = ImGui::AcceptDragDropPayload("collection");
         if (collectionPayload) {
             Collection* childCollection = *(Collection**) collectionPayload->Data;
@@ -526,5 +625,27 @@ void SceneManager::CollectionDragDropTarget(Collection* collection) {
 }
 
 void SceneManager::AddLight(Light* light, Collection* collection) {
-    lights.push_back(light);
+    if (collection == nullptr) {
+        collection = &mainCollection;
+    }
+    light->collection = collection;
+    light->transform.parent = &collection->transform;
+    collection->lights.push_back(light);
+}
+
+void SceneManager::DeleteLightFromCollection(Light* light) {
+    Collection* oldCollection = light->collection;
+    auto it = std::find(oldCollection->lights.begin(), oldCollection->lights.end(), light);
+    DEBUG_ASSERT(it != oldCollection->lights.end(), "Light not found inside collection!");
+    oldCollection->lights.erase(it);
+}
+
+void SceneManager::SetCollection(Light* light, Collection* collection) {
+    DeleteLightFromCollection(light);
+    if (collection == nullptr) {
+        collection = &mainCollection;
+    }
+    light->collection = collection;
+    light->transform.parent = &collection->transform;
+    collection->lights.push_back(light);
 }

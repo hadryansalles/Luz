@@ -13,6 +13,30 @@ struct Transform {
     bool dirty = true;
     Transform* parent = nullptr;
 
+    void SetPosition(glm::vec3 pos) {
+        position = pos;
+        dirty = true;
+    }
+
+    void SetRotation(glm::vec3 rot) {
+        rotation = rot;
+        dirty = true;
+    }
+
+    void SetScale(glm::vec3 scl) {
+        scale = scl;
+        dirty = true;
+    }
+
+    void SetMatrix(glm::mat4 mat) {
+        glm::quat rot;
+        glm::vec3 skew;
+        glm::vec4 persp;
+        glm::decompose(mat, scale, rot, position, skew, persp);
+        rotation = glm::degrees(glm::eulerAngles(rot));
+        dirty = true;
+    }
+
     glm::mat4 GetMatrix() {
         if (dirty) {
             dirty = false;
@@ -25,5 +49,14 @@ struct Transform {
             return parent->GetMatrix() * transform;
         }
         return transform;
+    }
+
+    glm::vec3 GetGlobalFront() {
+        glm::mat4 mat = GetMatrix();
+        return glm::vec3(mat[2][0], mat[2][1], mat[2][2]);
+    }
+
+    glm::vec3 GetWorldRotation() {
+        return glm::degrees(glm::eulerAngles(glm::quat(GetMatrix())));
     }
 };

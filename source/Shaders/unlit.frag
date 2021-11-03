@@ -12,6 +12,7 @@ layout(set = 4, binding = 0) uniform sampler2D colorTextures[];
 
 layout(push_constant) uniform PushConstant {
     int frameID;
+    int numFrames;
     int textureID;
 };
 

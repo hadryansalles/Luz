@@ -176,6 +176,19 @@ private:
         return dirty;
     }
 
+    ImVec2 ToScreenSpace(glm::vec3 position) {
+        glm::vec4 cameraSpace = camera.GetProj() * camera.GetView() * glm::vec4(position, 1.0f);
+        ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
+        auto ext = SwapChain::GetExtent();
+        screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
+        screenSpace.y = (screenSpace.y + 1.0) * ext.height/2.0;
+        return screenSpace;
+    }
+
+    std::vector<glm::vec3> CreateDisk(glm::vec3 center, float radius, int numSegments) {
+        
+    }
+
     void imguiDrawFrame() {
         LUZ_PROFILE_FUNC();
         auto device = LogicalDevice::GetVkDevice();
@@ -215,7 +228,6 @@ private:
         ImGui::End();
 
         if (ImGui::Begin("Inspector")) {
-            
             const float totalWidth = ImGui::GetContentRegionAvailWidth();
 
             Collection* selectedCollection = SceneManager::GetSelectedCollection();
@@ -238,6 +250,15 @@ private:
                 ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
                 ImGui::PushID("name");
                 ImGui::InputText("", &selectedModel->name);
+                ImGui::PopID();
+            }
+            
+            if (selectedLight != nullptr) {
+                ImGui::Text("Name");
+                ImGui::SameLine(totalWidth/5.0, -1);
+                ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
+                ImGui::PushID("name");
+                ImGui::InputText("", &selectedLight->name);
                 ImGui::PopID();
             }
 
@@ -313,6 +334,10 @@ private:
                 LightManager::OnImgui(selectedLight);
                 LightManager::SetDirty();
             }
+
+            if (selectedCollection) {
+                LightManager::SetDirty();
+            }
         }
         ImGui::End();
 
@@ -356,38 +381,8 @@ private:
         auto sceneDescriptor = SceneManager::GetSceneDescriptor();
         auto unlitGPO = UnlitGraphicsPipeline::GetResource();
         auto phongGPO = PhongGraphicsPipeline::GetResource();
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
-                    1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
         auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
         auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 4, 1, &descriptorSet, 0, nullptr);
-
-        for (const Model* model : SceneManager::GetModels()) {
-            if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
-                MeshResource* mesh = model->mesh;
-                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                // command buffer, vertex count, instance count, first vertex, first instance
-                // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
-                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
-                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
-                BindlessPushConstant pc;
-                pc.frameID = frameIndex;
-                pc.numFrames = SwapChain::GetNumFrames();
-                if (model->material.useDiffuseTexture) {
-                    pc.textureID = model->material.diffuseTexture;
-                } else {
-                    pc.textureID = 1;
-                }
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
-                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
-            }
-        }
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
@@ -417,6 +412,58 @@ private:
                 } else {
                     pc.textureID = 1;
                 }
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
+                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
+            }
+        }
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
+                    1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 4, 1, &descriptorSet, 0, nullptr);
+
+        for (const Model* model : SceneManager::GetModels()) {
+            if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
+                MeshResource* mesh = model->mesh;
+                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                // command buffer, vertex count, instance count, first vertex, first instance
+                // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
+                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
+                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
+                BindlessPushConstant pc;
+                pc.frameID = frameIndex;
+                pc.numFrames = SwapChain::GetNumFrames();
+                if (model->material.useDiffuseTexture) {
+                    pc.textureID = model->material.diffuseTexture;
+                } else {
+                    pc.textureID = 1;
+                }
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
+                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
+            }
+        }
+
+        if (LightManager::GetRenderGizmos()) {
+            for (const Light* light : LightManager::GetLights()) {
+                const Model* model = light->model;
+                MeshResource* mesh = model->mesh;
+                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
+                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
+                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
+                BindlessPushConstant pc;
+                pc.frameID = frameIndex;
+                pc.numFrames = SwapChain::GetNumFrames();
+                pc.textureID = 1;
                 vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }

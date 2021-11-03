@@ -76,6 +76,15 @@ MeshResource* MeshManager::CreateMesh(MeshDesc* desc) {
     return mesh;
 }
 
+MeshResource* MeshManager::GetOrCreateMesh(MeshDesc* desc) {
+    for (int i = 0; i < descs.size(); i++) {
+        if (desc == descs[i]) {
+            return meshes[i];
+        }
+    }
+    return CreateMesh(desc);
+}
+
 void MeshManager::OnImgui() {
     const float leftSpacing = ImGui::GetContentRegionAvailWidth()*1.0f/3.0f;
     if (ImGui::CollapsingHeader("Meshes")) {

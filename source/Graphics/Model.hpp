@@ -35,6 +35,7 @@ struct Model {
 struct Collection {
     Collection* parent = nullptr;
     std::vector<Model*> models;
+    std::vector<struct Light*> lights;
     std::vector<Collection*> children;
     Transform transform;
     std::string name;
