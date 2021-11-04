@@ -3,34 +3,40 @@
 #include "Transform.hpp"
 #include "Descriptors.hpp"
 
-struct DirectionalLight {
-    glm::vec4 color     = glm::vec4(1.0f);
-    glm::vec3 direction = glm::vec3(0.0f);
-    float intensity     = 1;
-};
-
 struct PointLight {
     glm::vec4 color    = glm::vec4(1.0f);
     glm::vec3 position = glm::vec3(0.0f);
     float intensity    = 1;
 };
 
+struct DirectionalLight {
+    glm::vec4 color     = glm::vec4(1.0f);
+    glm::vec3 direction = glm::vec3(0.0f, 0.0f, 1.0f);
+    float intensity     = 1;
+};
+
+struct SpotLight {
+    glm::vec3 color     = glm::vec4(1.0f);
+    f32 intensity       = 1;
+    glm::vec3 direction = glm::vec3(0.0f, 0.0f, 1.0f);
+    f32 cutOff          = 60.0f;
+    glm::vec3 position  = glm::vec3(0.0f);
+    f32 outerCutOff     = 90.0f;
+};
+
 #define MAX_POINT_LIGHTS 10
 #define MAX_DIRECTIONAL_LIGHTS 10
+#define MAX_SPOT_LIGHTS 10
 
 struct LightsUBO {
     PointLight pointLights[MAX_POINT_LIGHTS];
     DirectionalLight directionalLights[MAX_DIRECTIONAL_LIGHTS];
+    SpotLight spotLights[MAX_SPOT_LIGHTS];
     glm::vec3 ambientColor   = glm::vec3(1.0f);
     f32 ambientIntensity     = 0.1f;
     u32 numPointLights       = 0;
     u32 numDirectionalLights = 0;
-};
-
-struct PointLightUBO {
-    glm::vec4 color;
-    glm::vec3 position;
-    float intensity;
+    u32 numSpotLights        = 0;
 };
 
 struct Collection;
@@ -38,6 +44,7 @@ struct Collection;
 enum LightType {
     Point,
     Directional,
+    Spot
 };
 
 struct Light {
@@ -45,14 +52,16 @@ struct Light {
     Transform transform;
     Collection* collection = nullptr;
     glm::vec4 color = glm::vec4(1.0f);
-    float intensity = 1.0f;
+    f32 intensity = 1.0f;
     LightType type = LightType::Point;
+    f32 cutOff = 60.0f;
+    f32 outerCutOff = 90.0f;
     int id = -1;
     struct Model* model = nullptr;
 };
 
 class LightManager {
-    static inline const char* TYPE_NAMES[] = { "Point", "Directional"};
+    static inline const char* TYPE_NAMES[] = { "Point", "Directional", "Spot"};
     static inline LightsUBO uniformData;
     static inline BufferResource buffer;
     static inline u64 sectionSize;

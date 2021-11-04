@@ -285,7 +285,7 @@ void PhysicalDevice::OnSurfaceUpdate() {
 }
 
 void PhysicalDevice::UpdateDevice() {
-    if(!allDevices[index].suitable) {
+    if(index != -1 && !allDevices[index].suitable) {
         LOG_WARN("Selected device {} not suitable!", index);
     }
     if (index == -1 || !allDevices[index].suitable) {
@@ -296,10 +296,8 @@ void PhysicalDevice::UpdateDevice() {
             }
         }
     }
+    ASSERT(index != -1, "can't find suitable device. Aborting.");
     device = &(allDevices[index]);
-    return;
-
-    ASSERT(false, "can't find suitable device. Aborting.");
 }
 
 uint32_t PhysicalDevice::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {

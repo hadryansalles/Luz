@@ -108,6 +108,9 @@ void LightManager::OnImgui(Light* light) {
             if (ImGui::Selectable("Directional", light->type == LightType::Directional)) {
                 light->type = LightType::Directional;
             }
+            if (ImGui::Selectable("Spot", light->type == LightType::Spot)) {
+                light->type = LightType::Spot;
+            }
             ImGui::EndCombo();
         }
         ImGui::PopID();
@@ -121,6 +124,18 @@ void LightManager::OnImgui(Light* light) {
         ImGui::PushID("intensity");
         ImGui::DragFloat("", &light->intensity, 0.01f, 0.0f);
         ImGui::PopID();
+        if (light->type == LightType::Spot) {
+            ImGui::Text("Inner angle");
+            ImGui::SameLine();
+            ImGui::PushID("cutOff");
+            ImGui::DragFloat("", &light->cutOff, 0.1f, 0.0f, 360.0f);
+            ImGui::PopID();
+            ImGui::Text("Outer angle");
+            ImGui::SameLine();
+            ImGui::PushID("outerCutOff");
+            ImGui::DragFloat("", &light->outerCutOff, 0.1f, 0.0f, 360.0f);
+            ImGui::PopID();
+        }
     }
 }
 
@@ -164,13 +179,12 @@ void LightManager::UpdateUniformIfDirty() {
     if (dirtyUniform) {
         uniformData.numPointLights = 0;
         uniformData.numDirectionalLights = 0;
+        uniformData.numSpotLights = 0;
         for (Light* light : lights) {
             light->model->mesh = lightMeshes[light->type];
             light->model->transform.SetMatrix(light->transform.GetMatrix());
             light->model->material.diffuseColor = light->color;
             light->model->material.diffuseColor.a = gizmoOpacity;
-            // light->model->transform.SetPosition(light->transform.parent->GetMatrix() * glm::vec4(light->transform.position, 1.0));
-            // light->model->transform.SetScale(light->transform.parent->GetMatrix() * glm::vec4(light->transform.scale, 1.0));
             if (light->type == LightType::Point) {
                 PointLight& pointLight = uniformData.pointLights[uniformData.numPointLights];
                 pointLight.color = light->color;
@@ -184,7 +198,15 @@ void LightManager::UpdateUniformIfDirty() {
                 dirLight.intensity = light->intensity;
                 dirLight.direction = glm::normalize(light->transform.GetGlobalFront());
                 uniformData.numDirectionalLights += 1;
-                // light->model->transform.SetRotation(light->transform.GetWorldRotation());
+            } else if (light->type == LightType::Spot) {
+                SpotLight& spotLight = uniformData.spotLights[uniformData.numSpotLights];
+                spotLight.color = light->color;
+                spotLight.intensity = light->intensity;
+                spotLight.direction = glm::normalize(light->transform.GetGlobalFront());
+                spotLight.position = glm::vec3(light->transform.parent->GetMatrix() * glm::vec4(light->transform.position, 1));
+                spotLight.outerCutOff = glm::radians(light->outerCutOff);
+                spotLight.cutOff = glm::radians(light->cutOff);
+                uniformData.numSpotLights += 1;
             }
         }
         dirtyUniform = false;

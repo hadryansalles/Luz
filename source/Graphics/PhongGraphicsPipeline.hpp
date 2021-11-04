@@ -23,5 +23,4 @@ public:
     static BufferDescriptor CreateModelDescriptor();
     static BufferDescriptor CreateMaterialDescriptor();
     static TextureDescriptor CreateTextureDescriptor();
-    static BufferDescriptor CreatePointLightDescriptor();
 };

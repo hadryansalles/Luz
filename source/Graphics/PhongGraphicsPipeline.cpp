@@ -129,7 +129,3 @@ BufferDescriptor PhongGraphicsPipeline::CreateMaterialDescriptor() {
 TextureDescriptor PhongGraphicsPipeline::CreateTextureDescriptor() {
     return GraphicsPipelineManager::CreateTextureDescriptor(res.descriptorSetLayouts[3]);
 }
-
-BufferDescriptor PhongGraphicsPipeline::CreatePointLightDescriptor() {
-    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[4], sizeof(PointLightUBO));
-}
