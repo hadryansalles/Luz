@@ -4,6 +4,7 @@
 #include "LogicalDevice.hpp"
 #include "PhysicalDevice.hpp"
 #include "Instance.hpp"
+#include "SwapChain.hpp"
 
 void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
     auto device = LogicalDevice::GetVkDevice();
@@ -97,3 +98,35 @@ void BufferManager::CreateVertexBuffer(BufferResource& res, void* data, VkDevice
     BufferManager::CreateStaged(desc, res, data);
 }
 
+void BufferManager::CreateUniformBuffer(UniformBuffer& uniform, VkDeviceSize size) {
+    uniform.dataSize = size;
+    u64 numFrames = SwapChain::GetNumFrames();
+    BufferDesc bufferDesc;
+    VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minUniformBufferOffsetAlignment;
+    VkDeviceSize sizeRemain = size % minOffset;
+    uniform.sectionSize = size;
+    if (sizeRemain > 0) {
+        uniform.sectionSize += minOffset - sizeRemain;
+    }
+    bufferDesc.size = uniform.sectionSize * numFrames;
+    bufferDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    bufferDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    BufferManager::Create(bufferDesc, uniform.resource);
+    SetDirtyUniform(uniform);
+}
+
+void BufferManager::DestroyUniformBuffer(UniformBuffer& uniform) {
+    Destroy(uniform.resource);
+}
+
+void BufferManager::SetDirtyUniform(UniformBuffer& uniform) {
+    uniform.dirty = std::vector<bool>(SwapChain::GetNumFrames(), true);
+}
+
+void BufferManager::UpdateUniformIfDirty(UniformBuffer& uniform, int numFrame, void* data) {
+    DEBUG_ASSERT(numFrame < uniform.dirty.size(), "Invalid frame number!");
+    if(uniform.dirty[numFrame]) {
+        BufferManager::Update(uniform.resource, data, numFrame * uniform.sectionSize, uniform.dataSize);
+        uniform.dirty[numFrame] = false;
+    }
+}

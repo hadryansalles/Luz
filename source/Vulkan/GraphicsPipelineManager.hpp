@@ -35,7 +35,6 @@ struct BindlessPushConstant {
 };
 
 class GraphicsPipelineManager {
-    static inline VkDescriptorPool textureDescriptorPool = VK_NULL_HANDLE;
     static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
 
     static inline int bufferDescriptors = 0;
@@ -54,12 +53,10 @@ public:
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
 
     static BufferDescriptor CreateBufferDescriptor(VkDescriptorSetLayout layout, uint32_t size);
-    static TextureDescriptor CreateTextureDescriptor(VkDescriptorSetLayout layout);
-
     static void UpdateBufferDescriptor(BufferDescriptor& descriptor, void* data, uint32_t size);
-    static void UpdateTextureDescriptor(TextureDescriptor& descriptor, TextureResource* texture);
 
-    static inline VkDescriptorPool GetTexturesDescriptorPool() { return textureDescriptorPool; }
+    static void WriteUniform(UniformBuffer& uniform, int index);
+
     static inline VkDescriptorPool GetImguiDescriptorPool()    { return imguiDescriptorPool;   }
 
     // bindless resources
@@ -67,6 +64,7 @@ public:
 
     static inline constexpr int TEXTURES_BINDING = 0;
     static inline constexpr int BUFFERS_BINDING = 1;
+
     static inline constexpr int SCENE_BUFFER_INDEX = 0;
-    static inline constexpr int LIGHTS_BUFFER_INDEX = 0;
+    static inline constexpr int LIGHTS_BUFFER_INDEX = 1;
 };

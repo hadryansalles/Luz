@@ -63,10 +63,8 @@ struct Light {
 class LightManager {
     static inline const char* TYPE_NAMES[] = { "Point", "Directional", "Spot"};
     static inline LightsUBO uniformData;
-    static inline BufferResource buffer;
-    static inline u64 sectionSize;
+    static inline UniformBuffer uniformBuffer;
     static inline std::vector<Light*> lights;
-    static inline std::vector<bool> dirtyBuffer;
     static inline bool dirtyUniform = false;
     static inline struct MeshResource* lightMeshes[3] = { nullptr, nullptr, nullptr };
     static inline float gizmoOpacity = 0.5f;

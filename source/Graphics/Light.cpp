@@ -32,40 +32,14 @@ void LightManager::Create() {
     std::vector<VkWriteDescriptorSet> writes(numFrames);
 
     // create a buffer with one section for each frame
-    BufferDesc bufferDesc;
-    VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minUniformBufferOffsetAlignment;
-    VkDeviceSize uniformSize = sizeof(uniformData);
-    VkDeviceSize sizeRemain = uniformSize % minOffset;
-    sectionSize = uniformSize;
-    if (sizeRemain > 0) {
-        sectionSize += minOffset - sizeRemain;
-    }
-    bufferDesc.size = sectionSize * numFrames;
-    bufferDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    bufferDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    BufferManager::Create(bufferDesc, buffer);
+    BufferManager::CreateUniformBuffer(uniformBuffer, sizeof(uniformData));
 
     SetDirty();
-    for (int i = 0; i < numFrames; i++) {
-        UpdateBufferIfDirty(i);
-
-        bufferInfos[i].buffer = buffer.buffer;
-        bufferInfos[i].offset = i*sectionSize;
-        bufferInfos[i].range = uniformSize;
-
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = bindlessDescriptorSet;
-        writes[i].dstBinding = GraphicsPipelineManager::BUFFERS_BINDING;
-        writes[i].dstArrayElement = numFrames*GraphicsPipelineManager::LIGHTS_BUFFER_INDEX + i;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writes[i].descriptorCount = 1;
-        writes[i].pBufferInfo = &bufferInfos[i];
-    }
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), numFrames, writes.data(), 0, nullptr);
+    GraphicsPipelineManager::WriteUniform(uniformBuffer, GraphicsPipelineManager::LIGHTS_BUFFER_INDEX);
 }
 
 void LightManager::Destroy() {
-    BufferManager::Destroy(buffer);
+    BufferManager::DestroyUniformBuffer(uniformBuffer);
     for (Light* light : lights) {
         SceneManager::DestroyModel(light->model);
     }
@@ -140,7 +114,7 @@ void LightManager::OnImgui(Light* light) {
 }
 
 void LightManager::SetDirty() {
-    dirtyBuffer = std::vector<bool>(SwapChain::GetNumFrames(), true);
+    BufferManager::SetDirtyUniform(uniformBuffer);
     dirtyUniform = true;
 }
 
@@ -214,16 +188,15 @@ void LightManager::UpdateUniformIfDirty() {
 }
 
 void LightManager::UpdateBufferIfDirty(int numFrame) {
-    DEBUG_ASSERT(numFrame < dirtyBuffer.size(), "Invalid frame number!");
+    DEBUG_ASSERT(numFrame < uniformBuffer.dirty.size(), "Invalid frame number!");
     UpdateUniformIfDirty();
-    if (dirtyBuffer[numFrame]) {
-        BufferManager::Update(buffer, &uniformData, numFrame * sectionSize, sizeof(uniformData));
+    if (uniformBuffer.dirty[numFrame]) {
+        BufferManager::UpdateUniformIfDirty(uniformBuffer, numFrame, &uniformData);
         for (Light* light : lights) {
             Model* model = light->model;
             model->ubo.model = model->transform.GetMatrix();
             BufferManager::Update(model->meshDescriptor.buffers[numFrame], &model->ubo, sizeof(model->ubo));
             BufferManager::Update(model->material.materialDescriptor.buffers[numFrame], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
         }
-        dirtyBuffer[numFrame] = false;
     }
 }

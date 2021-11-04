@@ -13,6 +13,13 @@ struct BufferResource {
     VkDeviceMemory memory;
 };
 
+struct UniformBuffer {
+    BufferResource resource;
+    std::vector<bool> dirty;
+    VkDeviceSize dataSize;
+    VkDeviceSize sectionSize;
+};
+
 class BufferManager {
 public:
     static void Create(const BufferDesc& desc, BufferResource& res);
@@ -26,4 +33,9 @@ public:
     static void CreateStagingBuffer(BufferResource& res, void* data, VkDeviceSize size);
     static void CreateIndexBuffer(BufferResource& res, void* data, VkDeviceSize size);
     static void CreateVertexBuffer(BufferResource& res, void* data, VkDeviceSize size);
+
+    static void CreateUniformBuffer(UniformBuffer& uniform, VkDeviceSize dataSize);
+    static void DestroyUniformBuffer(UniformBuffer& uniform);
+    static void SetDirtyUniform(UniformBuffer& uniform);
+    static void UpdateUniformIfDirty(UniformBuffer& uniform, int numFrame, void* data);
 };

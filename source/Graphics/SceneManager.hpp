@@ -19,9 +19,6 @@ private:
     static inline bool dirty = true;
     static inline bool autoReloadFiles = false;
 
-    static inline SceneUBO sceneUBO;
-    static inline BufferDescriptor sceneDescriptor;
-
     static inline unsigned int modelID = 0;
     static inline std::vector<Model*> models;
     static inline Collection mainCollection;
@@ -93,7 +90,6 @@ public:
     static void AsyncLoadModels(std::filesystem::path path, Collection* collection = nullptr);
     static void AddPreloadedModel(ModelDesc desc);
 
-    static inline BufferDescriptor& GetSceneDescriptor() { return sceneDescriptor;    }
     static inline std::vector<Model*>& GetModels()       { return models;             }
     static inline Model* GetSelectedModel()              { return selectedModel;      }
     static inline Transform* GetSelectedTransform()      { return selectedTransform;  }

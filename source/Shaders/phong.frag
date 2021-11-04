@@ -3,19 +3,11 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
-layout(set = 2, binding = 0) uniform MaterialUBO {
+layout(set = 1, binding = 0) uniform MaterialUBO {
     vec4 color;
 } material;
 
-layout(set = 3, binding = 0) uniform sampler2D texSampler;
-
-layout(set = 4, binding = 0) uniform PointLightUBO {
-    vec4 color;
-    vec3 position;
-    float intensity;
-} light;
-
-layout(set = 5, binding = 0) uniform sampler2D colorTextures[];
+layout(set = 2, binding = 0) uniform sampler2D colorTextures[];
 
 struct PointLight {
     vec4 color;
@@ -38,7 +30,12 @@ struct SpotLight {
     float outerAngle;
 };
 
-layout(set = 5, binding = 1) uniform LightsBuffer {
+layout(set = 2, binding = 1) uniform SceneBuffer {
+    mat4 view;
+    mat4 proj;
+} sceneBuffers[];
+
+layout(set = 2, binding = 1) uniform LightsBuffer {
     PointLight pointLights[10];
     DirectionalLight directionalLights[10];
     SpotLight spotLights[10];
@@ -129,7 +126,9 @@ vec3 EvalSpotLight(SpotLight light) {
     return light.color*diff*clamp((theta-light.outerAngle)/epsilon, 0.0, 1.0)*light.intensity/dist2;
 }
 
-#define LIGHT_BUFFER_INDEX 0
+#define SCENE_BUFFER_INDEX 0
+#define LIGHT_BUFFER_INDEX 1
+#define scene sceneBuffers[numFrames*SCENE_BUFFER_INDEX + frameID]
 #define lights lightsBuffers[numFrames*LIGHT_BUFFER_INDEX + frameID]
 
 void main() {

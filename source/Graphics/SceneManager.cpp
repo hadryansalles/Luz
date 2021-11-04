@@ -58,19 +58,12 @@ void SceneManager::AddPreloadedModel(ModelDesc desc) {
 }
 
 void SceneManager::Create() {
-    sceneDescriptor = UnlitGraphicsPipeline::CreateSceneDescriptor();
-    GraphicsPipelineManager::UpdateBufferDescriptor(sceneDescriptor, &sceneUBO, sizeof(sceneUBO));
-
     for (Model* model : models) {
         CreateModelDescriptors(model);
     }
 }
 
 void SceneManager::Destroy() {
-    for (size_t i = 0; i < sceneDescriptor.buffers.size(); i++) {
-        BufferManager::Destroy(sceneDescriptor.buffers[i]);
-    }
-
     for (Model* model : models) {
         for (BufferResource& buffer : model->meshDescriptor.buffers) {
             BufferManager::Destroy(buffer);

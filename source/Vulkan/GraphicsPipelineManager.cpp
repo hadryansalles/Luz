@@ -14,7 +14,6 @@ void GraphicsPipelineManager::Create() {
     auto allocator = Instance::GetAllocator();
     auto numFrames = SwapChain::GetNumFrames();
 
-    VkDescriptorPoolSize texturePoolSizes[]  = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2048} };
     VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
 
     VkDescriptorPoolSize bufferPoolSizes[]   = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
@@ -29,16 +28,6 @@ void GraphicsPipelineManager::Create() {
     auto result = vkCreateDescriptorPool(device, &bufferPoolInfo, allocator, &bufferDescriptorPool);
     bufferDescriptorPools.push_back(bufferDescriptorPool);
     DEBUG_VK(result, "Failed to create buffer descriptor pool!");
-
-    VkDescriptorPoolCreateInfo texturePoolInfo{};
-    texturePoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    texturePoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    texturePoolInfo.maxSets = (uint32_t)(1024);
-    texturePoolInfo.poolSizeCount = 1;
-    texturePoolInfo.pPoolSizes = texturePoolSizes;
-
-    result = vkCreateDescriptorPool(device, &texturePoolInfo, allocator, &textureDescriptorPool);
-    DEBUG_VK(result, "Failed to create texture descriptor pool!");
 
     VkDescriptorPoolCreateInfo imguiPoolInfo{};
     imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -123,7 +112,6 @@ void GraphicsPipelineManager::Destroy() {
         vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), bufferDescriptorPools[i], Instance::GetAllocator());
     }
     bufferDescriptorPools.clear();
-    vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), textureDescriptorPool, Instance::GetAllocator());
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), imguiDescriptorPool, Instance::GetAllocator());
 
     // bindless resources
@@ -398,26 +386,6 @@ BufferDescriptor GraphicsPipelineManager::CreateBufferDescriptor(VkDescriptorSet
 
     return uniform;
 }
-TextureDescriptor GraphicsPipelineManager::CreateTextureDescriptor(VkDescriptorSetLayout setLayout) {
-    auto numFrames = SwapChain::GetNumFrames();
-    auto device = LogicalDevice::GetVkDevice();
-
-    TextureDescriptor uniform;
-
-    std::vector<VkDescriptorSetLayout> matLayouts(numFrames, setLayout);
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = textureDescriptorPool;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(numFrames);
-    allocInfo.pSetLayouts = matLayouts.data();
-
-    uniform.descriptors.resize(numFrames);
-    auto vkRes = vkAllocateDescriptorSets(device, &allocInfo, uniform.descriptors.data());
-    DEBUG_VK(vkRes, "Failed to allocate texture descriptor sets!");
-
-    return uniform;
-}
 
 void GraphicsPipelineManager::UpdateBufferDescriptor(BufferDescriptor& descriptor, void* data, uint32_t size) {
     auto numFrames = SwapChain::GetNumFrames();
@@ -444,23 +412,22 @@ void GraphicsPipelineManager::UpdateBufferDescriptor(BufferDescriptor& descripto
     }
 }
 
-void GraphicsPipelineManager::UpdateTextureDescriptor(TextureDescriptor& descriptor, TextureResource* texture) {
-    std::array<VkWriteDescriptorSet, 1> writes{};
+void GraphicsPipelineManager::WriteUniform(UniformBuffer& uniform, int index) {
+    int numFrames = SwapChain::GetNumFrames();
+    std::vector<VkDescriptorBufferInfo> bufferInfos(numFrames);
+    std::vector<VkWriteDescriptorSet> writes(numFrames);
+    for (int i = 0; i < numFrames; i++) {
+        bufferInfos[i].buffer = uniform.resource.buffer;
+        bufferInfos[i].offset = i*uniform.sectionSize;
+        bufferInfos[i].range = uniform.dataSize;
 
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.imageView = texture->image.view;
-    imageInfo.sampler = texture->sampler;
-
-    for (size_t i = 0; i < SwapChain::GetNumFrames(); i++) {
-        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].dstSet = descriptor.descriptors[i];
-        writes[0].dstBinding = 0;
-        writes[0].dstArrayElement = 0;
-        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[0].descriptorCount = 1;
-        writes[0].pImageInfo = &imageInfo;
-
-        vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), (uint32_t)(writes.size()), writes.data(), 0, nullptr);
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = bindlessDescriptorSet;
+        writes[i].dstBinding = GraphicsPipelineManager::BUFFERS_BINDING;
+        writes[i].dstArrayElement = numFrames*index + i;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[i].descriptorCount = 1;
+        writes[i].pBufferInfo = &bufferInfos[i];
     }
+    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), numFrames, writes.data(), 0, nullptr);
 }

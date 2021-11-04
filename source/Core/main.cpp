@@ -49,6 +49,7 @@ public:
 
 private:
     SceneUBO sceneUBO;
+    UniformBuffer sceneUniform;
     ImDrawData* imguiDrawData = nullptr;
     Camera camera;
 
@@ -93,6 +94,8 @@ private:
         MeshManager::Create();
         SceneManager::Create();
         LightManager::Create();
+        BufferManager::CreateUniformBuffer(sceneUniform, sizeof(sceneUBO));
+        GraphicsPipelineManager::WriteUniform(sceneUniform, GraphicsPipelineManager::SCENE_BUFFER_INDEX);
     }
 
     void Finish() {
@@ -126,6 +129,7 @@ private:
         SceneManager::Destroy();
         UnlitGraphicsPipeline::Destroy();
         PhongGraphicsPipeline::Destroy();
+        BufferManager::DestroyUniformBuffer(sceneUniform);
 
         DestroyImgui();
 
@@ -378,18 +382,13 @@ private:
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        auto sceneDescriptor = SceneManager::GetSceneDescriptor();
         auto unlitGPO = UnlitGraphicsPipeline::GetResource();
         auto phongGPO = PhongGraphicsPipeline::GetResource();
         auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
         auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
-                    1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
-        // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 4,
-        //             1, &(SceneManager::GetLights()[0]->descriptor.descriptors[frameIndex]), 0, nullptr);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 5, 1, &descriptorSet, 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 2, 1, &descriptorSet, 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
@@ -400,9 +399,9 @@ private:
                 vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
                 // command buffer, vertex count, instance count, first vertex, first instance
                 // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 1,
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 2,
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 1,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
                 BindlessPushConstant pc;
                 pc.frameID = frameIndex;
@@ -418,9 +417,7 @@ private:
         }
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
-                    1, &sceneDescriptor.descriptors[frameIndex], 0, nullptr);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 4, 1, &descriptorSet, 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 2, 1, &descriptorSet, 0, nullptr);
 
         for (const Model* model : SceneManager::GetModels()) {
             if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
@@ -431,9 +428,9 @@ private:
                 vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
                 // command buffer, vertex count, instance count, first vertex, first instance
                 // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
                 BindlessPushConstant pc;
                 pc.frameID = frameIndex;
@@ -456,9 +453,9 @@ private:
                 VkDeviceSize offsets[] = { 0 };
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
                     1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 2,
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
                     1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
                 BindlessPushConstant pc;
                 pc.frameID = frameIndex;
@@ -512,6 +509,8 @@ private:
         PhongGraphicsPipeline::Create();
         SceneManager::Create();
         LightManager::Create();
+        BufferManager::CreateUniformBuffer(sceneUniform, sizeof(sceneUBO));
+        GraphicsPipelineManager::WriteUniform(sceneUniform, GraphicsPipelineManager::SCENE_BUFFER_INDEX);
         CreateImgui();
         createUniformProjection();
     }
@@ -532,10 +531,10 @@ private:
         }
 
         LightManager::UpdateBufferIfDirty(currentImage);
-
+        BufferManager::SetDirtyUniform(sceneUniform);
         sceneUBO.view = camera.GetView();
         sceneUBO.proj = camera.GetProj();
-        BufferManager::Update(SceneManager::GetSceneDescriptor().buffers[currentImage], &sceneUBO, sizeof(sceneUBO));
+        BufferManager::UpdateUniformIfDirty(sceneUniform, currentImage, &sceneUBO);
     }
 
     void SetupImgui() {

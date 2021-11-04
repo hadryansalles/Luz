@@ -71,7 +71,7 @@ void PhongGraphicsPipeline::Setup() {
     desc.colorBlendState.blendConstants[2] = 0.0f;
     desc.colorBlendState.blendConstants[3] = 0.0f;
 
-    desc.bindings.resize(5);
+    desc.bindings.resize(2);
     desc.bindings[0].binding = 0;
     desc.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[0].descriptorCount = 1;
@@ -80,25 +80,7 @@ void PhongGraphicsPipeline::Setup() {
     desc.bindings[1].binding = 0;
     desc.bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc.bindings[1].descriptorCount = 1;
-    desc.bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    desc.bindings[2].binding = 0;
-    desc.bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc.bindings[2].descriptorCount = 1;
-    desc.bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    desc.bindings[3].binding = 0;
-    desc.bindings[3].descriptorCount = 1;
-    desc.bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    // only relevant for image sampling related descriptors
-    desc.bindings[3].pImmutableSamplers = nullptr;
-    // here we specify in which shader stages the buffer will by referenced
-    desc.bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    desc.bindings[4].binding = 0;
-    desc.bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc.bindings[4].descriptorCount = 1;
-    desc.bindings[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    desc.bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 }
 
 void PhongGraphicsPipeline::Create() {
@@ -114,18 +96,10 @@ void PhongGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
 }
 
-BufferDescriptor PhongGraphicsPipeline::CreateSceneDescriptor() {
-    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[0], sizeof(SceneUBO));
-}
-
 BufferDescriptor PhongGraphicsPipeline::CreateModelDescriptor() {
-    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[1], sizeof(ModelUBO));
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[0], sizeof(ModelUBO));
 }
 
 BufferDescriptor PhongGraphicsPipeline::CreateMaterialDescriptor() {
-    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[2], sizeof(PhongMaterialUBO));
-}
-
-TextureDescriptor PhongGraphicsPipeline::CreateTextureDescriptor() {
-    return GraphicsPipelineManager::CreateTextureDescriptor(res.descriptorSetLayouts[3]);
+    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[1], sizeof(PhongMaterialUBO));
 }
