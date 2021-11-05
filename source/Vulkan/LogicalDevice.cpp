@@ -55,6 +55,7 @@ void LogicalDevice::Create() {
     descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
     descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
     descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
+    descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
     descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
 
     VkDeviceCreateInfo createInfo{};

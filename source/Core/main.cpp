@@ -37,6 +37,115 @@ void CheckVulkanResult(VkResult res) {
     }
 }
 
+#define MAX_TEXTURES 4096
+#define MAX_MODELS 4096
+#define MAX_LIGHTS_PER_TYPE 8
+
+#define SCENE_BUFFER_INDEX2 0
+#define MODELS_BUFFER_INDEX2 1
+
+struct LightBlock {
+    glm::vec3 color;
+    f32 intensity;
+    glm::vec3 position;
+    f32 innerAngle;
+    glm::vec3 direction;
+    f32 outerAngle;
+};
+
+struct SceneBlock {
+    LightBlock pointLights[MAX_LIGHTS_PER_TYPE];
+    LightBlock spotLights[MAX_LIGHTS_PER_TYPE];
+    LightBlock dirLights[MAX_LIGHTS_PER_TYPE];
+    glm::vec3 ambientLightColor;
+    f32 ambientLightIntensity;
+    glm::mat4 projView;
+    glm::vec3 camPos;
+    u32 numPointLights;
+    u32 numSpotLights;
+    u32 numDirLights;
+    f32 PADDING[2];
+};
+
+struct ModelBlock {
+    glm::mat4 model;
+    glm::vec4 colors[2];
+    f32 values[2];
+    RID textures[2];
+};
+
+struct ConstantsBlock {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int modelID;
+};
+
+struct SceneResource {
+    SceneBlock scene;
+    ModelBlock models[MAX_MODELS];
+    RID textures[MAX_TEXTURES];
+    StorageBuffer sceneBuffer;
+    StorageBuffer modelsBuffer;
+    std::vector<RID> freeTextureRIDs;
+    std::vector<RID> freeModelRIDs; 
+};
+
+enum EntityType {
+    InvalidEntity,
+    ModelEntity,
+    CollectionEntity,
+    LightEntity
+};
+
+struct Transform2 {
+    glm::vec3 position = glm::vec3(.0f);
+    glm::vec3 rotation = glm::vec3(.0f);
+    glm::vec3 scale    = glm::vec3(1.0f);
+};
+
+struct Entity {
+    std::string name = "Entity";
+    Transform2 transform;
+    EntityType entityType = EntityType::InvalidEntity;
+};
+
+enum LightType2 {
+    Point2,
+    Directional2,
+    Spot2
+};
+
+enum Material2 {
+    Phong2,
+    Unlit2
+};
+
+struct Model2 : Entity {
+    MeshResource* mesh = nullptr;
+    Material2 material = Material2::Phong2;
+};
+
+struct Light2 : Entity {
+    LightType2 lightType = LightType2::Point2;
+};
+
+void CreateSceneBuffers(SceneResource& res) {
+    BufferManager::CreateStorageBuffer(res.sceneBuffer, sizeof(res.scene));
+    BufferManager::CreateStorageBuffer(res.modelsBuffer, sizeof(res.models));
+    GraphicsPipelineManager::WriteStorage(res.sceneBuffer, SCENE_BUFFER_INDEX2);
+    GraphicsPipelineManager::WriteStorage(res.modelsBuffer, MODELS_BUFFER_INDEX2);
+}
+
+void DestroySceneBuffers(SceneResource& res) {
+    BufferManager::DestroyStorageBuffer(res.sceneBuffer);
+    BufferManager::DestroyStorageBuffer(res.modelsBuffer);
+}
+
+void UpdateSceneResource(SceneResource& res, int numFrame) {
+    BufferManager::UpdateStorage(res.sceneBuffer, numFrame, &res.scene);
+    BufferManager::UpdateStorage(res.modelsBuffer, numFrame, &res.models);
+}
+
 class LuzApplication {
 public:
     void run() {
@@ -52,6 +161,7 @@ private:
     UniformBuffer sceneUniform;
     ImDrawData* imguiDrawData = nullptr;
     Camera camera;
+    SceneResource sceneResource;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -96,6 +206,7 @@ private:
         LightManager::Create();
         BufferManager::CreateUniformBuffer(sceneUniform, sizeof(sceneUBO));
         GraphicsPipelineManager::WriteUniform(sceneUniform, GraphicsPipelineManager::SCENE_BUFFER_INDEX);
+        CreateSceneBuffers(sceneResource);
     }
 
     void Finish() {
@@ -130,7 +241,7 @@ private:
         UnlitGraphicsPipeline::Destroy();
         PhongGraphicsPipeline::Destroy();
         BufferManager::DestroyUniformBuffer(sceneUniform);
-
+        DestroySceneBuffers(sceneResource);
         DestroyImgui();
 
         SwapChain::Destroy();
@@ -187,10 +298,6 @@ private:
         screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
         screenSpace.y = (screenSpace.y + 1.0) * ext.height/2.0;
         return screenSpace;
-    }
-
-    std::vector<glm::vec3> CreateDisk(glm::vec3 center, float radius, int numSegments) {
-        
     }
 
     void imguiDrawFrame() {
@@ -357,6 +464,10 @@ private:
         auto instance = Instance::GetVkInstance();
         auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
 
+        ConstantsBlock constants;
+        constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX2 + frameIndex;
+        constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX2 + frameIndex;
+
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = 0;
@@ -390,7 +501,9 @@ private:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 2, 1, &descriptorSet, 0, nullptr);
 
-        for (const Model* model : SceneManager::GetModels()) {
+        auto models = SceneManager::GetModels();
+        for (int i = 0; i < models.size(); i++) { 
+            Model* model = models[i];
             if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
                 MeshResource* mesh = model->mesh;
                 VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
@@ -411,7 +524,8 @@ private:
                 } else {
                     pc.textureID = 1;
                 }
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
+                constants.modelID = i;
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
@@ -419,7 +533,8 @@ private:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 2, 1, &descriptorSet, 0, nullptr);
 
-        for (const Model* model : SceneManager::GetModels()) {
+        for (int i = 0; i < models.size(); i++) { 
+            Model* model = models[i];
             if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
                 MeshResource* mesh = model->mesh;
                 VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
@@ -440,13 +555,16 @@ private:
                 } else {
                     pc.textureID = 1;
                 }
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
+                constants.modelID = 1;
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
 
         if (LightManager::GetRenderGizmos()) {
-            for (const Light* light : LightManager::GetLights()) {
+            auto lights = LightManager::GetLights();
+            for (int i = 0; i < lights.size(); i++) {
+                Light* light = lights[i];
                 const Model* model = light->model;
                 MeshResource* mesh = model->mesh;
                 VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
@@ -461,7 +579,8 @@ private:
                 pc.frameID = frameIndex;
                 pc.numFrames = SwapChain::GetNumFrames();
                 pc.textureID = 1;
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(pc), &pc);
+                constants.modelID = models.size()+i;
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
             }
         }
@@ -510,6 +629,7 @@ private:
         SceneManager::Create();
         LightManager::Create();
         BufferManager::CreateUniformBuffer(sceneUniform, sizeof(sceneUBO));
+        CreateSceneBuffers(sceneResource);
         GraphicsPipelineManager::WriteUniform(sceneUniform, GraphicsPipelineManager::SCENE_BUFFER_INDEX);
         CreateImgui();
         createUniformProjection();
@@ -535,6 +655,23 @@ private:
         sceneUBO.view = camera.GetView();
         sceneUBO.proj = camera.GetProj();
         BufferManager::UpdateUniformIfDirty(sceneUniform, currentImage, &sceneUBO);
+        auto models = SceneManager::GetModels();
+        for (int i = 0; i < models.size(); i++) {
+            sceneResource.models[i].model = models[i]->transform.GetMatrix();
+            sceneResource.models[i].colors[0] = models[i]->material.diffuseColor;
+            sceneResource.models[i].textures[0] = models[i]->material.diffuseTexture;
+        }
+        auto lights = LightManager::GetLights();
+        for (int i = 0; i < lights.size(); i++) {
+            int lightID = models.size() + i;
+            sceneResource.models[lightID].model = lights[i]->model->transform.GetMatrix();
+            sceneResource.models[lightID].colors[0] = lights[i]->color;
+            sceneResource.models[lightID].textures[0] = 0;
+        }
+        sceneResource.scene.ambientLightColor = LightManager::GetAmbientLightColor();
+        sceneResource.scene.ambientLightIntensity = LightManager::GetAmbientLightIntensity();
+        sceneResource.scene.projView = camera.GetProj() * camera.GetView();
+        UpdateSceneResource(sceneResource, currentImage);
     }
 
     void SetupImgui() {

@@ -89,6 +89,9 @@ public:
     static void SetDirty();
     static void SetAmbient(glm::vec3 color, float intensity);
 
+    static inline glm::vec3 GetAmbientLightColor() { return uniformData.ambientColor; }
+    static inline float GetAmbientLightIntensity() { return uniformData.ambientIntensity; }
+
     static inline std::vector<Light*>& GetLights() { return lights;       }
     static inline bool GetRenderGizmos()           { return renderGizmos; }
 };

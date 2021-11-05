@@ -20,6 +20,12 @@ struct UniformBuffer {
     VkDeviceSize sectionSize;
 };
 
+struct StorageBuffer {
+    BufferResource resource;
+    VkDeviceSize dataSize;
+    VkDeviceSize sectionSize;
+};
+
 class BufferManager {
 public:
     static void Create(const BufferDesc& desc, BufferResource& res);
@@ -38,4 +44,8 @@ public:
     static void DestroyUniformBuffer(UniformBuffer& uniform);
     static void SetDirtyUniform(UniformBuffer& uniform);
     static void UpdateUniformIfDirty(UniformBuffer& uniform, int numFrame, void* data);
+
+    static void CreateStorageBuffer(StorageBuffer& uniform, VkDeviceSize dataSize);
+    static void DestroyStorageBuffer(StorageBuffer& uniform);
+    static void UpdateStorage(StorageBuffer& uniform, int numFrame, void* data);
 };

@@ -1,13 +1,12 @@
 #version 450
-#extension GL_ARB_separate_shader_objects : enable
-#extension GL_KHR_vulkan_glsl : enable
-#extension GL_EXT_nonuniform_qualifier : enable
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "base.glsl"
 
 layout(set = 1, binding = 0) uniform MaterialUBO {
     vec4 color;
 } material;
-
-layout(set = 2, binding = 0) uniform sampler2D colorTextures[];
 
 struct PointLight {
     vec4 color;
@@ -30,11 +29,6 @@ struct SpotLight {
     float outerAngle;
 };
 
-layout(set = 2, binding = 1) uniform SceneBuffer {
-    mat4 view;
-    mat4 proj;
-} sceneBuffers[];
-
 layout(set = 2, binding = 1) uniform LightsBuffer {
     PointLight pointLights[10];
     DirectionalLight directionalLights[10];
@@ -45,59 +39,6 @@ layout(set = 2, binding = 1) uniform LightsBuffer {
     int numDirectionalLights;
     int numSpotLights;
 } lightsBuffers[];
-
-layout(push_constant) uniform PushConstant {
-    int frameID;
-    int numFrames;
-    int textureID;
-};
-
-// 
-// struct DirectionalLight {
-//     vec4 color;
-//     vec3 direction;
-//     float intensity;
-// };
-// 
-// layout(binding = 0) restrict readonly buffer SceneBuffer {
-//     mat4 view;
-//     mat4 proj;
-// } sceneBuffers[];
-// 
-// struct PBRMaterial {
-//     vec4 albedo;
-//     vec4 roughness;
-//     vec4 normal;
-//     vec4 metal;
-//     int albedoTextureID;
-//     int roughnessTextureID;
-//     int normalTextureID;
-//     int metalTextureID;
-// };
-// 
-// struct PhongMaterial {
-//     vec4 diffuse;
-//     vec4 specular;
-//     int diffuseTextureID;
-//     int specularTextureID;
-// };
-// 
-// layout(binding = 0) restrict readonly buffer PhongMaterialBuffer {
-//     PhongMaterial materials[4096];
-// } phongBuffers[];
-// 
-// 
-// layout(binding = 0) restrict readonly buffer PBRMaterialBuffer {
-//     PBRMaterial materials[];
-// } pbrBuffers[];
-// 
-// struct Model {
-//     mat4 model;
-// };
-// 
-// layout(binding = 0) restrict readonly buffer ModelBuffer {
-//     Model models[];
-// } modelBuffers[];
 
 layout(location = 0) in vec4 fragPos;
 layout(location = 1) in vec3 fragNormal;
@@ -126,21 +67,18 @@ vec3 EvalSpotLight(SpotLight light) {
     return light.color*diff*clamp((theta-light.outerAngle)/epsilon, 0.0, 1.0)*light.intensity/dist2;
 }
 
-#define SCENE_BUFFER_INDEX 0
-#define LIGHT_BUFFER_INDEX 1
-#define scene sceneBuffers[numFrames*SCENE_BUFFER_INDEX + frameID]
-#define lights lightsBuffers[numFrames*LIGHT_BUFFER_INDEX + frameID]
-
 void main() {
-    vec3 intensity = lights.ambientColor*lights.ambientIntensity;
-    for(int i = 0; i < lights.numPointLights; i++) {
-        intensity += EvalPointLight(lights.pointLights[i]);
-    }
-    for(int i = 0; i < lights.numDirectionalLights; i++) {
-        intensity += EvalDirectionalLight(lights.directionalLights[i]);
-    }
-    for(int i = 0; i < lights.numSpotLights; i++) {
-        intensity += EvalSpotLight(lights.spotLights[i]);
-    }
-    outColor = material.color*texture(colorTextures[textureID], fragTexCoord)*vec4(intensity, 1.0);
+    // outColor = vec4(1, 1, 1, 1);
+    vec3 intensity = scene.ambientLightColor*scene.ambientLightIntensity;
+    // for(int i = 0; i < lights.numPointLights; i++) {
+    //     intensity += EvalPointLight(lights.pointLights[i]);
+    // }
+    // for(int i = 0; i < lights.numDirectionalLights; i++) {
+    //     intensity += EvalDirectionalLight(lights.directionalLights[i]);
+    // }
+    // for(int i = 0; i < lights.numSpotLights; i++) {
+    //     intensity += EvalSpotLight(lights.spotLights[i]);
+    // }
+    // outColor = model.colors[0]*texture(textures[model.textures[0]], fragTexCoord)*vec4(intensity, 1.0);
+    outColor = model.colors[0]*texture(textures[model.textures[0]], fragTexCoord)*vec4(intensity, 1.0);
 }

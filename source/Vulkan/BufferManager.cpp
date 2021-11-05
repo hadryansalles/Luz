@@ -130,3 +130,27 @@ void BufferManager::UpdateUniformIfDirty(UniformBuffer& uniform, int numFrame, v
         uniform.dirty[numFrame] = false;
     }
 }
+
+void BufferManager::CreateStorageBuffer(StorageBuffer& buffer, VkDeviceSize size) {
+    buffer.dataSize = size;
+    u64 numFrames = SwapChain::GetNumFrames();
+    BufferDesc bufferDesc;
+    VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minStorageBufferOffsetAlignment;
+    VkDeviceSize sizeRemain = size % minOffset;
+    buffer.sectionSize = size;
+    if (sizeRemain > 0) {
+        buffer.sectionSize += minOffset - sizeRemain;
+    }
+    bufferDesc.size = buffer.sectionSize * numFrames;
+    bufferDesc.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    bufferDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    BufferManager::Create(bufferDesc, buffer.resource);
+}
+
+void BufferManager::DestroyStorageBuffer(StorageBuffer& buffer) {
+    Destroy(buffer.resource);
+}
+
+void BufferManager::UpdateStorage(StorageBuffer& buffer, int numFrame, void* data) {
+    BufferManager::Update(buffer.resource, data, numFrame * buffer.sectionSize, buffer.dataSize);
+}

@@ -15,7 +15,7 @@ using i32 = int32_t;
 using i64 = int64_t;
 using f32 = float;
 using f64 = double;
-using RID = u16;
+using RID = u32;
 
 #ifdef _WIN32
     #ifndef _WIN64

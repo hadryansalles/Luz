@@ -32,6 +32,7 @@ void SceneManager::Setup() {
     AddLight(LightManager::CreateLight());
     // AsyncLoadModels("assets/ignore/dragon.obj");
     AsyncLoadModels("assets/cube.obj");
+    AsyncLoadModels("assets/cube.obj");
     // AsyncLoadModels("assets/teapot.obj");
     // AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
 }
