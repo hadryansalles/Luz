@@ -46,10 +46,10 @@ void SceneManager::AsyncLoadModels(std::filesystem::path path, Collection* colle
 }
 
 void CreateModelDescriptors(Model* model) {
-    model->meshDescriptor = UnlitGraphicsPipeline::CreateModelDescriptor();
-    model->material.materialDescriptor = UnlitGraphicsPipeline::CreateMaterialDescriptor();
-    GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
-    GraphicsPipelineManager::UpdateBufferDescriptor(model->material.materialDescriptor, (UnlitMaterialUBO*)&model->material, sizeof(UnlitMaterialUBO));
+    // model->meshDescriptor = UnlitGraphicsPipeline::CreateModelDescriptor();
+    // model->material.materialDescriptor = UnlitGraphicsPipeline::CreateMaterialDescriptor();
+    // GraphicsPipelineManager::UpdateBufferDescriptor(model->meshDescriptor, &model->ubo, sizeof(model->ubo));
+    // GraphicsPipelineManager::UpdateBufferDescriptor(model->material.materialDescriptor, (UnlitMaterialUBO*)&model->material, sizeof(UnlitMaterialUBO));
 }
 
 void SceneManager::AddPreloadedModel(ModelDesc desc) {

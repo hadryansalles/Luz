@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
-layout(set = 2, binding = 0) uniform sampler2D textures[];
+layout(set = 0, binding = 0) uniform sampler2D textures[];
 
 layout(push_constant) uniform ConstantsBlock{
     int sceneBufferIndex;
@@ -35,7 +35,7 @@ struct ModelBlock {
     int textures[2];
 };
 
-layout(set = 2, binding = 2) readonly buffer SceneBlock {
+layout(set = 0, binding = 1) readonly buffer SceneBlock {
     LightBlock pointLights[MAX_LIGHTS_PER_TYPE];
     LightBlock spotLights[MAX_LIGHTS_PER_TYPE];
     LightBlock dirLights[MAX_LIGHTS_PER_TYPE];
@@ -48,7 +48,7 @@ layout(set = 2, binding = 2) readonly buffer SceneBlock {
     int numDirLights;
 } sceneBuffers[];
 
-layout(set = 2, binding = 2) readonly buffer ModelBuffer {
+layout(set = 0, binding = 1) readonly buffer ModelBuffer {
     ModelBlock models[MAX_MODELS];
 } modelsBuffers[];
 

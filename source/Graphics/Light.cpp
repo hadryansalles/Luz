@@ -188,15 +188,15 @@ void LightManager::UpdateUniformIfDirty() {
 }
 
 void LightManager::UpdateBufferIfDirty(int numFrame) {
-    DEBUG_ASSERT(numFrame < uniformBuffer.dirty.size(), "Invalid frame number!");
-    UpdateUniformIfDirty();
-    if (uniformBuffer.dirty[numFrame]) {
-        BufferManager::UpdateUniformIfDirty(uniformBuffer, numFrame, &uniformData);
-        for (Light* light : lights) {
-            Model* model = light->model;
-            model->ubo.model = model->transform.GetMatrix();
-            BufferManager::Update(model->meshDescriptor.buffers[numFrame], &model->ubo, sizeof(model->ubo));
-            BufferManager::Update(model->material.materialDescriptor.buffers[numFrame], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
-        }
-    }
+    // DEBUG_ASSERT(numFrame < uniformBuffer.dirty.size(), "Invalid frame number!");
+    // UpdateUniformIfDirty();
+    // if (uniformBuffer.dirty[numFrame]) {
+    //     BufferManager::UpdateUniformIfDirty(uniformBuffer, numFrame, &uniformData);
+    //     for (Light* light : lights) {
+    //         Model* model = light->model;
+    //         model->ubo.model = model->transform.GetMatrix();
+    //         BufferManager::Update(model->meshDescriptor.buffers[numFrame], &model->ubo, sizeof(model->ubo));
+    //         BufferManager::Update(model->material.materialDescriptor.buffers[numFrame], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
+    //     }
+    // }
 }

@@ -45,49 +45,39 @@ void CheckVulkanResult(VkResult res) {
 #define MODELS_BUFFER_INDEX2 1
 
 struct LightBlock {
-    glm::vec3 color;
-    f32 intensity;
-    glm::vec3 position;
-    f32 innerAngle;
-    glm::vec3 direction;
-    f32 outerAngle;
+    glm::vec3 color = glm::vec3(1.0f);
+    f32 intensity = 1.0f;
+    glm::vec3 position = glm::vec3(1.0f);
+    f32 innerAngle = 0;
+    glm::vec3 direction = glm::vec3(.0f, .0f, 1.0f);
+    f32 outerAngle = 0;
 };
 
 struct SceneBlock {
     LightBlock pointLights[MAX_LIGHTS_PER_TYPE];
     LightBlock spotLights[MAX_LIGHTS_PER_TYPE];
     LightBlock dirLights[MAX_LIGHTS_PER_TYPE];
-    glm::vec3 ambientLightColor;
-    f32 ambientLightIntensity;
-    glm::mat4 projView;
-    glm::vec3 camPos;
-    u32 numPointLights;
-    u32 numSpotLights;
-    u32 numDirLights;
+    glm::vec3 ambientLightColor = glm::vec3(1.0f);
+    f32 ambientLightIntensity = 0.1f;
+    glm::mat4 projView = glm::mat4(1.0f);
+    glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
+    u32 numPointLights = 0;
+    u32 numSpotLights = 0;
+    u32 numDirLights = 0;
     f32 PADDING[2];
 };
 
 struct ModelBlock {
-    glm::mat4 model;
-    glm::vec4 colors[2];
-    f32 values[2];
-    RID textures[2];
+    glm::mat4 model     = glm::mat4(1.0f);
+    glm::vec4 colors[2] = { glm::vec4(1.0f), glm::vec4(1.0f) };
+    f32 values[2]       = { .0f, .0f };
+    RID textures[2]     = { 0, 0 };
 };
 
 struct ConstantsBlock {
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
-};
-
-struct SceneResource {
-    SceneBlock scene;
-    ModelBlock models[MAX_MODELS];
-    RID textures[MAX_TEXTURES];
-    StorageBuffer sceneBuffer;
-    StorageBuffer modelsBuffer;
-    std::vector<RID> freeTextureRIDs;
-    std::vector<RID> freeModelRIDs; 
 };
 
 enum EntityType {
@@ -105,7 +95,7 @@ struct Transform2 {
 
 struct Entity {
     std::string name = "Entity";
-    Transform2 transform;
+    Transform transform;
     EntityType entityType = EntityType::InvalidEntity;
 };
 
@@ -121,13 +111,48 @@ enum Material2 {
 };
 
 struct Model2 : Entity {
-    MeshResource* mesh = nullptr;
+    RID meshID = 0;
     Material2 material = Material2::Phong2;
 };
 
 struct Light2 : Entity {
     LightType2 lightType = LightType2::Point2;
 };
+
+struct SceneResource {
+    SceneBlock scene;
+    ModelBlock models[MAX_MODELS];
+    RID textures[MAX_TEXTURES];
+    StorageBuffer sceneBuffer;
+    StorageBuffer modelsBuffer;
+    std::vector<RID> freeTextureRIDs;
+    std::vector<RID> freeModelRIDs; 
+
+    Camera camera;
+    std::vector<Entity*> entities;
+    int selectedEntity = -1;
+
+    bool renderLightGizmos = true;
+    float lightGizmosOpacity = 1.0f;
+};
+
+Model2* CreateModel(SceneResource& res, std::string name, RID meshID) {
+    Model2* model = new Model2();
+    model->name = name;
+    model->meshID = meshID;
+    model->entityType = EntityType::ModelEntity;
+    res.entities.push_back(model);
+    return model;
+}
+
+Light2* CreateLight(SceneResource& res, std::string name, LightType2 type) {
+    Light2* light = new Light2();
+    light->name = name;
+    light->entityType = EntityType::LightEntity;
+    light->lightType = type;
+    res.entities.push_back(light);
+    return light;
+}
 
 void CreateSceneBuffers(SceneResource& res) {
     BufferManager::CreateStorageBuffer(res.sceneBuffer, sizeof(res.scene));
@@ -142,8 +167,106 @@ void DestroySceneBuffers(SceneResource& res) {
 }
 
 void UpdateSceneResource(SceneResource& res, int numFrame) {
+    LUZ_PROFILE_FUNC();
+    res.scene.projView = res.camera.GetProj() * res.camera.GetView();
     BufferManager::UpdateStorage(res.sceneBuffer, numFrame, &res.scene);
     BufferManager::UpdateStorage(res.modelsBuffer, numFrame, &res.models);
+}
+
+void OnImgui(SceneResource& res) {
+    if (ImGui::CollapsingHeader("Scene Resources", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (int i = 0; i < res.entities.size(); i++) {
+            ImGui::PushID(i);
+            if (ImGui::Selectable(res.entities[i]->name.c_str(), res.selectedEntity == i)) {
+                res.selectedEntity = i;
+            }
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Add model")) {
+            CreateModel(res, "New Model", 0);
+        }
+        if (ImGui::Button("Add light")) {
+            CreateLight(res, "New Light", LightType2::Point2);
+        }
+        ImGui::ColorEdit3("Ambient color", glm::value_ptr(res.scene.ambientLightColor));
+        ImGui::DragFloat("Ambient intensity", &res.scene.ambientLightIntensity);
+    }
+}
+
+void InspectModel(SceneResource& res, int id, Model2* model) {
+    ImGui::Text("Mesh: %d", model->meshID);
+}
+
+void RenderTransformGizmos(SceneResource& res, int id) {
+    Transform& transform = res.entities[id]->transform;
+
+    ImGuizmo::BeginFrame();
+    static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
+    static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
+
+    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+            currentGizmoOperation = ImGuizmo::TRANSLATE;
+        }
+        if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+            currentGizmoOperation = ImGuizmo::ROTATE;
+        }
+        if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+            currentGizmoOperation = ImGuizmo::SCALE;
+        }
+        if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
+            currentGizmoOperation = ImGuizmo::TRANSLATE;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
+            currentGizmoOperation = ImGuizmo::ROTATE;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
+            currentGizmoOperation = ImGuizmo::SCALE;
+        }
+
+        if (currentGizmoOperation != ImGuizmo::SCALE) {
+            if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
+                currentGizmoMode = ImGuizmo::LOCAL;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
+                currentGizmoMode = ImGuizmo::WORLD;
+            }
+        } else {
+            currentGizmoMode = ImGuizmo::LOCAL;
+        }
+    }
+    glm::mat4 modelMat = transform.GetMatrix();
+    glm::mat4 guizmoProj(res.camera.GetProj());
+    guizmoProj[1][1] *= -1;
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+    ImGuizmo::Manipulate(glm::value_ptr(res.camera.GetView()), glm::value_ptr(guizmoProj), currentGizmoOperation,
+    currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
+
+    if (transform.parent != nullptr) {
+        modelMat = glm::inverse(transform.parent->GetMatrix()) * modelMat;
+    }
+    transform.transform = modelMat;
+    
+    ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
+        glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
+}
+
+void InspectEntity(SceneResource& res, int id) {
+    Entity* entity = res.entities[id];
+    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3("Position", glm::value_ptr(entity->transform.position));
+        ImGui::DragFloat3("Scale", glm::value_ptr(entity->transform.scale));
+        ImGui::DragFloat3("Rotation", glm::value_ptr(entity->transform.rotation));
+        RenderTransformGizmos(res, id);
+    }
+    if (entity->entityType == EntityType::ModelEntity) {
+        InspectModel(res, id, (Model2*)entity);
+    }
 }
 
 class LuzApplication {
@@ -160,7 +283,6 @@ private:
     SceneUBO sceneUBO;
     UniformBuffer sceneUniform;
     ImDrawData* imguiDrawData = nullptr;
-    Camera camera;
     SceneResource sceneResource;
 
     void WaitToInit(float seconds) {
@@ -253,7 +375,7 @@ private:
             LUZ_PROFILE_FRAME();
             Window::Update();
             SceneManager::Update();
-            camera.Update();
+            sceneResource.camera.Update();
             drawFrame();
             if (DirtyGlobalResources()) {
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
@@ -292,7 +414,7 @@ private:
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = camera.GetProj() * camera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = sceneResource.camera.GetProj() * sceneResource.camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         auto ext = SwapChain::GetExtent();
         screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
@@ -318,7 +440,7 @@ private:
                     SwapChain::OnImgui();
                     UnlitGraphicsPipeline::OnImgui();
                     PhongGraphicsPipeline::OnImgui();
-                    camera.OnImgui();
+                    sceneResource.camera.OnImgui();
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Assets")) {
@@ -335,119 +457,124 @@ private:
         if (ImGui::Begin("Scene")) {
             SceneManager::OnImgui();
             LightManager::OnImgui();
+            OnImgui(sceneResource);
         }
         ImGui::End();
 
         if (ImGui::Begin("Inspector")) {
-            const float totalWidth = ImGui::GetContentRegionAvailWidth();
+            // const float totalWidth = ImGui::GetContentRegionAvailWidth();
 
-            Collection* selectedCollection = SceneManager::GetSelectedCollection();
-            Model* selectedModel = SceneManager::GetSelectedModel();
-            Light* selectedLight = SceneManager::GetSelectedLight();
-            Transform* selectedTransform = SceneManager::GetSelectedTransform();
+            // Collection* selectedCollection = SceneManager::GetSelectedCollection();
+            // Model* selectedModel = SceneManager::GetSelectedModel();
+            // Light* selectedLight = SceneManager::GetSelectedLight();
+            // Transform* selectedTransform = SceneManager::GetSelectedTransform();
 
-            if (selectedCollection != nullptr) {
-                ImGui::Text("Name");
-                ImGui::SameLine(totalWidth/5.0, -1);
-                ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
-                ImGui::PushID("name");
-                ImGui::InputText("", &selectedCollection->name);
-                ImGui::PopID();
-            }
+            // if (selectedCollection != nullptr) {
+            //     ImGui::Text("Name");
+            //     ImGui::SameLine(totalWidth/5.0, -1);
+            //     ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
+            //     ImGui::PushID("name");
+            //     ImGui::InputText("", &selectedCollection->name);
+            //     ImGui::PopID();
+            // }
 
-            if (selectedModel != nullptr) {
-                ImGui::Text("Name");
-                ImGui::SameLine(totalWidth/5.0, -1);
-                ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
-                ImGui::PushID("name");
-                ImGui::InputText("", &selectedModel->name);
-                ImGui::PopID();
-            }
-            
-            if (selectedLight != nullptr) {
-                ImGui::Text("Name");
-                ImGui::SameLine(totalWidth/5.0, -1);
-                ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
-                ImGui::PushID("name");
-                ImGui::InputText("", &selectedLight->name);
-                ImGui::PopID();
-            }
+            // if (selectedModel != nullptr) {
+            //     ImGui::Text("Name");
+            //     ImGui::SameLine(totalWidth/5.0, -1);
+            //     ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
+            //     ImGui::PushID("name");
+            //     ImGui::InputText("", &selectedModel->name);
+            //     ImGui::PopID();
+            // }
+            // 
+            // if (selectedLight != nullptr) {
+            //     ImGui::Text("Name");
+            //     ImGui::SameLine(totalWidth/5.0, -1);
+            //     ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
+            //     ImGui::PushID("name");
+            //     ImGui::InputText("", &selectedLight->name);
+            //     ImGui::PopID();
+            // }
 
-            if (selectedTransform != nullptr) {
-                Transform& transform = *selectedTransform;
-                ImGuizmo::BeginFrame();
-                static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
-                static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
+            // if (selectedTransform != nullptr) {
+            //     Transform& transform = *selectedTransform;
+            //     ImGuizmo::BeginFrame();
+            //     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
+            //     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-                if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
-                        currentGizmoOperation = ImGuizmo::TRANSLATE;
-                    }
-                    if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
-                        currentGizmoOperation = ImGuizmo::ROTATE;
-                    }
-                    if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
-                        currentGizmoOperation = ImGuizmo::SCALE;
-                    }
-                    if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
-                        currentGizmoOperation = ImGuizmo::TRANSLATE;
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
-                        currentGizmoOperation = ImGuizmo::ROTATE;
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
-                        currentGizmoOperation = ImGuizmo::SCALE;
-                    }
+            //     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //  {
+             //       if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+             //           currentGizmoOperation = ImGuizmo::TRANSLATE;
+             //       }
+             //       if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+             //           currentGizmoOperation = ImGuizmo::ROTATE;
+             //       }
+             //       if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+             //           currentGizmoOperation = ImGuizmo::SCALE;
+             //       }
+             //       if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
+             //           currentGizmoOperation = ImGuizmo::TRANSLATE;
+             //       }
+             //       ImGui::SameLine();
+             //       if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
+             //           currentGizmoOperation = ImGuizmo::ROTATE;
+             //       }
+             //       ImGui::SameLine();
+             //       if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
+             //           currentGizmoOperation = ImGuizmo::SCALE;
+             //       }
 
-                    ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
-                    ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
-                    ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
+             //       ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
+             //       ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
+             //       ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
 
-                    if (currentGizmoOperation != ImGuizmo::SCALE) {
-                        if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
-                            currentGizmoMode = ImGuizmo::LOCAL;
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
-                            currentGizmoMode = ImGuizmo::WORLD;
-                        }
-                    } else {
-                        currentGizmoMode = ImGuizmo::LOCAL;
-                    }
-                }
-                glm::mat4 modelMat = transform.GetMatrix();
-                // ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
-                //     glm::value_ptr(transform.scale), glm::value_ptr(transform.transform));
+             //       if (currentGizmoOperation != ImGuizmo::SCALE) {
+             //           if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
+             //               currentGizmoMode = ImGuizmo::LOCAL;
+             //           }
+             //           ImGui::SameLine();
+             //           if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
+             //               currentGizmoMode = ImGuizmo::WORLD;
+             //           }
+             //       } else {
+             //           currentGizmoMode = ImGuizmo::LOCAL;
+             //       }
+             //   }
+            //     glm::mat4 modelMat = transform.GetMatrix();
+            //     // ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
+            //     //     glm::value_ptr(transform.scale), glm::value_ptr(transform.transform));
 
-                glm::mat4 guizmoProj(sceneUBO.proj);
-                guizmoProj[1][1] *= -1;
+            //     glm::mat4 guizmoProj(sceneUBO.proj);
+            //     guizmoProj[1][1] *= -1;
 
-                ImGuiIO& io = ImGui::GetIO();
-                ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-                ImGuizmo::Manipulate(glm::value_ptr(sceneUBO.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
-                currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
+            //     ImGuiIO& io = ImGui::GetIO();
+            //     ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+            //     ImGuizmo::Manipulate(glm::value_ptr(sceneUBO.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
+            //     currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
 
-                if (transform.parent != nullptr) {
-                    modelMat = glm::inverse(transform.parent->GetMatrix()) * modelMat;
-                }
-                transform.transform = modelMat;
-                
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
-                    glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
-            }
+            //     if (transform.parent != nullptr) {
+            //         modelMat = glm::inverse(transform.parent->GetMatrix()) * modelMat;
+            //     }
+            //     transform.transform = modelMat;
+            //     
+            //     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
+            //         glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
+            // }
 
-            if (selectedModel != nullptr) {
-                MaterialManager::OnImgui(selectedModel);
-            }
-            if (selectedLight) {
-                LightManager::OnImgui(selectedLight);
-                LightManager::SetDirty();
-            }
+            // if (selectedModel != nullptr) {
+            //     MaterialManager::OnImgui(selectedModel);
+            // }
+            // if (selectedLight) {
+            //     LightManager::OnImgui(selectedLight);
+            //     LightManager::SetDirty();
+            // }
 
-            if (selectedCollection) {
-                LightManager::SetDirty();
+            // if (selectedCollection) {
+            //     LightManager::SetDirty();
+            // }
+
+            if (sceneResource.selectedEntity != -1) {
+                InspectEntity(sceneResource, sceneResource.selectedEntity);
             }
         }
         ImGui::End();
@@ -499,90 +626,21 @@ private:
         auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 2, 1, &descriptorSet, 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 0, 1, &descriptorSet, 0, nullptr);
 
-        auto models = SceneManager::GetModels();
-        for (int i = 0; i < models.size(); i++) { 
-            Model* model = models[i];
-            if (model->mesh != nullptr && model->material.type == MaterialType::Phong) {
-                MeshResource* mesh = model->mesh;
+        for (int i = 0; i < sceneResource.entities.size(); i++) {
+            Entity* entity = sceneResource.entities[i];
+            if (entity->entityType == EntityType::ModelEntity) {
+                Model2* model = (Model2*)entity;
+                MeshResource* mesh = MeshManager::GetMesh(model->meshID);
                 VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
                 VkDeviceSize offsets[] = { 0 };
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                // command buffer, vertex count, instance count, first vertex, first instance
-                // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 0,
-                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.layout, 1,
-                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
-                BindlessPushConstant pc;
-                pc.frameID = frameIndex;
-                if (model->material.useDiffuseTexture) {
-                    pc.textureID = model->material.diffuseTexture;
-                    pc.numFrames = SwapChain::GetNumFrames();
-                } else {
-                    pc.textureID = 1;
-                }
                 constants.modelID = i;
                 vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
-            }
-        }
-
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 2, 1, &descriptorSet, 0, nullptr);
-
-        for (int i = 0; i < models.size(); i++) { 
-            Model* model = models[i];
-            if (model->mesh != nullptr && model->material.type == MaterialType::Unlit) {
-                MeshResource* mesh = model->mesh;
-                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                // command buffer, vertex count, instance count, first vertex, first instance
-                // vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
-                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
-                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
-                BindlessPushConstant pc;
-                pc.frameID = frameIndex;
-                pc.numFrames = SwapChain::GetNumFrames();
-                if (model->material.useDiffuseTexture) {
-                    pc.textureID = model->material.diffuseTexture;
-                } else {
-                    pc.textureID = 1;
-                }
-                constants.modelID = 1;
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
-            }
-        }
-
-        if (LightManager::GetRenderGizmos()) {
-            auto lights = LightManager::GetLights();
-            for (int i = 0; i < lights.size(); i++) {
-                Light* light = lights[i];
-                const Model* model = light->model;
-                MeshResource* mesh = model->mesh;
-                VkBuffer vertexBuffers[] = { mesh->vertexBuffer.buffer };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 0,
-                    1, &model->meshDescriptor.descriptors[frameIndex], 0, nullptr);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.layout, 1,
-                    1, &model->material.materialDescriptor.descriptors[frameIndex], 0, nullptr);
-                BindlessPushConstant pc;
-                pc.frameID = frameIndex;
-                pc.numFrames = SwapChain::GetNumFrames();
-                pc.textureID = 1;
-                constants.modelID = models.size()+i;
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                vkCmdDrawIndexed(commandBuffer, mesh->indexCount, 1, 0, 0, 0);
-            }
+            }         
         }
 
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
@@ -639,38 +697,53 @@ private:
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
         auto ext = SwapChain::GetExtent();
-        camera.SetExtent(ext.width, ext.height);
+        sceneResource.camera.SetExtent(ext.width, ext.height);
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
         LUZ_PROFILE_FUNC();
-        for (Model* model : SceneManager::GetModels()) {
-            model->ubo.model = model->transform.GetMatrix();
-            BufferManager::Update(model->meshDescriptor.buffers[currentImage], &model->ubo, sizeof(model->ubo));
-            BufferManager::Update(model->material.materialDescriptor.buffers[currentImage], (UnlitMaterialUBO*)&(model->material), sizeof(UnlitMaterialUBO));
-        }
-
         LightManager::UpdateBufferIfDirty(currentImage);
         BufferManager::SetDirtyUniform(sceneUniform);
-        sceneUBO.view = camera.GetView();
-        sceneUBO.proj = camera.GetProj();
+        sceneUBO.view = sceneResource.camera.GetView();
+        sceneUBO.proj = sceneResource.camera.GetProj();
         BufferManager::UpdateUniformIfDirty(sceneUniform, currentImage, &sceneUBO);
-        auto models = SceneManager::GetModels();
-        for (int i = 0; i < models.size(); i++) {
-            sceneResource.models[i].model = models[i]->transform.GetMatrix();
-            sceneResource.models[i].colors[0] = models[i]->material.diffuseColor;
-            sceneResource.models[i].textures[0] = models[i]->material.diffuseTexture;
+        // auto models = SceneManager::GetModels();
+        // for (int i = 0; i < models.size(); i++) {
+        //     sceneResource.models[i].model = models[i]->transform.GetMatrix();
+        //     sceneResource.models[i].colors[0] = models[i]->material.diffuseColor;
+        //     sceneResource.models[i].textures[0] = models[i]->material.diffuseTexture;
+        // }
+        // auto lights = LightManager::GetLights();
+        // for (int i = 0; i < lights.size(); i++) {
+        //     int lightID = models.size() + i;
+        //     sceneResource.models[lightID].model = lights[i]->model->transform.GetMatrix();
+        //     sceneResource.models[lightID].colors[0] = lights[i]->color;
+        //     sceneResource.models[lightID].textures[0] = 0;
+        // }
+        sceneResource.scene.numDirLights = 0;
+        sceneResource.scene.numSpotLights = 0;
+        sceneResource.scene.numPointLights = 0;
+        for (int i = 0; i < sceneResource.entities.size(); i++) {
+            Entity* entity = sceneResource.entities[i];
+            if (entity->entityType == EntityType::ModelEntity) {
+                sceneResource.models[i].model = entity->transform.GetMatrix();
+                sceneResource.models[i].colors[0] = glm::vec4(1.0f);
+                sceneResource.models[i].textures[0] = 0;
+            } if (entity->entityType == EntityType::LightEntity) {
+                sceneResource.models[i].model = entity->transform.GetMatrix();
+                Light2* light = (Light2*)entity;
+                if (light->lightType == LightType2::Directional2) {
+                    sceneResource.scene.numDirLights++;
+                }
+                if (light->lightType == LightType2::Spot2) {
+                    sceneResource.scene.numSpotLights++;
+                }
+                if (light->lightType == LightType2::Point2) {
+                    sceneResource.scene.pointLights[sceneResource.scene.numPointLights].position = entity->transform.position;
+                    sceneResource.scene.numPointLights++;
+                }
+            }
         }
-        auto lights = LightManager::GetLights();
-        for (int i = 0; i < lights.size(); i++) {
-            int lightID = models.size() + i;
-            sceneResource.models[lightID].model = lights[i]->model->transform.GetMatrix();
-            sceneResource.models[lightID].colors[0] = lights[i]->color;
-            sceneResource.models[lightID].textures[0] = 0;
-        }
-        sceneResource.scene.ambientLightColor = LightManager::GetAmbientLightColor();
-        sceneResource.scene.ambientLightIntensity = LightManager::GetAmbientLightIntensity();
-        sceneResource.scene.projView = camera.GetProj() * camera.GetView();
         UpdateSceneResource(sceneResource, currentImage);
     }
 

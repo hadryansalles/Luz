@@ -18,7 +18,6 @@ struct GraphicsPipelineDesc {
     VkPipelineDepthStencilStateCreateInfo          depthStencil{};
     VkPipelineColorBlendAttachmentState            colorBlendAttachment{};
     VkPipelineColorBlendStateCreateInfo            colorBlendState{};
-    std::vector<VkDescriptorSetLayoutBinding>      bindings;
 };
 
 struct GraphicsPipelineResource {
@@ -65,8 +64,7 @@ public:
     static inline VkDescriptorSet& GetBindlessDescriptorSet() { return bindlessDescriptorSet; }
 
     static inline constexpr int TEXTURES_BINDING = 0;
-    static inline constexpr int BUFFERS_BINDING = 1;
-    static inline constexpr int STORAGE_BINDING = 2;
+    static inline constexpr int STORAGE_BINDING = 1;
 
     static inline constexpr int SCENE_BUFFER_INDEX = 1;
     static inline constexpr int LIGHTS_BUFFER_INDEX = 2;

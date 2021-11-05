@@ -4,10 +4,6 @@
 
 #include "base.glsl"
 
-layout(set = 1, binding = 0) uniform MaterialUBO {
-    vec4 color;
-} material;
-
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 

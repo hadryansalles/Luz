@@ -71,17 +71,6 @@ void UnlitGraphicsPipeline::Setup() {
     desc.colorBlendState.blendConstants[1] = 0.0f;
     desc.colorBlendState.blendConstants[2] = 0.0f;
     desc.colorBlendState.blendConstants[3] = 0.0f;
-
-    desc.bindings.resize(2);
-    desc.bindings[0].binding = 0;
-    desc.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc.bindings[0].descriptorCount = 1;
-    desc.bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    desc.bindings[1].binding = 0;
-    desc.bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc.bindings[1].descriptorCount = 1;
-    desc.bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 }
 
 void UnlitGraphicsPipeline::Create() {
@@ -95,12 +84,4 @@ void UnlitGraphicsPipeline::Destroy() {
 
 void UnlitGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
-}
-
-BufferDescriptor UnlitGraphicsPipeline::CreateModelDescriptor() {
-    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[0], sizeof(ModelUBO));
-}
-
-BufferDescriptor UnlitGraphicsPipeline::CreateMaterialDescriptor() {
-    return GraphicsPipelineManager::CreateBufferDescriptor(res.descriptorSetLayouts[1], sizeof(UnlitMaterialUBO));
 }

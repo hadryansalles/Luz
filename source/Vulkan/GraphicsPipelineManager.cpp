@@ -74,14 +74,6 @@ void GraphicsPipelineManager::Create() {
         bindings.push_back(texturesBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
 
-        VkDescriptorSetLayoutBinding uniformBuffersBinding{};
-        uniformBuffersBinding.binding = BUFFERS_BINDING;
-        uniformBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uniformBuffersBinding.descriptorCount = MAX_UNIFORMS;
-        uniformBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
-        bindings.push_back(uniformBuffersBinding);
-        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
-
         VkDescriptorSetLayoutBinding storageBuffersBinding{};
         storageBuffersBinding.binding = STORAGE_BINDING;
         storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -180,20 +172,7 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     viewportState.scissorCount = 1;
     viewportState.pScissors = &scissor;
 
-    res.descriptorSetLayouts.clear();
-    res.descriptorSetLayouts.resize(desc.bindings.size());
-
-    for (int i = 0; i < desc.bindings.size(); i++) {
-        VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
-        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorLayoutInfo.bindingCount = 1;
-        descriptorLayoutInfo.pBindings = &desc.bindings[i];
-
-        auto vkRes = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &res.descriptorSetLayouts[i]);
-        DEBUG_VK(vkRes, "Failed to create descriptor set layout {}!", i);
-    }
-
-    std::vector<VkDescriptorSetLayout> layouts(res.descriptorSetLayouts);
+    std::vector<VkDescriptorSetLayout> layouts;
     layouts.push_back(bindlessDescriptorLayout);
 
     VkPushConstantRange pushConstant{};
@@ -423,23 +402,23 @@ void GraphicsPipelineManager::UpdateBufferDescriptor(BufferDescriptor& descripto
 }
 
 void GraphicsPipelineManager::WriteUniform(UniformBuffer& uniform, int index) {
-    int numFrames = SwapChain::GetNumFrames();
-    std::vector<VkDescriptorBufferInfo> bufferInfos(numFrames);
-    std::vector<VkWriteDescriptorSet> writes(numFrames);
-    for (int i = 0; i < numFrames; i++) {
-        bufferInfos[i].buffer = uniform.resource.buffer;
-        bufferInfos[i].offset = i*uniform.sectionSize;
-        bufferInfos[i].range = uniform.dataSize;
+    // int numFrames = SwapChain::GetNumFrames();
+    // std::vector<VkDescriptorBufferInfo> bufferInfos(numFrames);
+    // std::vector<VkWriteDescriptorSet> writes(numFrames);
+    // for (int i = 0; i < numFrames; i++) {
+    //     bufferInfos[i].buffer = uniform.resource.buffer;
+    //     bufferInfos[i].offset = i*uniform.sectionSize;
+    //     bufferInfos[i].range = uniform.dataSize;
 
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = bindlessDescriptorSet;
-        writes[i].dstBinding = GraphicsPipelineManager::BUFFERS_BINDING;
-        writes[i].dstArrayElement = numFrames*index + i;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writes[i].descriptorCount = 1;
-        writes[i].pBufferInfo = &bufferInfos[i];
-    }
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), numFrames, writes.data(), 0, nullptr);
+    //     writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    //     writes[i].dstSet = bindlessDescriptorSet;
+    //     writes[i].dstBinding = GraphicsPipelineManager::BUFFERS_BINDING;
+    //     writes[i].dstArrayElement = numFrames*index + i;
+    //     writes[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    //     writes[i].descriptorCount = 1;
+    //     writes[i].pBufferInfo = &bufferInfos[i];
+    // }
+    // vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), numFrames, writes.data(), 0, nullptr);
 }
 
 void GraphicsPipelineManager::WriteStorage(StorageBuffer& uniform, int index) {

@@ -89,4 +89,5 @@ public:
 
     static MeshResource* CreateMesh(MeshDesc* desc);
     static MeshResource* GetOrCreateMesh(MeshDesc* desc);
+    static MeshResource* GetMesh(RID meshID) { return meshes[meshID]; }
 };
