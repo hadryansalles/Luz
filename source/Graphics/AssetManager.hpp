@@ -79,8 +79,6 @@ struct ModelDesc {
 #define MAX_MESHES 2048
 
 class AssetManager {
-    static inline MeshDesc meshDescs[MAX_MESHES];
-    static inline MeshResource meshes[MAX_MESHES];
     static inline RID nextMeshRID = 0;
     static inline std::vector<RID> unintializedMeshes;
     static inline std::mutex meshesLock;
@@ -95,6 +93,9 @@ class AssetManager {
     static void LoadOBJ(std::filesystem::path path);
 
 public:
+    static inline MeshDesc meshDescs[MAX_MESHES];
+    static inline MeshResource meshes[MAX_MESHES];
+
     static void Create();
     static void Destroy();
     static void Finish();
@@ -110,7 +111,4 @@ public:
     static void AsyncLoadModels(std::filesystem::path path);
     static std::vector<ModelDesc> LoadModels(std::filesystem::path path);
     static std::vector<ModelDesc> GetLoadedModels();
-
-    static MeshDesc& GetMeshDesc(RID rid) { return meshDescs[rid]; }
-    static MeshResource& GetMeshResource(RID rid) { return meshes[rid]; }
 };

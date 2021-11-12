@@ -24,7 +24,7 @@ void CreateSceneResources(SceneResource& res) {
 
 Model* CreateModel(SceneResource& res, std::string name, RID mesh, RID texture) {
     Model* model = new Model();
-    model->transform.SetPosition(AssetManager::GetMeshDesc(mesh).center);
+    model->transform.SetPosition(AssetManager::meshDescs[mesh].center);
     model->name = name;
     model->mesh = mesh;
     model->entityType = EntityType::Model;

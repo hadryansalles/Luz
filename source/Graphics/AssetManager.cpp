@@ -16,10 +16,13 @@ void AssetManager::Create() {
 }
 
 void AssetManager::Destroy() {
+    meshesLock.lock();
     for (RID i = 0; i < nextMeshRID; i++) {
         BufferManager::Destroy(meshes[i].vertexBuffer);
         BufferManager::Destroy(meshes[i].indexBuffer);
+        unintializedMeshes.push_back(i);
     }
+    meshesLock.unlock();
 }
 
 void AssetManager::Finish() {

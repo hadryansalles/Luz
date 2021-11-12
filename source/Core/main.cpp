@@ -398,7 +398,7 @@ private:
             if (entity->entityType == EntityType::Model) {
                 Model* model = (Model*)entity;
                 if (model->material == Material::Phong) {
-                    MeshResource& mesh = AssetManager::GetMeshResource(model->mesh);
+                    MeshResource& mesh = AssetManager::meshes[model->mesh];
                     VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
                     VkDeviceSize offsets[] = { 0 };
                     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
@@ -418,7 +418,7 @@ private:
             if (entity->entityType == EntityType::Model) {
                 Model* model = (Model*)entity;
                 if (model->material == Material::Unlit) {
-                    MeshResource mesh = AssetManager::GetMeshResource(model->mesh);
+                    MeshResource mesh = AssetManager::meshes[model->mesh];
                     VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
                     VkDeviceSize offsets[] = { 0 };
                     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
@@ -429,7 +429,7 @@ private:
                 }
             } else if (sceneResource.renderLightGizmos && entity->entityType == EntityType::Light) {
                 Light* light = (Light*)entity;
-                MeshResource& mesh = AssetManager::GetMeshResource(sceneResource.lightMeshes[light->block.type]);
+                MeshResource& mesh = AssetManager::meshes[sceneResource.lightMeshes[light->block.type]];
                 VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
                 VkDeviceSize offsets[] = { 0 };
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
