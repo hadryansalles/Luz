@@ -1,11 +1,9 @@
 #include "Luzpch.hpp"
 
-#include "MeshManager.hpp"
+#include "AssetManager.hpp"
 #include "UnlitGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
-
-#include "SceneManager.hpp"
 
 void UnlitGraphicsPipeline::Setup() {
     desc.name = "Unlit";

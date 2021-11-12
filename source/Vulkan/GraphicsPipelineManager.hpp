@@ -52,10 +52,6 @@ public:
     static void DestroyPipeline(GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
 
-    static BufferDescriptor CreateBufferDescriptor(VkDescriptorSetLayout layout, uint32_t size);
-    static void UpdateBufferDescriptor(BufferDescriptor& descriptor, void* data, uint32_t size);
-
-    static void WriteUniform(UniformBuffer& uniform, int index);
     static void WriteStorage(StorageBuffer& uniform, int index);
 
     static inline VkDescriptorPool GetImguiDescriptorPool()    { return imguiDescriptorPool;   }

@@ -24,7 +24,7 @@ void TextureManager::Create() {
     LUZ_PROFILE_FUNC();
 
     for (int i = 0; i < nextRID; i++) {
-        TextureDesc desc = AssetManager::LoadImageFile(resources[i].path);
+        TextureDesc desc = AssetManager::LoadTexture(resources[i].path);
         DEBUG_ASSERT(desc.data != nullptr, "Image '{}' not loaded. Can't create texture for it!", desc.path.string().c_str());
         InitTexture(i, desc);
     }
@@ -97,6 +97,10 @@ void TextureManager::InitTexture(RID rid, TextureDesc& desc) {
 }
 
 RID TextureManager::CreateTexture(TextureDesc& desc) {
+    if (desc.path == "") {
+        return 0;
+    }
+
     if (nextRID >= MAX_TEXTURES) {
         LOG_ERROR("Can't create new texture! Max number of textures exceed!");
         return 0;

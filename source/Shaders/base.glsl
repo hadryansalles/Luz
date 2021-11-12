@@ -2,8 +2,6 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
-layout(set = 0, binding = 0) uniform sampler2D textures[];
-
 layout(push_constant) uniform ConstantsBlock{
     int sceneBufferIndex;
     int modelBufferIndex;
@@ -13,11 +11,11 @@ layout(push_constant) uniform ConstantsBlock{
 #define SCENE_BUFFER_INDEX 0
 #define MODEL_BUFFER_INDEX 1
 
-#define LIGHT_BUFFER_INDEX 2
-#define lights lightsBuffers[numFrames*LIGHT_BUFFER_INDEX + frameID]
-
-#define MAX_LIGHTS_PER_TYPE 8
+#define MAX_LIGHTS 16
 #define MAX_MODELS 4096
+#define LIGHT_TYPE_POINT 0
+#define LIGHT_TYPE_DIRECTIONAL 1
+#define LIGHT_TYPE_SPOT 2
 
 struct LightBlock {
     vec3 color;
@@ -26,6 +24,7 @@ struct LightBlock {
     float innerAngle;
     vec3 direction;
     float outerAngle;
+    int type;
 };
 
 struct ModelBlock {
@@ -35,17 +34,15 @@ struct ModelBlock {
     int textures[2];
 };
 
+layout(set = 0, binding = 0) uniform sampler2D textures[];
+
 layout(set = 0, binding = 1) readonly buffer SceneBlock {
-    LightBlock pointLights[MAX_LIGHTS_PER_TYPE];
-    LightBlock spotLights[MAX_LIGHTS_PER_TYPE];
-    LightBlock dirLights[MAX_LIGHTS_PER_TYPE];
+    LightBlock lights[MAX_LIGHTS];
     vec3 ambientLightColor;
     float ambientLightIntensity;
     mat4 projView;
     vec3 camPos;
-    int numPointLights;
-    int numSpotLights;
-    int numDirLights;
+    int numLights;
 } sceneBuffers[];
 
 layout(set = 0, binding = 1) readonly buffer ModelBuffer {

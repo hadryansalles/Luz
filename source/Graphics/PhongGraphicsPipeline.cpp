@@ -3,8 +3,7 @@
 #include "PhongGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
-#include "MeshManager.hpp"
-#include "SceneManager.hpp"
+#include "AssetManager.hpp"
 
 void PhongGraphicsPipeline::Setup() {
     desc.name = "Phong";

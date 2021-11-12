@@ -2,7 +2,7 @@
 
 #include "Camera.hpp"
 #include "Window.hpp"
-#include "SceneManager.hpp"
+#include "Transform.hpp"
 
 Camera::Camera() {
     UpdateView();
@@ -50,7 +50,7 @@ void Camera::UpdateProj(){
     proj[1][1] *= -1;
 }
 
-void Camera::Update() {
+void Camera::Update(Transform* selectedTransform) {
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
         return;
     }
@@ -65,7 +65,6 @@ void Camera::Update() {
         mode = Camera::Control::Fly;
     }
     if (Window::IsKeyDown(GLFW_KEY_SPACE)) {
-        Transform* selectedTransform = SceneManager::GetSelectedTransform();
         if (selectedTransform != nullptr) {
             zoom = 1.0f;
             if (selectedTransform->parent != nullptr) {

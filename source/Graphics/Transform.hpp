@@ -53,7 +53,7 @@ struct Transform {
 
     glm::vec3 GetGlobalFront() {
         glm::mat4 mat = GetMatrix();
-        return glm::vec3(mat[2][0], mat[2][1], mat[2][2]);
+        return glm::normalize(glm::vec3(mat[2][0], mat[2][1], mat[2][2]));
     }
 
     glm::vec3 GetWorldRotation() {
