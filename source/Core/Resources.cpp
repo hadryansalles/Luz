@@ -13,6 +13,7 @@ void CreateScene(SceneResource& res) {
     res.lightMeshes[1] = dirDesc[0].mesh;
     res.lightMeshes[2] = spotDesc[0].mesh;
     AssetManager::AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
+    res.rootCollection = CreateCollection(res, "Root");
 }
 
 void CreateSceneResources(SceneResource& res) {
@@ -30,21 +31,21 @@ Model* CreateModel(SceneResource& res, std::string name, RID mesh, RID texture) 
     model->entityType = EntityType::Model;
     model->block.textures[0] = texture;
     res.entities.push_back(model);
+    SetCollection(model, res.rootCollection);
     return model;
 }
 
-void InspectEntity(SceneResource& res, int id) {
-    Entity* entity = res.entities[id];
+void InspectEntity(SceneResource& res, Entity* entity) {
     ImGui::InputText("Name", & entity->name);
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat3("Position", glm::value_ptr(entity->transform.position));
         ImGui::DragFloat3("Scale", glm::value_ptr(entity->transform.scale));
         ImGui::DragFloat3("Rotation", glm::value_ptr(entity->transform.rotation));
-        RenderTransformGizmos(res, id);
+        RenderTransformGizmos(res, entity->transform);
     }
     if (entity->entityType == EntityType::Model) {
-        InspectModel(res, id, (Model*)entity);
+        InspectModel(res, (Model*)entity);
     } else if (entity->entityType == EntityType::Light) {
-        InspectLight(res, id, (Light*)entity);
+        InspectLight(res, (Light*)entity);
     }
 }

@@ -13,7 +13,6 @@
 #include "PhongGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "BufferManager.hpp"
-#include "TextureManager.hpp"
 #include "AssetManager.hpp"
 
 #include <stb_image.h>
@@ -65,7 +64,7 @@ private:
         LUZ_PROFILE_FUNC();
         UnlitGraphicsPipeline::Setup();
         PhongGraphicsPipeline::Setup();
-        TextureManager::Setup();
+        AssetManager::Setup();
         SetupImgui();
     }
 
@@ -88,7 +87,6 @@ private:
         PhongGraphicsPipeline::Create();
         CreateImgui();
         createUniformProjection();
-        TextureManager::Create();
         AssetManager::Create();
         CreateSceneResources(sceneResource);
     }
@@ -97,7 +95,6 @@ private:
         LUZ_PROFILE_FUNC();
         DestroyVulkan();
         AssetManager::Finish();
-        TextureManager::Finish();
         FinishImgui();
     }
 
@@ -109,7 +106,6 @@ private:
         DestroyFrameResources();
         GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
-        TextureManager::Destroy();
         LogicalDevice::Destroy();
         PhysicalDevice::Destroy();
         Instance::Destroy();
@@ -132,16 +128,12 @@ private:
             LUZ_PROFILE_FRAME();
             Window::Update();
             for (ModelDesc& desc : AssetManager::GetLoadedModels()) {
-                RID texture = TextureManager::GetTexture(desc.texture.path);
-                if (texture == 0) {
-                    texture = TextureManager::CreateTexture(desc.texture);
-                }
-                CreateModel(sceneResource, desc.name, desc.mesh, texture);
+                CreateModel(sceneResource, desc.name, desc.mesh, desc.texture);
             }
             AssetManager::UpdateResources();
             Transform* selectedTransform = nullptr;
-            if (sceneResource.selectedEntity != -1) {
-                selectedTransform = &sceneResource.entities[sceneResource.selectedEntity]->transform;
+            if (sceneResource.selectedEntity != nullptr) {
+                selectedTransform = &sceneResource.selectedEntity->transform;
             }
             sceneResource.camera.Update(selectedTransform);
             drawFrame();
@@ -213,7 +205,6 @@ private:
                 }
                 if (ImGui::BeginTabItem("Assets")) {
                     AssetManager::OnImgui();
-                    TextureManager::OnImgui();
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
@@ -338,7 +329,7 @@ private:
             //     LightManager::SetDirty();
             // }
 
-            if (sceneResource.selectedEntity != -1) {
+            if (sceneResource.selectedEntity != nullptr) {
                 InspectEntity(sceneResource, sceneResource.selectedEntity);
             }
         }

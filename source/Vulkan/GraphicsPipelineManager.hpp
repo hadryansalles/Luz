@@ -3,8 +3,6 @@
 #include <vulkan/vulkan.h>
 #include <string>
 
-#include "TextureManager.hpp"
-#include "Descriptors.hpp"
 #include "BufferManager.hpp"
 #include "Shader.hpp"
 

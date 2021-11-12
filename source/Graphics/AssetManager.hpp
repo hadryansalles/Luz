@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <mutex>
 
-#include "TextureManager.hpp"
+#include "Texture.hpp"
 
 struct MeshVertex {
     glm::vec3 pos;
@@ -73,15 +73,20 @@ struct MeshResource {
 struct ModelDesc {
     std::string name;
     RID mesh;
-    TextureDesc texture;
+    RID texture;
 };
 
 #define MAX_MESHES 2048
+#define MAX_TEXTURES 2048
 
 class AssetManager {
     static inline RID nextMeshRID = 0;
     static inline std::vector<RID> unintializedMeshes;
     static inline std::mutex meshesLock;
+
+    static inline RID nextTextureRID = 0;
+    static inline std::vector<RID> unintializedTextures;
+    static inline std::mutex texturesLock;
 
     static inline std::vector<ModelDesc> loadedModels;
     static inline std::mutex loadedModelsLock;
@@ -90,12 +95,20 @@ class AssetManager {
     static void InitializeMesh(RID id);
     static void RecenterMesh(RID id);
 
+    static RID NewTexture();
+    static void InitializeTexture(RID id);
+    static void UpdateTexturesDescriptor(std::vector<RID>& rids);
+
     static void LoadOBJ(std::filesystem::path path);
 
 public:
     static inline MeshDesc meshDescs[MAX_MESHES];
     static inline MeshResource meshes[MAX_MESHES];
 
+    static inline TextureDesc textureDescs[MAX_TEXTURES];
+    static inline TextureResource textures[MAX_TEXTURES];
+
+    static void Setup();
     static void Create();
     static void Destroy();
     static void Finish();
@@ -106,7 +119,7 @@ public:
     static bool IsOBJ(std::filesystem::path path);
     static bool IsTexture(std::filesystem::path path);
 
-    static TextureDesc LoadTexture(std::filesystem::path path);
+    static RID LoadTexture(std::filesystem::path path);
 
     static void AsyncLoadModels(std::filesystem::path path);
     static std::vector<ModelDesc> LoadModels(std::filesystem::path path);

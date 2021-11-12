@@ -1,14 +1,20 @@
 #include "Luzpch.hpp"
 
 #include "AssetManager.hpp"
-
-#include <algorithm>
+#include "GraphicsPipelineManager.hpp"
+#include "LogicalDevice.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include <imgui/imgui_impl_vulkan.h>
+
+void AssetManager::Setup() {
+    LoadTexture("assets/default.png");
+    LoadTexture("assets/white.png");
+}
 
 void AssetManager::Create() {
     LUZ_PROFILE_FUNC();
@@ -23,15 +29,30 @@ void AssetManager::Destroy() {
         unintializedMeshes.push_back(i);
     }
     meshesLock.unlock();
+    texturesLock.lock();
+    for (RID i = 0; i < nextTextureRID; i++) {
+        DestroyTexture(textures[i]);
+        unintializedTextures.push_back(i);
+    }
+    texturesLock.unlock();
 }
 
 void AssetManager::Finish() {
+    meshesLock.lock();
     for (RID i = 0; i < nextMeshRID; i++) {
         meshDescs[i].indices.clear();
         meshDescs[i].vertices.clear();
         meshDescs[i] = MeshDesc();
     }
     nextMeshRID = 0;
+    meshesLock.unlock();
+    texturesLock.lock();
+    for (RID i = 0; i < nextTextureRID; i++) {
+        stbi_image_free(textureDescs[i].data);
+        textureDescs[i] = TextureDesc();
+    }
+    nextTextureRID = 0;
+    texturesLock.unlock();
 }
 
 RID AssetManager::NewMesh() {
@@ -42,7 +63,16 @@ RID AssetManager::NewMesh() {
     return rid;
 }
 
+RID AssetManager::NewTexture() {
+    texturesLock.lock();
+    RID rid = nextTextureRID++;
+    unintializedTextures.push_back(rid);
+    texturesLock.unlock();
+    return rid;
+}
+
 void AssetManager::UpdateResources() {
+    LUZ_PROFILE_FUNC();
     meshesLock.lock();
     std::vector<RID> toInitialize = std::move(unintializedMeshes);
     unintializedMeshes.clear();
@@ -50,6 +80,43 @@ void AssetManager::UpdateResources() {
     for (RID rid : toInitialize) {
         InitializeMesh(rid);
     }
+    texturesLock.lock();
+    toInitialize = std::move(unintializedTextures);
+    texturesLock.unlock();
+    for (RID rid : toInitialize) {
+        InitializeTexture(rid);
+    }
+    UpdateTexturesDescriptor(toInitialize);
+}
+
+void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
+    LUZ_PROFILE_FUNC();
+    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    const RID count = rids.size();
+    std::vector<VkDescriptorImageInfo> imageInfos(count);
+    std::vector<VkWriteDescriptorSet> writes(count);
+
+    VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
+
+    for (int i = 0; i < count; i++) {
+        RID rid = rids[i];
+        DEBUG_ASSERT(textures[rid].sampler != VK_NULL_HANDLE, "Texture not loaded!");
+        textures[rid].imguiRID = ImGui_ImplVulkan_AddTexture(textures[rid].sampler, textures[rid].image.view, layout);
+
+        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[i].imageView = textures[rid].image.view;
+        imageInfos[i].sampler = textures[rid].sampler;
+
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = bindlessDescriptorSet;
+        writes[i].dstBinding = 0;
+        writes[i].dstArrayElement = rid;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[i].descriptorCount = 1;
+        writes[i].pImageInfo = &imageInfos[i];
+    }
+    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
 }
 
 void AssetManager::InitializeMesh(RID rid) {
@@ -98,6 +165,12 @@ void AssetManager::RecenterMesh(RID rid) {
     }
 }
 
+void AssetManager::InitializeTexture(RID id) {
+    TextureResource& res = textures[id];
+    TextureDesc& desc = textureDescs[id];
+    CreateTexture(desc, res);
+}
+
 bool AssetManager::IsOBJ(std::filesystem::path path) {
     std::string extension = path.extension().string();
     return extension == ".obj" || extension == ".OBJ";
@@ -119,7 +192,7 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
         LOG_ERROR("{} {}", warn, err);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
-    std::vector<TextureDesc> diffuseTextures(materials.size());
+    std::vector<RID> diffuseTextures(materials.size());
     for (size_t i = 0; i < materials.size(); i++) {
         if (materials[i].diffuse_texname != "") {
             std::filesystem::path copyPath = parentPath;
@@ -201,21 +274,39 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
     }
 }
 
-TextureDesc AssetManager::LoadTexture(std::filesystem::path path) {
+RID AssetManager::LoadTexture(std::filesystem::path path) {
+    // check if texture is already loaded
+    RID rid = 0;
+    path = std::filesystem::absolute(path);
+    texturesLock.lock();
+    for (RID i = 0; i < nextTextureRID; i++) {
+        if (textureDescs[i].path == path) {
+            rid = i;
+            break;
+        }
+    }
+    texturesLock.unlock();
+    if (rid != 0) {
+        return rid;
+    }
+
+    // read texture file
     int texWidth, texHeight, texChannels;
-    TextureDesc desc;
     stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     if (!pixels) {
         LOG_ERROR("Failed to load image file {}", path.string().c_str());
-        return desc;
+        return 0;
     }
 
+    // create texture desc
+    rid = NewTexture();
+    TextureDesc& desc = textureDescs[rid];
     desc.data = pixels;
     desc.width = texWidth;
     desc.height = texHeight;
     desc.path = path;
 
-    return desc;
+    return rid;
 }
 
 std::vector<ModelDesc> AssetManager::LoadModels(std::filesystem::path path) {
@@ -274,13 +365,9 @@ void DirOnImgui(std::filesystem::path path) {
 void AssetManager::OnImgui() {
     const float totalWidth = ImGui::GetContentRegionAvailWidth();
     const float leftSpacing = ImGui::GetContentRegionAvailWidth()*1.0f/3.0f;
-    // ImGui::Text("Path");
-    // ImGui::SameLine(totalWidth*3.0f/5.0);
-    // ImGui::Text("PATH TO SCENE");
-    // ImGui::Text(SceneManager::GetPath().stem().string().c_str());
-    // if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) {
-    //     DirOnImgui(SceneManager::GetPath().parent_path());
-    // }
+    if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) { 
+        DirOnImgui(std::filesystem::path("assets").parent_path());
+    }
     if (ImGui::CollapsingHeader("Meshes")) {
         for (int i = 0; i < nextMeshRID; i++) {
             ImGui::PushID(i);
@@ -300,6 +387,22 @@ void AssetManager::OnImgui() {
                 ImGui::PushID("indicesCount");
                 ImGui::Text("%u", meshDescs[i].indices.size());
                 ImGui::PopID();
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        }
+    }
+    if (ImGui::CollapsingHeader("Textures")) {
+        for (RID rid = 0; rid < nextTextureRID; rid++) {
+            ImGui::PushID(rid);
+            if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
+                DrawTextureOnImgui(textures[rid]);
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    std::string texturePath = textureDescs[rid].path.string();
+                    ImGui::SetDragDropPayload("texture", texturePath.c_str(), texturePath.size());
+                    DrawTextureOnImgui(textures[rid]);
+                    ImGui::EndDragDropSource();
+                }
                 ImGui::TreePop();
             }
             ImGui::PopID();

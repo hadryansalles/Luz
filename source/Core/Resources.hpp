@@ -58,6 +58,7 @@ struct Entity {
     std::string name = "Entity";
     Transform transform;
     EntityType entityType = EntityType::Invalid;
+    struct Collection* parent = nullptr;
 };
 
 enum LightType {
@@ -81,6 +82,10 @@ struct Light : Entity {
     LightBlock block;
 };
 
+struct Collection : Entity {
+    std::vector<Entity*> children;
+};
+
 struct SceneResource {
     SceneBlock scene;
     ModelBlock models[MAX_MODELS];
@@ -91,8 +96,9 @@ struct SceneResource {
     std::vector<RID> freeModelRIDs; 
 
     Camera camera;
+    Collection* rootCollection = nullptr;
     std::vector<Entity*> entities;
-    int selectedEntity = -1;
+    Entity* selectedEntity = nullptr;
 
     bool renderLightGizmos = true;
     float lightGizmosOpacity = 1.0f;
@@ -101,6 +107,24 @@ struct SceneResource {
 };
 
 void CreateScene(SceneResource& res);
+
+inline void RemoveFromCollection(Entity* entity) {
+    Collection* parent = entity->parent;
+    auto it = std::find(parent->children.begin(), parent->children.end(), entity);
+    DEBUG_ASSERT(it != parent->children.end(), "Entity isn't a children of its parent.");
+    parent->children.erase(it);
+    entity->parent = nullptr;
+    entity->transform.parent = nullptr;
+}
+
+inline void SetCollection(Entity* entity, Collection* collection) {
+    if (entity->parent != nullptr) {
+        RemoveFromCollection(entity);
+    }
+    entity->parent = collection;
+    entity->transform.parent = &collection->transform;
+    collection->children.push_back(entity);
+}
 
 Model* CreateModel(SceneResource& res, std::string name, RID mesh, RID texture);
 
@@ -111,6 +135,14 @@ inline Light* CreateLight(SceneResource& res, std::string name, LightType type) 
     light->block.type = type;
     res.entities.push_back(light);
     return light;
+}
+
+inline Collection* CreateCollection(SceneResource& res, std::string name) {
+    Collection* collection = new Collection();
+    collection->entityType = EntityType::Collection;
+    collection->name = name;
+    res.entities.push_back(collection);
+    return collection;
 }
 
 void CreateSceneResources(SceneResource& res);
@@ -145,14 +177,36 @@ inline void UpdateSceneResource(SceneResource& res, int numFrame) {
     BufferManager::UpdateStorage(res.modelsBuffer, numFrame, &res.models);
 }
 
-inline void OnImgui(SceneResource& res) {
-    if (ImGui::CollapsingHeader("Scene Resources", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < res.entities.size(); i++) {
-            ImGui::PushID(i);
-            if (ImGui::Selectable(res.entities[i]->name.c_str(), res.selectedEntity == i)) {
-                res.selectedEntity = i;
+inline void OnImgui(SceneResource& res, Collection* collection, bool root = false) {
+    bool open = true;
+    if (!root) {
+        ImGui::PushID(collection);
+        open = ImGui::TreeNode(collection->name.c_str());
+    }
+    if (open) {
+        for (Entity* entity : collection->children) {
+            if (entity->entityType == EntityType::Collection) {
+                OnImgui(res, (Collection*)entity);
             }
+            else {
+                if (ImGui::Selectable(entity->name.c_str(), res.selectedEntity == entity)) {
+                    res.selectedEntity = entity;
+                }
+            }
+
+        }
+        if (!root) {
+            ImGui::TreePop();
             ImGui::PopID();
+        }
+    }
+}
+
+inline void OnImgui(SceneResource& res) {
+    if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::TreeNodeEx("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
+            OnImgui(res, res.rootCollection, true);
+            ImGui::TreePop();
         }
         if (ImGui::Button("Add model")) {
             CreateModel(res, "New Model", 0, 0);
@@ -161,15 +215,15 @@ inline void OnImgui(SceneResource& res) {
             CreateLight(res, "New Light", LightType::Point);
         }
         ImGui::ColorEdit3("Ambient color", glm::value_ptr(res.scene.ambientLightColor));
-        ImGui::DragFloat("Ambient intensity", &res.scene.ambientLightIntensity);
+        ImGui::DragFloat("Ambient intensity", &res.scene.ambientLightIntensity, 0.01);
     }
 }
 
-inline void InspectModel(SceneResource& res, int id, Model* model) {
+inline void InspectModel(SceneResource& res, Model* model) {
     ImGui::Text("Mesh: %d", model->mesh);
 }
 
-inline void InspectLight(SceneResource& res, int id, Light* light) {
+inline void InspectLight(SceneResource& res, Light* light) {
     static const char* LIGHT_NAMES[] = { "Point", "Directional", "Spot" };
     if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginCombo("Type", LIGHT_NAMES[light->block.type])) {
@@ -193,9 +247,7 @@ inline void InspectLight(SceneResource& res, int id, Light* light) {
     }
 }
 
-inline void RenderTransformGizmos(SceneResource& res, int id) {
-    Transform& transform = res.entities[id]->transform;
-
+inline void RenderTransformGizmos(SceneResource& res, Transform& transform) {
     ImGuizmo::BeginFrame();
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
@@ -252,4 +304,4 @@ inline void RenderTransformGizmos(SceneResource& res, int id) {
         glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
 }
 
-void InspectEntity(SceneResource& res, int id);
+void InspectEntity(SceneResource& res, Entity* entity);
