@@ -4,6 +4,7 @@
 #include <mutex>
 
 #include "Texture.hpp"
+#include "Scene.hpp"
 
 struct MeshVertex {
     glm::vec3 pos;
@@ -70,12 +71,6 @@ struct MeshResource {
     uint32_t indexCount;
 };
 
-struct ModelDesc {
-    std::string name;
-    RID mesh;
-    RID texture;
-};
-
 #define MAX_MESHES 2048
 #define MAX_TEXTURES 2048
 
@@ -88,7 +83,7 @@ class AssetManager {
     static inline std::vector<RID> unintializedTextures;
     static inline std::mutex texturesLock;
 
-    static inline std::vector<ModelDesc> loadedModels;
+    static inline std::vector<Model> loadedModels;
     static inline std::mutex loadedModelsLock;
 
     static RID NewMesh();
@@ -121,7 +116,8 @@ public:
 
     static RID LoadTexture(std::filesystem::path path);
 
+    static Model* LoadModel(std::filesystem::path path);
     static void AsyncLoadModels(std::filesystem::path path);
-    static std::vector<ModelDesc> LoadModels(std::filesystem::path path);
-    static std::vector<ModelDesc> GetLoadedModels();
+    static std::vector<Model*> LoadModels(std::filesystem::path path);
+    static std::vector<Model*> GetLoadedModels();
 };

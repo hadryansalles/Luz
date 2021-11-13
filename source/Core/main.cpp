@@ -14,6 +14,7 @@
 #include "FileManager.hpp"
 #include "BufferManager.hpp"
 #include "AssetManager.hpp"
+#include "Scene.hpp"
 
 #include <stb_image.h>
 
@@ -23,8 +24,6 @@
 #ifdef _DEBUG
 #define IMGUI_VULKAN_DEBUG_REPORT
 #endif
-
-#include "Resources.hpp"
 
 void CheckVulkanResult(VkResult res) {
     if (res == 0) {
@@ -48,7 +47,6 @@ public:
 
 private:
     ImDrawData* imguiDrawData = nullptr;
-    SceneResource sceneResource;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -66,12 +64,12 @@ private:
         PhongGraphicsPipeline::Setup();
         AssetManager::Setup();
         SetupImgui();
+        Scene::Setup();
     }
 
     void Create() {
         LUZ_PROFILE_FUNC();
         CreateVulkan();
-        CreateScene(sceneResource);
     }
 
     void CreateVulkan() {
@@ -88,7 +86,7 @@ private:
         CreateImgui();
         createUniformProjection();
         AssetManager::Create();
-        CreateSceneResources(sceneResource);
+        Scene::CreateResources();
     }
 
     void Finish() {
@@ -116,7 +114,7 @@ private:
         LUZ_PROFILE_FUNC();
         UnlitGraphicsPipeline::Destroy();
         PhongGraphicsPipeline::Destroy();
-        DestroySceneResources(sceneResource);
+        Scene::DestroyResources();
         DestroyImgui();
 
         SwapChain::Destroy();
@@ -127,15 +125,12 @@ private:
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
             Window::Update();
-            for (ModelDesc& desc : AssetManager::GetLoadedModels()) {
-                CreateModel(sceneResource, desc.name, desc.mesh, desc.texture);
-            }
             AssetManager::UpdateResources();
             Transform* selectedTransform = nullptr;
-            if (sceneResource.selectedEntity != nullptr) {
-                selectedTransform = &sceneResource.selectedEntity->transform;
+            if (Scene::selectedEntity != nullptr) {
+                selectedTransform = &Scene::selectedEntity->transform;
             }
-            sceneResource.camera.Update(selectedTransform);
+            Scene::camera.Update(selectedTransform);
             drawFrame();
             if (DirtyGlobalResources()) {
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
@@ -174,7 +169,7 @@ private:
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = sceneResource.camera.GetProj() * sceneResource.camera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         auto ext = SwapChain::GetExtent();
         screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
@@ -200,7 +195,7 @@ private:
                     SwapChain::OnImgui();
                     UnlitGraphicsPipeline::OnImgui();
                     PhongGraphicsPipeline::OnImgui();
-                    sceneResource.camera.OnImgui();
+                    Scene::camera.OnImgui();
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Assets")) {
@@ -213,124 +208,13 @@ private:
         ImGui::End();
 
         if (ImGui::Begin("Scene")) {
-            OnImgui(sceneResource);
+            Scene::OnImgui();
         }
         ImGui::End();
 
         if (ImGui::Begin("Inspector")) {
-            // const float totalWidth = ImGui::GetContentRegionAvailWidth();
-
-            // Collection* selectedCollection = SceneManager::GetSelectedCollection();
-            // Model* selectedModel = SceneManager::GetSelectedModel();
-            // Light* selectedLight = SceneManager::GetSelectedLight();
-            // Transform* selectedTransform = SceneManager::GetSelectedTransform();
-
-            // if (selectedCollection != nullptr) {
-            //     ImGui::Text("Name");
-            //     ImGui::SameLine(totalWidth/5.0, -1);
-            //     ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
-            //     ImGui::PushID("name");
-            //     ImGui::InputText("", &selectedCollection->name);
-            //     ImGui::PopID();
-            // }
-
-            // if (selectedModel != nullptr) {
-            //     ImGui::Text("Name");
-            //     ImGui::SameLine(totalWidth/5.0, -1);
-            //     ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
-            //     ImGui::PushID("name");
-            //     ImGui::InputText("", &selectedModel->name);
-            //     ImGui::PopID();
-            // }
-            // 
-            // if (selectedLight != nullptr) {
-            //     ImGui::Text("Name");
-            //     ImGui::SameLine(totalWidth/5.0, -1);
-            //     ImGui::SetNextItemWidth(totalWidth * 4.0 / 5.0);
-            //     ImGui::PushID("name");
-            //     ImGui::InputText("", &selectedLight->name);
-            //     ImGui::PopID();
-            // }
-
-            // if (selectedTransform != nullptr) {
-            //     Transform& transform = *selectedTransform;
-            //     ImGuizmo::BeginFrame();
-            //     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
-            //     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
-
-            //     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //  {
-             //       if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
-             //           currentGizmoOperation = ImGuizmo::TRANSLATE;
-             //       }
-             //       if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
-             //           currentGizmoOperation = ImGuizmo::ROTATE;
-             //       }
-             //       if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
-             //           currentGizmoOperation = ImGuizmo::SCALE;
-             //       }
-             //       if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
-             //           currentGizmoOperation = ImGuizmo::TRANSLATE;
-             //       }
-             //       ImGui::SameLine();
-             //       if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
-             //           currentGizmoOperation = ImGuizmo::ROTATE;
-             //       }
-             //       ImGui::SameLine();
-             //       if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
-             //           currentGizmoOperation = ImGuizmo::SCALE;
-             //       }
-
-             //       ImGui::InputFloat3("Position", glm::value_ptr(transform.position));
-             //       ImGui::InputFloat3("Rotation", glm::value_ptr(transform.rotation));
-             //       ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
-
-             //       if (currentGizmoOperation != ImGuizmo::SCALE) {
-             //           if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
-             //               currentGizmoMode = ImGuizmo::LOCAL;
-             //           }
-             //           ImGui::SameLine();
-             //           if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
-             //               currentGizmoMode = ImGuizmo::WORLD;
-             //           }
-             //       } else {
-             //           currentGizmoMode = ImGuizmo::LOCAL;
-             //       }
-             //   }
-            //     glm::mat4 modelMat = transform.GetMatrix();
-            //     // ImGuizmo::RecomposeMatrixFromComponents(glm::value_ptr(transform.position), glm::value_ptr(transform.rotation),
-            //     //     glm::value_ptr(transform.scale), glm::value_ptr(transform.transform));
-
-            //     glm::mat4 guizmoProj(sceneUBO.proj);
-            //     guizmoProj[1][1] *= -1;
-
-            //     ImGuiIO& io = ImGui::GetIO();
-            //     ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-            //     ImGuizmo::Manipulate(glm::value_ptr(sceneUBO.view), glm::value_ptr(guizmoProj), currentGizmoOperation,
-            //     currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
-
-            //     if (transform.parent != nullptr) {
-            //         modelMat = glm::inverse(transform.parent->GetMatrix()) * modelMat;
-            //     }
-            //     transform.transform = modelMat;
-            //     
-            //     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
-            //         glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
-            // }
-
-            // if (selectedModel != nullptr) {
-            //     MaterialManager::OnImgui(selectedModel);
-            // }
-            // if (selectedLight) {
-            //     LightManager::OnImgui(selectedLight);
-            //     LightManager::SetDirty();
-            // }
-
-            // if (selectedCollection) {
-            //     LightManager::SetDirty();
-            // }
-
-            if (sceneResource.selectedEntity != nullptr) {
-                InspectEntity(sceneResource, sceneResource.selectedEntity);
+            if (Scene::selectedEntity != nullptr) {
+                Scene::InspectEntity(Scene::selectedEntity);
             }
         }
         ImGui::End();
@@ -384,52 +268,46 @@ private:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 0, 1, &descriptorSet, 0, nullptr);
 
-        for (int i = 0; i < sceneResource.entities.size(); i++) {
-            Entity* entity = sceneResource.entities[i];
-            if (entity->entityType == EntityType::Model) {
-                Model* model = (Model*)entity;
-                if (model->material == Material::Phong) {
-                    MeshResource& mesh = AssetManager::meshes[model->mesh];
-                    VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
-                    VkDeviceSize offsets[] = { 0 };
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                    vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                    constants.modelID = i;
-                    vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                    vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
-                }
+        for (Model* model : Scene::modelEntities) {
+            if (model->material == Material::Phong) {
+                MeshResource& mesh = AssetManager::meshes[model->mesh];
+                VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                constants.modelID = model->id;
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
+                vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
             }
         }
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
         vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 0, 1, &descriptorSet, 0, nullptr);
 
-        for (int i = 0; i < sceneResource.entities.size(); i++) {
-            Entity* entity = sceneResource.entities[i];
-            if (entity->entityType == EntityType::Model) {
-                Model* model = (Model*)entity;
-                if (model->material == Material::Unlit) {
-                    MeshResource mesh = AssetManager::meshes[model->mesh];
-                    VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
-                    VkDeviceSize offsets[] = { 0 };
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                    vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                    constants.modelID = i;
-                    vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                    vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
-                }
-            } else if (sceneResource.renderLightGizmos && entity->entityType == EntityType::Light) {
-                Light* light = (Light*)entity;
-                MeshResource& mesh = AssetManager::meshes[sceneResource.lightMeshes[light->block.type]];
+        for (Model* model : Scene::modelEntities) {
+            if (model->material == Material::Unlit) {
+                MeshResource mesh = AssetManager::meshes[model->mesh];
                 VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
                 VkDeviceSize offsets[] = { 0 };
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                constants.modelID = i;
+                constants.modelID = model->id;
                 vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
             }
         }
+        if (Scene::renderLightGizmos) {
+            for (Light* light : Scene::lightEntities) {
+                MeshResource& mesh = AssetManager::meshes[Scene::lightMeshes[light->block.type]];
+                VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
+                VkDeviceSize offsets[] = { 0 };
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+                constants.modelID = light->id;
+                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
+                vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
+            }
+        } 
 
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
 
@@ -472,7 +350,7 @@ private:
         SwapChain::Create();
         UnlitGraphicsPipeline::Create();
         PhongGraphicsPipeline::Create();
-        CreateSceneResources(sceneResource);
+        Scene::CreateResources();
         CreateImgui();
         createUniformProjection();
     }
@@ -481,12 +359,12 @@ private:
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
         auto ext = SwapChain::GetExtent();
-        sceneResource.camera.SetExtent(ext.width, ext.height);
+        Scene::camera.SetExtent(ext.width, ext.height);
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
         LUZ_PROFILE_FUNC();
-        UpdateSceneResource(sceneResource, currentImage);
+        Scene::UpdateResources(currentImage);
     }
 
     void SetupImgui() {

@@ -59,7 +59,4 @@ public:
 
     static inline constexpr int TEXTURES_BINDING = 0;
     static inline constexpr int STORAGE_BINDING = 1;
-
-    static inline constexpr int SCENE_BUFFER_INDEX = 1;
-    static inline constexpr int LIGHTS_BUFFER_INDEX = 2;
 };

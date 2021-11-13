@@ -73,6 +73,11 @@ RID AssetManager::NewTexture() {
 
 void AssetManager::UpdateResources() {
     LUZ_PROFILE_FUNC();
+
+    // add new loaded models to scene
+    GetLoadedModels();
+
+    // initialize new meshes
     meshesLock.lock();
     std::vector<RID> toInitialize = std::move(unintializedMeshes);
     unintializedMeshes.clear();
@@ -80,6 +85,8 @@ void AssetManager::UpdateResources() {
     for (RID rid : toInitialize) {
         InitializeMesh(rid);
     }
+
+    // initialize new textures
     texturesLock.lock();
     toInitialize = std::move(unintializedTextures);
     texturesLock.unlock();
@@ -203,8 +210,10 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
+    Collection* collection = nullptr;
     if (shapes.size() > 1) {
-        // TODO: set collection
+        collection = Scene::CreateCollection();
+        collection->name = path.stem().string();
     }
     for (size_t i = 0; i < shapes.size(); i++) {
         MeshDesc desc;
@@ -250,16 +259,18 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
             if (j % 3 == 0) {
                 size_t faceId = j / 3;
                 if (faceId >= shapes[i].mesh.material_ids.size() || shapes[i].mesh.material_ids[faceId] != lastMaterialId) {
-                    ModelDesc model;
+                    Model model;
                     desc.path = std::filesystem::absolute(path);
                     desc.name = shapes[i].name + "_" + std::to_string(splittedShapeIndex);
                     model.name = desc.name;
+                    model.parent = collection;
                     RID meshRID = NewMesh();
                     meshDescs[meshRID] = std::move(desc);
                     RecenterMesh(meshRID);
                     model.mesh = meshRID;
+                    model.transform.SetPosition(meshDescs[meshRID].center);
                     if (lastMaterialId != -1 && materials[lastMaterialId].diffuse_texname != "") {
-                        model.texture = diffuseTextures[lastMaterialId];
+                        model.block.textures[0] = diffuseTextures[lastMaterialId];
                     }
                     loadedModelsLock.lock();
                     loadedModels.push_back(model);
@@ -309,7 +320,13 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
     return rid;
 }
 
-std::vector<ModelDesc> AssetManager::LoadModels(std::filesystem::path path) {
+Model* AssetManager::LoadModel(std::filesystem::path path) {
+    auto models = LoadModels(path);
+    ASSERT(models.size() == 1, "LoadModel loaded more than one model.");
+    return models[0];
+}
+
+std::vector<Model*> AssetManager::LoadModels(std::filesystem::path path) {
     if (loadedModels.size() != 0) {
         LOG_WARN("Sync load models with loaded models waiting to fetch...");
     }
@@ -317,12 +334,16 @@ std::vector<ModelDesc> AssetManager::LoadModels(std::filesystem::path path) {
     return GetLoadedModels();
 }
 
-std::vector<ModelDesc> AssetManager::GetLoadedModels() {
+std::vector<Model*> AssetManager::GetLoadedModels() {
     loadedModelsLock.lock();
-    std::vector<ModelDesc> models = std::move(loadedModels);
+    std::vector<Model> models = std::move(loadedModels);
     loadedModels.clear();
     loadedModelsLock.unlock();
-    return models;
+    std::vector<Model*> newModels(models.size());
+    for (int i = 0; i < models.size(); i++) {
+        newModels[i] = Scene::CreateModel(models[i]);
+    }
+    return newModels;
 }
 
 void AssetManager::AsyncLoadModels(std::filesystem::path path) {
