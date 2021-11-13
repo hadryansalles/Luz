@@ -48,6 +48,7 @@ public:
     void OnImgui();
     void SetExtent(float width, float height);
 
+    inline const glm::vec3& GetPosition() { return eye; }
     inline const glm::mat4& GetView() { return view; }
     inline const glm::mat4& GetProj() { return proj; }
 };

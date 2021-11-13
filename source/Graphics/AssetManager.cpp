@@ -200,10 +200,21 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
     std::vector<RID> diffuseTextures(materials.size());
+    std::vector<RID> specularTextures(materials.size());
     for (size_t i = 0; i < materials.size(); i++) {
         if (materials[i].diffuse_texname != "") {
             std::filesystem::path copyPath = parentPath;
             diffuseTextures[i] = AssetManager::LoadTexture(copyPath.append(materials[i].diffuse_texname));
+        }
+        else {
+            diffuseTextures[i] = 1;
+        }
+        if (materials[i].specular_texname != "") {
+            std::filesystem::path copyPath = parentPath;
+            specularTextures[i] = AssetManager::LoadTexture(copyPath.append(materials[i].specular_texname));
+        }
+        else {
+            specularTextures[i] = 1;
         }
     }
     if (warn != "") {
@@ -269,8 +280,14 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
                     RecenterMesh(meshRID);
                     model.mesh = meshRID;
                     model.transform.SetPosition(meshDescs[meshRID].center);
-                    if (lastMaterialId != -1 && materials[lastMaterialId].diffuse_texname != "") {
+                    if (lastMaterialId != -1) {
+                        auto diffuse = materials[lastMaterialId].diffuse;
+                        auto specular = materials[lastMaterialId].specular;
+                        model.block.values[0] = materials[lastMaterialId].shininess;
+                        model.block.colors[0] = glm::vec4(diffuse[0], diffuse[1], diffuse[2], 1.0);
+                        model.block.colors[1] = glm::vec4(specular[0], specular[1], specular[2], 1.0);
                         model.block.textures[0] = diffuseTextures[lastMaterialId];
+                        model.block.textures[1] = specularTextures[lastMaterialId];
                     }
                     loadedModelsLock.lock();
                     loadedModels.push_back(model);

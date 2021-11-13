@@ -62,6 +62,7 @@ void UpdateResources(int numFrame) {
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
         scene.numLights++;
     }
+    scene.camPos = camera.GetPosition();
     scene.projView = camera.GetProj() * camera.GetView();
     UpdateBuffers(numFrame);
 }
@@ -201,6 +202,21 @@ void OnImgui(Collection* collection, bool root) {
 
 void InspectModel(Model* model) {
     ImGui::Text("Mesh: %d", model->mesh);
+    if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::ColorEdit4("Diffuse", glm::value_ptr(model->block.colors[0]));
+        bool useDiffuse = model->block.textures[0] != 1;
+        if (ImGui::Checkbox("Use texture", &useDiffuse)) {
+            model->block.textures[0] = 1;
+        }
+        ImGui::Separator();
+        ImGui::ColorEdit4("Specular", glm::value_ptr(model->block.colors[1]));
+        bool useSpecular = model->block.textures[1] != 1;
+        if (ImGui::Checkbox("Use texture", &useSpecular)) {
+            model->block.textures[1] = 1;
+        }
+        ImGui::Separator();
+        ImGui::DragFloat("Shineness", &model->block.values[0], 0.01f);
+    }
 }
 
 void InspectLight(Light* light) {
