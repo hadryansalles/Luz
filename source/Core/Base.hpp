@@ -17,7 +17,8 @@ using f32 = float;
 using f64 = double;
 using RID = u32;
 
-#define ALIGN_AS(size, alignment) (size) % (alignment) > 0 ? (size) + (alignment) - (size) % (alignment) : (size)
+#define ALIGN_AS(size, alignment) ((size) % (alignment) > 0 ? (size) + (alignment) - (size) % (alignment) : (size))
+#define COUNT_OF(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
 #ifdef _WIN32
     #ifndef _WIN64

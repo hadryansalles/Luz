@@ -10,6 +10,9 @@
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
 #include "PhysicalDevice.hpp"
+#include "Texture.hpp"
+#include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui.h>
 
 namespace RayTracing {
 
@@ -35,7 +38,14 @@ struct RayTracingContext {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups;
+
+    bool useRayTracing = true;
+
     ImageResource image;
+    VkSampler sampler;
+    ImTextureID imguiTextureID;
+    VkViewport viewport;
+
     std::vector<AccelerationStructure> BLAS;
     AccelerationStructure TLAS;
     VkDescriptorPool descriptorPool;
@@ -61,12 +71,14 @@ struct RayTracingContext {
 };
 
 struct RayTracingPushConstants {
-    glm::mat4 viewProj;
-    glm::mat4 projInverse;
-    glm::mat4 viewInverse;
-    glm::vec4 clearColor;
-    glm::vec3 lightPosition;
-    float lightIntensity;
+    glm::mat4 view;
+    glm::mat4 proj;
+    //glm::mat4 viewProj;
+    //glm::mat4 projInverse;
+    //glm::mat4 viewInverse;
+    //glm::vec4 clearColor;
+    //glm::vec3 lightPosition;
+    //float lightIntensity;
 };
 
 RayTracingContext ctx;
@@ -244,17 +256,17 @@ void CreateTLAS(std::vector<struct Model*> models) {
         glm::mat4 modelMat = model->transform.GetMatrix();
         VkTransformMatrixKHR transform{};
         transform.matrix[0][0] = modelMat[0][0];
-        transform.matrix[0][1] = modelMat[0][1];
-        transform.matrix[0][2] = modelMat[0][2];
-        transform.matrix[0][3] = modelMat[0][3];
-        transform.matrix[1][0] = modelMat[1][0];
+        transform.matrix[0][1] = modelMat[1][0];
+        transform.matrix[0][2] = modelMat[2][0];
+        transform.matrix[0][3] = modelMat[3][0];
+        transform.matrix[1][0] = modelMat[0][1];
         transform.matrix[1][1] = modelMat[1][1];
-        transform.matrix[1][2] = modelMat[1][2];
-        transform.matrix[1][3] = modelMat[1][3];
-        transform.matrix[2][0] = modelMat[2][0];
-        transform.matrix[2][1] = modelMat[2][1];
+        transform.matrix[1][2] = modelMat[2][1];
+        transform.matrix[1][3] = modelMat[3][1];
+        transform.matrix[2][0] = modelMat[0][2];
+        transform.matrix[2][1] = modelMat[1][2];
         transform.matrix[2][2] = modelMat[2][2];
-        transform.matrix[2][3] = modelMat[2][3];
+        transform.matrix[2][3] = modelMat[3][2];
 
         VkAccelerationStructureInstanceKHR rayInstance{};
         rayInstance.transform = transform;
@@ -362,6 +374,49 @@ void CreateTLAS(std::vector<struct Model*> models) {
     BufferManager::Destroy(instancesBuffer);
 }
 
+void CreateImage() {
+    ImageDesc imageDesc;
+    imageDesc.width = SwapChain::GetExtent().width;
+    imageDesc.height = SwapChain::GetExtent().height;
+    imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageDesc.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageDesc.format = SwapChain::GetImageFormat();
+    imageDesc.mipLevels = 1;
+    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+    imageDesc.layout = VK_IMAGE_LAYOUT_GENERAL;
+    ImageManager::Create(imageDesc, ctx.image);
+    ctx.sampler = CreateSampler(1);
+    ctx.imguiTextureID = ImGui_ImplVulkan_AddTexture(ctx.sampler, ctx.image.view, VK_IMAGE_LAYOUT_GENERAL);
+
+    ctx.viewport.x = 0;
+    ctx.viewport.y = 0;
+    ctx.viewport.width = imageDesc.width;
+    ctx.viewport.height = imageDesc.height;
+    ctx.viewport.minDepth = 0;
+    ctx.viewport.maxDepth = 1;
+
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageInfo.imageView = ctx.image.view;
+    imageInfo.sampler = VK_NULL_HANDLE;
+
+    std::vector<VkWriteDescriptorSet> writes;
+
+    VkWriteDescriptorSet writeImage{};
+    writeImage.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writeImage.dstSet = ctx.descriptorSet;
+    writeImage.dstBinding = 1;
+    writeImage.dstArrayElement = 0;
+    writeImage.descriptorCount = 1;
+    writeImage.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    writeImage.pImageInfo = &imageInfo;
+    writes.push_back(writeImage);
+
+    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), writes.size(), writes.data(), 0, nullptr);
+}
+
 void CreatePipeline() {
     VkDevice device = LogicalDevice::GetVkDevice();
 
@@ -390,7 +445,7 @@ void CreatePipeline() {
     stages[MissStage] = missStage.stageCreateInfo;
 
     ShaderDesc shadowDesc;
-    shadowDesc.shaderBytes = FileManager::ReadRawBytes("bin/rt.rmiss.spv");
+    shadowDesc.shaderBytes = FileManager::ReadRawBytes("bin/rtShadow.rmiss.spv");
     shadowDesc.stageBit = VK_SHADER_STAGE_MISS_BIT_KHR;
     ShaderResource shadowStage;
     Shader::Create(shadowDesc, shadowStage);
@@ -418,6 +473,10 @@ void CreatePipeline() {
     group.generalShader = MissStage;
     ctx.shaderGroups.push_back(group);
 
+    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    group.generalShader = MissStage2;
+    ctx.shaderGroups.push_back(group);
+
     group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
     group.generalShader = VK_SHADER_UNUSED_KHR;
     group.closestHitShader = ClosestHitStage;
@@ -432,22 +491,6 @@ void CreatePipeline() {
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-
-    // image
-    {
-        ImageDesc imageDesc;
-        imageDesc.width = SwapChain::GetExtent().width;
-        imageDesc.height = SwapChain::GetExtent().height;
-        imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageDesc.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-        imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageDesc.format = SwapChain::GetImageFormat();
-        imageDesc.mipLevels = 1;
-        imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
-        imageDesc.layout = VK_IMAGE_LAYOUT_GENERAL;
-        ImageManager::Create(imageDesc, ctx.image);
-    }
 
     // descriptor sets
     {
@@ -498,11 +541,6 @@ void CreatePipeline() {
         descriptorAccelerationStructure.accelerationStructureCount = 1;
         descriptorAccelerationStructure.pAccelerationStructures = &ctx.TLAS.accel;
 
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-        imageInfo.imageView = ctx.image.view;
-        imageInfo.sampler = VK_NULL_HANDLE;
-
         std::vector<VkWriteDescriptorSet> writes;
 
         VkWriteDescriptorSet writeAccelerationStructure{};
@@ -515,17 +553,12 @@ void CreatePipeline() {
         writeAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
         writes.push_back(writeAccelerationStructure);
 
-        VkWriteDescriptorSet writeImage{};
-        writeImage.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeImage.dstSet = ctx.descriptorSet;
-        writeImage.dstBinding = 1;
-        writeImage.dstArrayElement = 0;
-        writeImage.descriptorCount = 1;
-        writeImage.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        writeImage.pImageInfo = &imageInfo;
-        writes.push_back(writeImage);
-
         vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+    }
+
+    // image
+    {
+        CreateImage();
     }
 
     pipelineLayoutInfo.setLayoutCount = 1;
@@ -533,6 +566,13 @@ void CreatePipeline() {
 
     VkResult res = vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &ctx.pipelineLayout);
     DEBUG_VK(res, "Failed to create ray tracing pipeline layout!");
+
+    VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT };
+
+    VkPipelineDynamicStateCreateInfo dynamicInfo{};
+    dynamicInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicInfo.pDynamicStates = dynamicStates;
+    dynamicInfo.dynamicStateCount = COUNT_OF(dynamicStates);
 
     VkRayTracingPipelineCreateInfoKHR pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
@@ -542,6 +582,8 @@ void CreatePipeline() {
     pipelineInfo.pGroups = ctx.shaderGroups.data();
     pipelineInfo.maxPipelineRayRecursionDepth = 1;
     pipelineInfo.layout = ctx.pipelineLayout;
+    pipelineInfo.pDynamicState = &dynamicInfo;
+        
     ctx.vkCreateRayTracingPipelinesKHR(device, {}, {}, 1, & pipelineInfo, nullptr, & ctx.pipeline);
 
     for (VkPipelineShaderStageCreateInfo& stage : stages) {
@@ -558,7 +600,7 @@ void CreateShaderBindingTable() {
     prop2.pNext = &ctx.properties;
     vkGetPhysicalDeviceProperties2(PhysicalDevice::GetVkPhysicalDevice(), &prop2);
 
-    u32 missCount = 1;
+    u32 missCount = 2;
     u32 hitCount = 1;
     u32 handleCount = 1 + missCount + hitCount;
     u32 handleSize= ctx.properties.shaderGroupHandleSize;
@@ -579,8 +621,8 @@ void CreateShaderBindingTable() {
     DEBUG_VK(res, "Failed to get ray tracing shader group handles!");
 
     BufferDesc sbtDesc;
-    sbtDesc.size = ctx.rgenRegion.size + ctx.hitRegion.size + ctx.callRegion.size;
-    sbtDesc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    sbtDesc.size = ctx.rgenRegion.size + ctx.missRegion.size + ctx.hitRegion.size + ctx.callRegion.size;
+    sbtDesc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
     sbtDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     BufferManager::Create(sbtDesc, ctx.SBTBuffer);
 
@@ -639,22 +681,49 @@ void Create() {
 }
 
 void RayTrace(VkCommandBuffer& commandBuffer) {
-    RayTracingPushConstants constants;
-    constants.clearColor = glm::vec4(0, 0, 1, 1);
-    constants.lightPosition = glm::vec3(20, 0, 0);
-    constants.lightIntensity = 3.0f;
-    constants.viewProj = Scene::camera.GetView() * Scene::camera.GetProj();
-    constants.viewInverse = glm::inverse(Scene::camera.GetView());
-    constants.projInverse = glm::inverse(Scene::camera.GetProj());
+    if (ctx.useRayTracing) {
+        RayTracingPushConstants constants;
+        // constants.clearColor = glm::vec4(0, 0, 1, 1);
+        // constants.lightPosition = glm::vec3(20, 0, 0);
+        // constants.lightIntensity = 3.0f;
+        // constants.viewProj = Scene::camera.GetView() * Scene::camera.GetProj();
+        // constants.viewInverse = glm::inverse(Scene::camera.GetView());
+        // constants.projInverse = glm::inverse(Scene::camera.GetProj());
+        constants.view = Scene::camera.GetView();
+        constants.proj = Scene::camera.GetProj();
 
-    auto ext = SwapChain::GetExtent();
+        auto ext = SwapChain::GetExtent();
 
-    VkPipelineBindPoint point = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
-    vkCmdBindPipeline(commandBuffer, point, ctx.pipeline);
-    vkCmdBindDescriptorSets(commandBuffer, point, ctx.pipelineLayout, 0, 1, &ctx.descriptorSet, 0, nullptr);
-    auto stages = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
-    vkCmdPushConstants(commandBuffer, ctx.pipelineLayout, stages, 0, sizeof(RayTracingPushConstants), &constants);
-    ctx.vkCmdTraceRaysKHR(commandBuffer, &ctx.rgenRegion, &ctx.missRegion, &ctx.hitRegion, &ctx.callRegion, ext.width, ext.height, 1);
+        VkPipelineBindPoint point = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
+        vkCmdBindPipeline(commandBuffer, point, ctx.pipeline);
+        vkCmdSetViewport(commandBuffer, 0, 1, &ctx.viewport);
+        vkCmdBindDescriptorSets(commandBuffer, point, ctx.pipelineLayout, 0, 1, &ctx.descriptorSet, 0, nullptr);
+        auto stages = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
+        vkCmdPushConstants(commandBuffer, ctx.pipelineLayout, stages, 0, sizeof(RayTracingPushConstants), &constants);
+        ctx.vkCmdTraceRaysKHR(commandBuffer, &ctx.rgenRegion, &ctx.missRegion, &ctx.hitRegion, &ctx.callRegion, ext.width, ext.height, 1);
+    }
+}
+
+void OnImgui() {
+    if (ImGui::Begin("Ray Tracing")) {
+        ImGui::Checkbox("Enabled", &ctx.useRayTracing);
+        ImVec2 imgSize = ImVec2(ctx.image.width, ctx.image.height);
+        ImVec2 winSize = ImGui::GetContentRegionAvail();
+        float t;
+        if (imgSize.x / imgSize.y > winSize.x / winSize.y) {
+            t = winSize.x / imgSize.x;
+        } else {
+            t = winSize.y / imgSize.y;
+        }
+        ImVec2 size = ImVec2(imgSize.x * t, imgSize.y*t);
+        ImGui::Image(ctx.imguiTextureID, size);
+    }
+    ImGui::End();
+}
+
+void UpdateViewport(VkExtent2D ext) {
+    ImageManager::Destroy(ctx.image);
+    CreateImage();
 }
 
 }

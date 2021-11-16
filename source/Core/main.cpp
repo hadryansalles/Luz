@@ -82,10 +82,10 @@ private:
         GraphicsPipelineManager::Create();
         PBRGraphicsPipeline::Create();
         CreateImgui();
-        createUniformProjection();
         AssetManager::Create();
         Scene::CreateResources();
         RayTracing::Create();
+        createUniformProjection();
     }
 
     void Finish() {
@@ -212,6 +212,8 @@ private:
         }
         ImGui::End();
 
+        RayTracing::OnImgui();
+
         ImGui::ShowDemoWindow();
 
         ImGui::Render();
@@ -336,6 +338,7 @@ private:
         // the easiest way to fix this is fliping the scaling factor of the y axis
         auto ext = SwapChain::GetExtent();
         Scene::camera.SetExtent(ext.width, ext.height);
+        RayTracing::UpdateViewport(ext);
     }
 
     void updateUniformBuffer(uint32_t currentImage) {

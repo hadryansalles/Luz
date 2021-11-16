@@ -6,8 +6,8 @@ struct hitPayload {
     vec3 color;
 };
 
-layout(location = 0) rayPayloadEXT hitPayload prd;
+layout(location = 0) rayPayloadInEXT hitPayload prd;
 
 void main() {
-    prd.color = vec3(0, 0, 1);
+    prd.color = vec3(1, 0, 0);
 }
