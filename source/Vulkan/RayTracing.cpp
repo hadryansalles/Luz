@@ -605,6 +605,11 @@ void CreatePipeline() {
         CreateImage();
     }
 
+    // image
+    {
+        CreateImage();
+    }
+
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pSetLayouts = &ctx.descriptorSetLayout;
 
