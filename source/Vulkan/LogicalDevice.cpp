@@ -58,6 +58,22 @@ void LogicalDevice::Create() {
     descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
     descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
 
+    VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
+    bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_ADDRESS_FEATURES_EXT;
+    bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
+    bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
+
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+    rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+    rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
+    rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+    accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+    accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+    accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -65,7 +81,7 @@ void LogicalDevice::Create() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
     createInfo.pEnabledFeatures = &features;
-    createInfo.pNext = &descriptorIndexingFeatures;
+    createInfo.pNext = &accelerationStructureFeatures;
 
     // specify the required layers to the device 
     if (Instance::IsLayersEnabled()) {

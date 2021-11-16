@@ -55,4 +55,5 @@ public:
     static inline VkSampleCountFlagBits GetNumSamples()              { return numSamples;        }
     static inline VkFramebuffer         GetFramebuffer(uint32_t i)   { return framebuffers[i];   }
     static inline VkCommandBuffer       GetCommandBuffer(uint32_t i) { return commandBuffers[i]; }
+    static inline VkFormat              GetImageFormat()             { return colorFormat;       }
 };

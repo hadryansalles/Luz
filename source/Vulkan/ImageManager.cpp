@@ -26,7 +26,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     // and linear makes the texels lay in row-major order, possibly with padding on each row
     imageInfo.tiling = desc.tiling;
     // not usable by the GPU, the first transition will discard the texels
-    imageInfo.initialLayout = desc.layout;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = desc.usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.samples = desc.numSamples;
@@ -61,6 +61,23 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
 
     result = vkCreateImageView(device, &viewInfo, allocator, &res.view);
     DEBUG_VK(result, "Failed to create image view!");
+
+    if (desc.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = desc.layout;
+        barrier.image = res.image;
+        barrier.subresourceRange = viewInfo.subresourceRange;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = 0;
+
+        VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+        VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+        vkCmdPipelineBarrier(commandBuffer, stage, stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    }
 }
 
 void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
@@ -261,4 +278,7 @@ void ImageManager::Destroy(ImageResource& res) {
     vkDestroyImageView(device, res.view, allocator);
     vkDestroyImage(device, res.image, allocator);
     vkFreeMemory(device, res.memory, allocator);
+}
+
+void ImageManager::SetLayout(ImageResource& res, VkImageLayout newLayout) {
 }

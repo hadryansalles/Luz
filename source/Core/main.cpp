@@ -14,6 +14,7 @@
 #include "BufferManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
+#include "RayTracing.hpp"
 
 #include <stb_image.h>
 
@@ -84,6 +85,7 @@ private:
         createUniformProjection();
         AssetManager::Create();
         Scene::CreateResources();
+        RayTracing::Create();
     }
 
     void Finish() {
@@ -285,6 +287,8 @@ private:
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
 
         vkCmdEndRenderPass(commandBuffer);
+
+        RayTracing::RayTrace(commandBuffer);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");

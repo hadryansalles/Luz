@@ -38,7 +38,7 @@ endif()
 set(LIBS_DIR ${CMAKE_SOURCE_DIR}/lib/${CMAKE_CFG_INTDIR})
 
 # Luz
-file(GLOB_RECURSE GLSL_SOURCE "source/*.vert" "source/*.frag")
+file(GLOB_RECURSE GLSL_SOURCE "source/*.vert" "source/*.frag" "source/*.rchit" "source/*.rgen" "source/*.rmiss")
 file(GLOB_RECURSE SOURCE "source/*.cpp" "source/*.hpp")
 file(GLOB HEADERS "source/*")
 add_executable(${PROJECT_NAME} ${SOURCE} ${GLSL_SOURCE})
@@ -102,7 +102,7 @@ foreach(GLSL ${GLSL_SOURCE})
   set(SPIRV "${CMAKE_SOURCE_DIR}/bin/${FILE_NAME}.spv")
   add_custom_command(
     OUTPUT ${SPIRV}
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV} --target-env spirv1.4
     DEPENDS ${GLSL})
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)

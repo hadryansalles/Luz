@@ -74,7 +74,8 @@ struct MeshDesc {
 struct MeshResource {
     BufferResource vertexBuffer;
     BufferResource indexBuffer;
-    uint32_t indexCount;
+    u32 vertexCount;
+    u32 indexCount;
 };
 
 #define MAX_MESHES 2048

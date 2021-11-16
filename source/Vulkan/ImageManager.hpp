@@ -33,4 +33,5 @@ public:
     static void Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer);
     static void Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res);
     static void Destroy(ImageResource& res);
+    static void SetLayout(ImageResource& res, VkImageLayout newLayout);
 };

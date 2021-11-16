@@ -84,7 +84,7 @@ void BufferManager::CreateStagingBuffer(BufferResource& res, void* data, VkDevic
 
 void BufferManager::CreateIndexBuffer(BufferResource& res, void* data, VkDeviceSize size) {
     BufferDesc desc;
-    desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     desc.size = size;
     BufferManager::CreateStaged(desc, res, data);
@@ -92,7 +92,7 @@ void BufferManager::CreateIndexBuffer(BufferResource& res, void* data, VkDeviceS
 
 void BufferManager::CreateVertexBuffer(BufferResource& res, void* data, VkDeviceSize size) {
     BufferDesc desc;
-    desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     desc.size = size;
     BufferManager::CreateStaged(desc, res, data);
@@ -103,11 +103,7 @@ void BufferManager::CreateUniformBuffer(UniformBuffer& uniform, VkDeviceSize siz
     u64 numFrames = SwapChain::GetNumFrames();
     BufferDesc bufferDesc;
     VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minUniformBufferOffsetAlignment;
-    VkDeviceSize sizeRemain = size % minOffset;
-    uniform.sectionSize = size;
-    if (sizeRemain > 0) {
-        uniform.sectionSize += minOffset - sizeRemain;
-    }
+    uniform.sectionSize = ALIGN_AS(size, minOffset);
     bufferDesc.size = uniform.sectionSize * numFrames;
     bufferDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     bufferDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -153,4 +149,11 @@ void BufferManager::DestroyStorageBuffer(StorageBuffer& buffer) {
 
 void BufferManager::UpdateStorage(StorageBuffer& buffer, int numFrame, void* data) {
     BufferManager::Update(buffer.resource, data, numFrame * buffer.sectionSize, buffer.dataSize);
+}
+
+VkDeviceAddress BufferManager::GetAddress(BufferResource& res) {
+    VkBufferDeviceAddressInfo info{};
+    info.buffer = res.buffer;
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    return vkGetBufferDeviceAddress(LogicalDevice::GetVkDevice(), &info);
 }

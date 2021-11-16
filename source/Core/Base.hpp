@@ -17,6 +17,8 @@ using f32 = float;
 using f64 = double;
 using RID = u32;
 
+#define ALIGN_AS(size, alignment) (size) % (alignment) > 0 ? (size) + (alignment) - (size) % (alignment) : (size)
+
 #ifdef _WIN32
     #ifndef _WIN64
         #error "x86 not supported!"

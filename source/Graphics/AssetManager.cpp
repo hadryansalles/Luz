@@ -143,6 +143,7 @@ void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
 void AssetManager::InitializeMesh(RID rid) {
     MeshResource& res = meshes[rid];
     MeshDesc& desc = meshDescs[rid];
+    res.vertexCount = desc.vertices.size();
     res.indexCount = desc.indices.size();
     BufferManager::CreateVertexBuffer(res.vertexBuffer, desc.vertices.data(), sizeof(desc.vertices[0]) * desc.vertices.size());
     BufferManager::CreateIndexBuffer(res.indexBuffer, desc.indices.data(), sizeof(desc.indices[0]) * desc.indices.size());

@@ -48,4 +48,6 @@ public:
     static void CreateStorageBuffer(StorageBuffer& uniform, VkDeviceSize dataSize);
     static void DestroyStorageBuffer(StorageBuffer& uniform);
     static void UpdateStorage(StorageBuffer& uniform, int numFrame, void* data);
+
+    static VkDeviceAddress GetAddress(BufferResource& res);
 };
