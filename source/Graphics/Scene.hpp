@@ -34,11 +34,24 @@ struct SceneBlock {
     u32 numLights = 0;
 };
 
+struct MaterialBlock {
+    glm::vec3 color  = glm::vec3(0.4, 0.4, 0.4);
+    float specular   = 0.5;
+
+    float emission   = 0;
+    float opacity    = 1;
+    float metallic   = 0;
+    float roughness  = 0.4;
+
+    RID colorMap     = 0;
+    RID normalMap    = 1;
+    RID metallicMap  = 1;
+    RID roughnessMap = 1;
+};
+
 struct ModelBlock {
-    glm::mat4 model     = glm::mat4(1.0f);
-    glm::vec4 colors[2] = { glm::vec4(1.0f), glm::vec4(1.0f) };
-    f32 values[2]       = { .0f, .0f };
-    RID textures[2]     = { 0, 0 };
+    glm::mat4 model = glm::mat4(1.0f);
+    MaterialBlock material;
 };
 
 struct ConstantsBlock {
@@ -67,16 +80,14 @@ enum LightType {
     Spot
 };
 
-enum class Material {
-    Phong,
-    Unlit
-};
-
 struct Model : Entity {
     RID id = 0;
     RID mesh = 0;
     ModelBlock block;
-    Material material = Material::Phong;
+    bool useColorMap = true;
+    bool useNormalMap = true;
+    bool useMetallicMap = true;
+    bool useRoughnessMap = true;
 };
 
 struct Light : Entity {

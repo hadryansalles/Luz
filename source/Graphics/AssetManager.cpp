@@ -199,22 +199,38 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
         LOG_ERROR("{} {}", warn, err);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
-    std::vector<RID> diffuseTextures(materials.size());
-    std::vector<RID> specularTextures(materials.size());
+    // convert obj material to my material
+    auto avg = [](const tinyobj::real_t value[3]) {return (value[0] + value[1] + value[2]) / 3.0f; };
+    auto toVec3 = [](const tinyobj::real_t value[3]) {return glm::vec3(value[0], value[1], value[2]); };
+    std::vector<MaterialBlock> materialBlocks(materials.size());
     for (size_t i = 0; i < materials.size(); i++) {
+        materialBlocks[i].color     = toVec3(materials[i].diffuse);
+        materialBlocks[i].specular  = avg(materials[i].specular);
+        if (materialBlocks[i].specular == 0) {
+            materialBlocks[i].specular = 0.5;
+        }
+        materialBlocks[i].emission  = avg(materials[i].emission);
+        // materialBlocks[i].opacity   = materials[i].dissolve;
+        materialBlocks[i].metallic  = materials[i].metallic;
+        materialBlocks[i].roughness = materials[i].roughness;
         if (materials[i].diffuse_texname != "") {
             std::filesystem::path copyPath = parentPath;
-            diffuseTextures[i] = AssetManager::LoadTexture(copyPath.append(materials[i].diffuse_texname));
+            materialBlocks[i].colorMap = AssetManager::LoadTexture(copyPath.append(materials[i].diffuse_texname));
+            materialBlocks[i].color = glm::vec3(1.0);
         }
-        else {
-            diffuseTextures[i] = 1;
-        }
-        if (materials[i].specular_texname != "") {
+        if (materials[i].normal_texname != "") {
             std::filesystem::path copyPath = parentPath;
-            specularTextures[i] = AssetManager::LoadTexture(copyPath.append(materials[i].specular_texname));
+            materialBlocks[i].normalMap = AssetManager::LoadTexture(copyPath.append(materials[i].normal_texname));
         }
-        else {
-            specularTextures[i] = 1;
+        if (materials[i].metallic_texname != "") {
+            std::filesystem::path copyPath = parentPath;
+            materialBlocks[i].metallicMap = AssetManager::LoadTexture(copyPath.append(materials[i].metallic_texname));
+            materialBlocks[i].metallic = 1.0f;
+        }
+        if (materials[i].roughness_texname != "") {
+            std::filesystem::path copyPath = parentPath;
+            materialBlocks[i].roughnessMap = AssetManager::LoadTexture(copyPath.append(materials[i].roughness_texname));
+            materialBlocks[i].roughness = 1.0f;
         }
     }
     if (warn != "") {
@@ -281,13 +297,7 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
                     model.mesh = meshRID;
                     model.transform.SetPosition(meshDescs[meshRID].center);
                     if (lastMaterialId != -1) {
-                        auto diffuse = materials[lastMaterialId].diffuse;
-                        auto specular = materials[lastMaterialId].specular;
-                        model.block.values[0] = materials[lastMaterialId].shininess;
-                        model.block.colors[0] = glm::vec4(diffuse[0], diffuse[1], diffuse[2], 1.0);
-                        model.block.colors[1] = glm::vec4(specular[0], specular[1], specular[2], 1.0);
-                        model.block.textures[0] = diffuseTextures[lastMaterialId];
-                        model.block.textures[1] = specularTextures[lastMaterialId];
+                        model.block.material = materialBlocks[lastMaterialId];
                     }
                     loadedModelsLock.lock();
                     loadedModels.push_back(model);

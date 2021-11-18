@@ -1,17 +1,17 @@
 #include "Luzpch.hpp"
 
-#include "PhongGraphicsPipeline.hpp"
+#include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
 #include "AssetManager.hpp"
 
-void PhongGraphicsPipeline::Setup() {
-    desc.name = "Phong";
+void PBRGraphicsPipeline::Setup() {
+    desc.name = "PBR";
 
     desc.shaderStages.resize(2);
-    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/phong.vert.spv");
+    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/pbr.vert.spv");
     desc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/phong.frag.spv");
+    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/pbr.frag.spv");
     desc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     desc.bindingDesc = MeshVertex::getBindingDescription();
@@ -71,15 +71,15 @@ void PhongGraphicsPipeline::Setup() {
     desc.colorBlendState.blendConstants[3] = 0.0f;
 }
 
-void PhongGraphicsPipeline::Create() {
+void PBRGraphicsPipeline::Create() {
     desc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
     GraphicsPipelineManager::CreatePipeline(desc, res);
 }
 
-void PhongGraphicsPipeline::Destroy() {
+void PBRGraphicsPipeline::Destroy() {
     GraphicsPipelineManager::DestroyPipeline(res);
 }
 
-void PhongGraphicsPipeline::OnImgui() {
+void PBRGraphicsPipeline::OnImgui() {
     GraphicsPipelineManager::OnImgui(desc, res);
 }

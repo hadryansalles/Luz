@@ -17,6 +17,8 @@ layout(push_constant) uniform ConstantsBlock{
 #define LIGHT_TYPE_DIRECTIONAL 1
 #define LIGHT_TYPE_SPOT 2
 
+#define PI 3.14159265359
+
 struct LightBlock {
     vec3 color;
     float intensity;
@@ -29,9 +31,16 @@ struct LightBlock {
 
 struct ModelBlock {
     mat4 modelMat;
-    vec4 colors[2];
-    float values[2];
-    int textures[2];
+    vec3 color;
+    float specular;
+    float emission;
+    float opacity;
+    float metallic;
+    float roughness;
+    int colorMap;
+    int normalMap;
+    int metallicMap;
+    int roughnessMap;
 };
 
 layout(set = 0, binding = 0) uniform sampler2D textures[];

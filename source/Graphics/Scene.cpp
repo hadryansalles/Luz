@@ -23,8 +23,10 @@ void Setup() {
     DeleteModel(dirModel);
     DeleteModel(spotModel);
 
-    AssetManager::AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
-    AssetManager::AsyncLoadModels("assets/ignore/dragon.obj");
+    // AssetManager::AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
+    // AssetManager::AsyncLoadModels("assets/cube.obj");
+    AssetManager::AsyncLoadModels("assets/ignore/coffee_cart/coffee_cart.obj");
+    // AssetManager::AsyncLoadModels("assets/ignore/r3pu/r3pu.obj");
 }
 
 void CreateResources() {
@@ -49,14 +51,31 @@ void UpdateResources(int numFrame) {
         model->id = i;
         models[i] = model->block;
         models[i].model = model->transform.GetMatrix();
+        if (!model->useColorMap) {
+            models[i].material.colorMap = 1;
+        }
+        if (!model->useNormalMap) {
+            models[i].material.normalMap = 1;
+        }
+        if (!model->useMetallicMap) {
+            models[i].material.metallicMap = 1;
+        }
+        if (!model->useRoughnessMap) {
+            models[i].material.roughnessMap = 1;
+        }
     }
     for (int i = 0; i < lightEntities.size(); i++) {
         int id = i + modelEntities.size();
         Light* light = lightEntities[i];
         light->id = id;
         models[id].model = light->transform.GetMatrix();
-        models[id].colors[0] = glm::vec4(light->block.color, lightGizmosOpacity);
-        models[id].textures[0] = 1;
+        models[id].material = MaterialBlock();
+        models[id].material.color = light->block.color;
+        models[id].material.specular = 0;
+        models[id].material.emission = light->block.intensity;
+        models[id].material.opacity = lightGizmosOpacity;
+        models[id].material.roughness = 0;
+        models[id].material.colorMap = 1;
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
@@ -77,7 +96,6 @@ Model* CreateModel() {
     model->name = "Model";
     model->mesh = 0;
     model->entityType = EntityType::Model;
-    model->block.textures[0] = 0;
     entities.push_back(model);
     modelEntities.push_back(model);
     SetCollection(model, rootCollection);
@@ -90,7 +108,6 @@ Model* CreateModel(Model& copy) {
     model->block = copy.block;
     model->mesh = copy.mesh;
     model->transform = copy.transform;
-    model->material = copy.material;
     model->entityType = EntityType::Model;
     entities.push_back(model);
     modelEntities.push_back(model);
@@ -203,19 +220,35 @@ void OnImgui(Collection* collection, bool root) {
 void InspectModel(Model* model) {
     ImGui::Text("Mesh: %d", model->mesh);
     if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::ColorEdit4("Diffuse", glm::value_ptr(model->block.colors[0]));
-        bool useDiffuse = model->block.textures[0] != 1;
-        if (ImGui::Checkbox("Use texture", &useDiffuse)) {
-            model->block.textures[0] = 1;
+        if (ImGui::TreeNode("Color")) {
+            ImGui::ColorEdit3("Value", glm::value_ptr(model->block.material.color));
+            ImGui::Checkbox("Texture", &model->useColorMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.colorMap]);
+            ImGui::TreePop();
         }
-        ImGui::Separator();
-        ImGui::ColorEdit4("Specular", glm::value_ptr(model->block.colors[1]));
-        bool useSpecular = model->block.textures[1] != 1;
-        if (ImGui::Checkbox("Use texture", &useSpecular)) {
-            model->block.textures[1] = 1;
+        if (ImGui::TreeNode("Normal")) {
+            ImGui::Checkbox("Texture", &model->useNormalMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.normalMap]);
+            ImGui::TreePop();
         }
+        if (ImGui::TreeNode("Metallic")) {
+            ImGui::DragFloat("Value", &model->block.material.metallic, 0.01);
+            ImGui::Checkbox("Texture", &model->useMetallicMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.metallicMap]);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Roughness")) {
+            ImGui::DragFloat("Value", &model->block.material.roughness, 0.01);
+            ImGui::Checkbox("Texture", &model->useRoughnessMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.roughnessMap]);
+            ImGui::TreePop();
+        }
+        ImGui::DragFloat("Specular", &model->block.material.specular, 0.01);
         ImGui::Separator();
-        ImGui::DragFloat("Shineness", &model->block.values[0], 0.01f);
+        ImGui::DragFloat("Emission", &model->block.material.emission, 0.01);
+        ImGui::Separator();
+        ImGui::DragFloat("Opacity", &model->block.material.opacity, 0.001, 0, 1);
+        ImGui::Separator();
     }
 }
 

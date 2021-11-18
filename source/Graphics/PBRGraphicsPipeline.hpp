@@ -2,12 +2,7 @@
 
 #include "GraphicsPipelineManager.hpp"
 
-struct PhongMaterialUBO {
-    glm::vec4 diffuseColor;
-    glm::vec4 specularColor;
-};
-
-class PhongGraphicsPipeline {
+class PBRGraphicsPipeline {
     static inline GraphicsPipelineDesc desc{};
     static inline GraphicsPipelineResource res{};
 public:

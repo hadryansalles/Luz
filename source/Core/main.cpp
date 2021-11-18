@@ -9,8 +9,7 @@
 #include "Camera.hpp"
 #include "Shader.hpp"
 #include "GraphicsPipelineManager.hpp"
-#include "UnlitGraphicsPipeline.hpp"
-#include "PhongGraphicsPipeline.hpp"
+#include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "BufferManager.hpp"
 #include "AssetManager.hpp"
@@ -60,8 +59,7 @@ private:
 
     void Setup() {
         LUZ_PROFILE_FUNC();
-        UnlitGraphicsPipeline::Setup();
-        PhongGraphicsPipeline::Setup();
+        PBRGraphicsPipeline::Setup();
         AssetManager::Setup();
         SetupImgui();
         Scene::Setup();
@@ -81,8 +79,7 @@ private:
         SwapChain::Create();
         DEBUG_TRACE("Finish creating SwapChain.");
         GraphicsPipelineManager::Create();
-        UnlitGraphicsPipeline::Create();
-        PhongGraphicsPipeline::Create();
+        PBRGraphicsPipeline::Create();
         CreateImgui();
         createUniformProjection();
         AssetManager::Create();
@@ -112,8 +109,7 @@ private:
 
     void DestroyFrameResources() {
         LUZ_PROFILE_FUNC();
-        UnlitGraphicsPipeline::Destroy();
-        PhongGraphicsPipeline::Destroy();
+        PBRGraphicsPipeline::Destroy();
         Scene::DestroyResources();
         DestroyImgui();
 
@@ -138,14 +134,10 @@ private:
                 CreateVulkan();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
-            } else if (UnlitGraphicsPipeline::IsDirty()) {
+            } else if (PBRGraphicsPipeline::IsDirty()) {
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-                UnlitGraphicsPipeline::Destroy();
-                UnlitGraphicsPipeline::Create();
-            } else if (PhongGraphicsPipeline::IsDirty()) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-                PhongGraphicsPipeline::Destroy();
-                PhongGraphicsPipeline::Create();
+                PBRGraphicsPipeline::Destroy();
+                PBRGraphicsPipeline::Create();
             } else if (Window::IsDirty()) {
                 Window::ApplyChanges();
             }
@@ -193,8 +185,7 @@ private:
                     PhysicalDevice::OnImgui();
                     LogicalDevice::OnImgui();
                     SwapChain::OnImgui();
-                    UnlitGraphicsPipeline::OnImgui();
-                    PhongGraphicsPipeline::OnImgui();
+                    PBRGraphicsPipeline::OnImgui();
                     Scene::camera.OnImgui();
                     ImGui::EndTabItem();
                 }
@@ -260,42 +251,24 @@ private:
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        auto unlitGPO = UnlitGraphicsPipeline::GetResource();
-        auto phongGPO = PhongGraphicsPipeline::GetResource();
+        auto gpo = PBRGraphicsPipeline::GetResource();
         auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
         auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, phongGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, phongGPO.layout, 0, 1, &descriptorSet, 0, nullptr);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gpo.pipeline);
+        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
 
         for (Model* model : Scene::modelEntities) {
-            if (model->material == Material::Phong) {
-                MeshResource& mesh = AssetManager::meshes[model->mesh];
-                VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                constants.modelID = model->id;
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
-            }
+            MeshResource& mesh = AssetManager::meshes[model->mesh];
+            VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+            constants.modelID = model->id;
+            vkCmdPushConstants(commandBuffer, gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
+            vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
         }
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, unlitGPO.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, unlitGPO.layout, 0, 1, &descriptorSet, 0, nullptr);
-
-        for (Model* model : Scene::modelEntities) {
-            if (model->material == Material::Unlit) {
-                MeshResource mesh = AssetManager::meshes[model->mesh];
-                VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-                constants.modelID = model->id;
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
-            }
-        }
         if (Scene::renderLightGizmos) {
             for (Light* light : Scene::lightEntities) {
                 MeshResource& mesh = AssetManager::meshes[Scene::lightMeshes[light->block.type]];
@@ -304,7 +277,7 @@ private:
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
                 constants.modelID = light->id;
-                vkCmdPushConstants(commandBuffer, phongGPO.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
+                vkCmdPushConstants(commandBuffer, gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
             }
         } 
@@ -348,8 +321,7 @@ private:
         DestroyFrameResources();
         PhysicalDevice::OnSurfaceUpdate();
         SwapChain::Create();
-        UnlitGraphicsPipeline::Create();
-        PhongGraphicsPipeline::Create();
+        PBRGraphicsPipeline::Create();
         Scene::CreateResources();
         CreateImgui();
         createUniformProjection();
