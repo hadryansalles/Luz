@@ -31,16 +31,15 @@ struct LightBlock {
 
 struct ModelBlock {
     mat4 modelMat;
-    vec3 color;
-    float specular;
-    float emission;
-    float opacity;
+    vec4 color;
+    vec3 emission;
     float metallic;
     float roughness;
+    int aoMap;
     int colorMap;
     int normalMap;
-    int metallicMap;
-    int roughnessMap;
+    int emissionMap;
+    int metallicRoughnessMap;
 };
 
 layout(set = 0, binding = 0) uniform sampler2D textures[];

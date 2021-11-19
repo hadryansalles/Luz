@@ -95,6 +95,10 @@ class AssetManager {
     static void UpdateTexturesDescriptor(std::vector<RID>& rids);
 
     static void LoadOBJ(std::filesystem::path path);
+    static void LoadGLTF(std::filesystem::path path);
+
+    static bool IsOBJ(std::filesystem::path path);
+    static bool IsGLTF(std::filesystem::path path);
 
 public:
     static inline MeshDesc meshDescs[MAX_MESHES];
@@ -111,9 +115,10 @@ public:
 
     static void UpdateResources();
 
-    static bool IsOBJ(std::filesystem::path path);
+    static bool IsModel(std::filesystem::path path);
     static bool IsTexture(std::filesystem::path path);
 
+    static RID CreateTexture(std::string name, u8* data, u32 width, u32 height);
     static RID LoadTexture(std::filesystem::path path);
 
     static Model* LoadModel(std::filesystem::path path);

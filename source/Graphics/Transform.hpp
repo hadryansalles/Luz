@@ -13,6 +13,16 @@ struct Transform {
     bool dirty = true;
     Transform* parent = nullptr;
 
+    Transform& operator=(const Transform& rhs) {
+        this->position = rhs.position;
+        this->rotation = rhs.rotation;
+        this->scale = rhs.scale;
+        this->transform = rhs.transform;
+        this->dirty = rhs.dirty;
+        this->parent = rhs.parent;
+        return *this;
+    }
+
     void SetPosition(glm::vec3 pos) {
         position = pos;
         dirty = true;

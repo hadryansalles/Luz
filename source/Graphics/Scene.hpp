@@ -28,25 +28,23 @@ struct LightBlock {
 struct SceneBlock {
     LightBlock lights[MAX_LIGHTS];
     glm::vec3 ambientLightColor = glm::vec3(1.0f);
-    f32 ambientLightIntensity = 0.1f;
+    f32 ambientLightIntensity = 0.03f;
     glm::mat4 projView = glm::mat4(1.0f);
     glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
     u32 numLights = 0;
 };
 
 struct MaterialBlock {
-    glm::vec3 color  = glm::vec3(0.4, 0.4, 0.4);
-    float specular   = 0.5;
-
-    float emission   = 0;
-    float opacity    = 1;
-    float metallic   = 0;
-    float roughness  = 0.4;
-
-    RID colorMap     = 0;
-    RID normalMap    = 1;
-    RID metallicMap  = 1;
-    RID roughnessMap = 1;
+    glm::vec4 color = glm::vec4(1.0f);
+    glm::vec3 emission = glm::vec3(1.0f);
+    f32 metallic    = 1;
+    f32 roughness   = 1;
+    RID aoMap       = 0;
+    RID colorMap    = 0;
+    RID normalMap   = 1;
+    RID emissionMap = 1;
+    RID metallicRoughnessMap = 0;
+    u32 PADDING[2];
 };
 
 struct ModelBlock {
@@ -86,8 +84,9 @@ struct Model : Entity {
     ModelBlock block;
     bool useColorMap = true;
     bool useNormalMap = true;
-    bool useMetallicMap = true;
-    bool useRoughnessMap = true;
+    bool useMetallicRoughnessMap = true;
+    bool useEmissionMap = true;
+    bool useAoMap = true;
 };
 
 struct Light : Entity {
@@ -114,6 +113,7 @@ namespace Scene {
     inline std::vector<Model*> modelEntities;
     inline std::vector<Light*> lightEntities;
     inline Entity* selectedEntity = nullptr;
+    inline Entity* copiedEntity = nullptr;
 
     inline bool renderLightGizmos = true;
     inline float lightGizmosOpacity = 1.0f;
@@ -125,12 +125,17 @@ namespace Scene {
     void UpdateResources(int numFrame);
     void DestroyResources();
 
-    Model* CreateModel();
-    Model* CreateModel(Model& copy);
-    Light* CreateLight();
-    Collection* CreateCollection();
+    Entity* CreateEntity(Entity* copy);
+    void DeleteEntity(Entity* entity);
 
-    void DeleteModel(Model* model);
+    Model* CreateModel();
+    Model* CreateModel(Model* copy);
+
+    Light* CreateLight();
+    Light* CreateLight(Light* copy);
+
+    Collection* CreateCollection();
+    Collection* CreateCollection(Collection* copy);
 
     void RemoveFromCollection(Entity* entity);
     void SetCollection(Entity* entity, Collection* collection);

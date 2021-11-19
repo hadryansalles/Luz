@@ -8,7 +8,7 @@
 
 #include "imgui/imgui_impl_vulkan.h"
 
-void CreateTexture(TextureDesc& desc, TextureResource& res) {
+void CreateTextureResource(TextureDesc& desc, TextureResource& res) {
     u32 mipLevels = (u32)(std::floor(std::log2(std::max(desc.width, desc.height)))) + 1;
     ImageManager::Create(desc.data, desc.width, desc.height, 4, mipLevels, res.image);
     res.sampler = CreateSampler(mipLevels);
@@ -16,7 +16,7 @@ void CreateTexture(TextureDesc& desc, TextureResource& res) {
     res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
 }
 
-void DestroyTexture(TextureResource& res) {
+void DestroyTextureResource(TextureResource& res) {
     ImageManager::Destroy(res.image);
     vkDestroySampler(LogicalDevice::GetVkDevice(), res.sampler, Instance::GetAllocator());
     res.sampler = VK_NULL_HANDLE;

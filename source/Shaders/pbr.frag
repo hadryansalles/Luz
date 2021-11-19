@@ -74,15 +74,18 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
 }
 
 void main() {
-    vec4 rgbaAlbedo = texture(textures[model.colorMap], fragTexCoord)*vec4(model.color, 1);
-    vec3 albedo = rgbaAlbedo.rgb;
-    float roughness = (texture(textures[model.roughnessMap], fragTexCoord)).r*model.roughness;
-    float metallic = (texture(textures[model.metallicMap], fragTexCoord)).r*model.metallic;
-    float specular = model.specular;
+    vec4 albedo = texture(textures[model.colorMap], fragTexCoord)*model.color;
+    vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
+    vec4 emission = texture(textures[model.emissionMap], fragTexCoord)*vec4(model.emission, 1.0);
+    float occlusion = texture(textures[model.aoMap], fragTexCoord).r;
+    float roughness = metallicRoughness.g*model.roughness;
+    float metallic = metallicRoughness.b*model.metallic;
+    // outColor = vec4(0, roughness, metallic, 1);
+    // return;
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(scene.camPos - fragPos.xyz);
     vec3 F0 = vec3(0.04);
-    F0 = mix(F0, albedo, metallic);
+    F0 = mix(F0, albedo.rgb, metallic);
 
     vec3 Lo = vec3(0.0);
     for(int i = 0; i < scene.numLights; i++) {
@@ -94,7 +97,7 @@ void main() {
             float attenuation = 1.0 / (dist*dist);
             vec3 radiance = light.color * light.intensity * attenuation;
 
-            float NDF = DistributionGGX(N, H, model.roughness);
+            float NDF = DistributionGGX(N, H, roughness);
             float G = GeometrySmith(N, V, L, roughness);
             vec3 F = FresnelSchlick(clamp(dot(H, V), 0.0, 1.0), F0);
 
@@ -107,14 +110,12 @@ void main() {
             kD *= 1.0 - metallic;
 
             float NdotL = max(dot(N, L), 0.0);
-            Lo += (kD * albedo / PI + spec)*radiance*NdotL;
+            Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
         }
     }
 
-    Lo += albedo*model.emission;
-    float alpha = rgbaAlbedo.a * model.opacity;
-    vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo;
-    vec3 color = ambient + Lo;
+    vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion;
+    vec3 color = ambient + Lo + emission.rgb;
     color = color / (color + vec3(1.0));
-    outColor = vec4(pow(color, vec3(1.0/2.2)), alpha);
+    outColor = vec4(pow(color, vec3(1.0/2.2)), albedo.a);
 }

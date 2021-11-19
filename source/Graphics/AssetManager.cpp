@@ -7,13 +7,27 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
+#define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#// include <stb_image.h>
+#include <tiny_gltf.h>
+
 #include <imgui/imgui_impl_vulkan.h>
 
 void AssetManager::Setup() {
-    LoadTexture("assets/default.png");
-    LoadTexture("assets/white.png");
+    u8* whiteTexture = new u8[4];
+    whiteTexture[0] = 255;
+    whiteTexture[1] = 255;
+    whiteTexture[2] = 255;
+    whiteTexture[3] = 255;
+    u8* blackTexture = new u8[4];
+    blackTexture[0] = 0;
+    blackTexture[1] = 0;
+    blackTexture[2] = 0;
+    blackTexture[3] = 255;
+    CreateTexture("White", whiteTexture, 1, 1);
+    CreateTexture("Black", blackTexture, 1, 1);
 }
 
 void AssetManager::Create() {
@@ -31,7 +45,7 @@ void AssetManager::Destroy() {
     meshesLock.unlock();
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
-        DestroyTexture(textures[i]);
+        DestroyTextureResource(textures[i]);
         unintializedTextures.push_back(i);
     }
     texturesLock.unlock();
@@ -48,7 +62,7 @@ void AssetManager::Finish() {
     meshesLock.unlock();
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
-        stbi_image_free(textureDescs[i].data);
+        delete textureDescs[i].data;
         textureDescs[i] = TextureDesc();
     }
     nextTextureRID = 0;
@@ -175,12 +189,11 @@ void AssetManager::RecenterMesh(RID rid) {
 void AssetManager::InitializeTexture(RID id) {
     TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
-    CreateTexture(desc, res);
+    CreateTextureResource(desc, res);
 }
 
-bool AssetManager::IsOBJ(std::filesystem::path path) {
-    std::string extension = path.extension().string();
-    return extension == ".obj" || extension == ".OBJ";
+bool AssetManager::IsModel(std::filesystem::path path) {
+    return IsOBJ(path) || IsGLTF(path);
 }
 
 bool AssetManager::IsTexture(std::filesystem::path path) {
@@ -201,37 +214,20 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
     }
     // convert obj material to my material
     auto avg = [](const tinyobj::real_t value[3]) {return (value[0] + value[1] + value[2]) / 3.0f; };
-    auto toVec3 = [](const tinyobj::real_t value[3]) {return glm::vec3(value[0], value[1], value[2]); };
     std::vector<MaterialBlock> materialBlocks(materials.size());
     for (size_t i = 0; i < materials.size(); i++) {
-        materialBlocks[i].color     = toVec3(materials[i].diffuse);
-        materialBlocks[i].specular  = avg(materials[i].specular);
-        if (materialBlocks[i].specular == 0) {
-            materialBlocks[i].specular = 0.5;
-        }
-        materialBlocks[i].emission  = avg(materials[i].emission);
-        // materialBlocks[i].opacity   = materials[i].dissolve;
+        materialBlocks[i].color = glm::vec4(glm::make_vec3(materials[i].diffuse), 1);
+        materialBlocks[i].emission  = glm::make_vec3(materials[i].emission);
         materialBlocks[i].metallic  = materials[i].metallic;
+        if (materials[i].specular != 0) {
+            materialBlocks[i].roughness = 1.0f - avg(materials[i].specular);
+        }
         materialBlocks[i].roughness = materials[i].roughness;
-        if (materials[i].diffuse_texname != "") {
-            std::filesystem::path copyPath = parentPath;
-            materialBlocks[i].colorMap = AssetManager::LoadTexture(copyPath.append(materials[i].diffuse_texname));
-            materialBlocks[i].color = glm::vec3(1.0);
-        }
-        if (materials[i].normal_texname != "") {
-            std::filesystem::path copyPath = parentPath;
-            materialBlocks[i].normalMap = AssetManager::LoadTexture(copyPath.append(materials[i].normal_texname));
-        }
-        if (materials[i].metallic_texname != "") {
-            std::filesystem::path copyPath = parentPath;
-            materialBlocks[i].metallicMap = AssetManager::LoadTexture(copyPath.append(materials[i].metallic_texname));
-            materialBlocks[i].metallic = 1.0f;
-        }
-        if (materials[i].roughness_texname != "") {
-            std::filesystem::path copyPath = parentPath;
-            materialBlocks[i].roughnessMap = AssetManager::LoadTexture(copyPath.append(materials[i].roughness_texname));
-            materialBlocks[i].roughness = 1.0f;
-        }
+        // if (materials[i].diffuse_texname != "") {
+        //     std::filesystem::path copyPath = parentPath;
+        //     materialBlocks[i].colorMap = AssetManager::LoadTexture(copyPath.append(materials[i].diffuse_texname));
+        //     materialBlocks[i].color = glm::vec3(1.0);
+        // }
     }
     if (warn != "") {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
@@ -312,6 +308,229 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
     }
 }
 
+void AssetManager::LoadGLTF(std::filesystem::path path) {
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    bool ret = false;
+    if (path.extension() == ".gltf") {
+        ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+    }
+    else {
+        ret = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
+    }
+
+    if (!warn.empty()) {
+      LOG_WARN("Warn: {}", warn.c_str());
+    }
+
+    if (!err.empty()) {
+      LOG_ERROR("Err: {}", err.c_str());
+    }
+
+    if (!ret) {
+      LOG_ERROR("Failed to parse glTF");
+      return;
+    }
+
+    const tinygltf::Scene& scene = model.scenes[model.defaultScene];
+    const auto getBuffer = [&](auto& accessor, auto& view) { return &model.buffers[view.buffer].data[view.byteOffset + accessor.byteOffset]; };
+
+    std::vector<RID> loadedTextures(model.textures.size());
+    for (int i = 0; i < model.textures.size(); i++) {
+
+        tinygltf::Texture texture = model.textures[i];
+        tinygltf::Image image = model.images[texture.source];
+        unsigned char* buffer = new unsigned char[image.width * image.height * 4];
+        if (image.component == 3) {
+            unsigned char* rgba = buffer; 
+            unsigned char* rgb = image.image.data();
+            for (u32 j = 0; j < image.width * image.height; j++) {
+                rgba[0] = rgb[0];
+                rgba[1] = rgb[1];
+                rgba[2] = rgb[2];
+                rgba += 4;
+                rgb += 3;
+            }
+        } else {
+            memcpy(buffer, image.image.data(), image.width * image.height * 4);
+        }
+
+        loadedTextures[i] = NewTexture();
+        TextureDesc& desc = textureDescs[loadedTextures[i]];
+        desc.data = buffer;
+        desc.width = image.width;
+        desc.height = image.height;
+        desc.path = texture.name;
+    }
+
+    std::vector<MaterialBlock> materials(model.materials.size());
+
+    for (int i = 0; i < materials.size(); i++) {
+        auto& mat = model.materials[i];
+        // pbr
+        if (mat.values.find("baseColorTexture") != mat.values.end()) {
+            materials[i].colorMap = loadedTextures[mat.values["baseColorTexture"].TextureIndex()];
+        }
+        if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
+            materials[i].metallicRoughnessMap = loadedTextures[mat.values["metallicRoughnessTexture"].TextureIndex()];
+        }
+        if (mat.values.find("baseColorFactor") != mat.values.end()) {
+            materials[i].color = glm::make_vec4(mat.values["baseColorFactor"].ColorFactor().data());
+        }
+        if (mat.values.find("roughnessFactor") != mat.values.end()) {
+            materials[i].roughness = mat.values["roughnessFactor"].Factor();
+        }
+        if (mat.values.find("metallicFactor") != mat.values.end()) {
+            materials[i].metallic = mat.values["metallicFactor"].Factor();
+        }
+        // additional
+        if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
+            materials[i].normalMap = loadedTextures[mat.additionalValues["normalTexture"].TextureIndex()];
+        }
+        if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
+            materials[i].emissionMap = loadedTextures[mat.additionalValues["emissiveTexture"].TextureIndex()];
+        }
+        if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
+            materials[i].aoMap = loadedTextures[mat.additionalValues["occlusionTexture"].TextureIndex()];
+        }
+        if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
+            materials[i].emission = glm::make_vec3(mat.additionalValues["emissiveFactor"].ColorFactor().data());
+        }
+    }
+
+    Collection* sceneCollection = nullptr;
+    if (model.meshes.size() > 1) {
+        sceneCollection = Scene::CreateCollection();
+        sceneCollection->name = path.stem().string();
+    }
+    for (const tinygltf::Mesh & mesh : model.meshes) {
+        Collection* collection = nullptr;
+        if (mesh.primitives.size() > 1) {
+            collection = Scene::CreateCollection();
+            if (sceneCollection) {
+                Scene::SetCollection(collection, sceneCollection);
+            }
+            collection->name = mesh.name != "" ? mesh.name : path.stem().string();
+        }
+        for (int i = 0; i < mesh.primitives.size(); i++) { 
+            const tinygltf::Primitive& primitive = mesh.primitives[i];
+            MeshDesc desc{};
+            desc.name = mesh.name != "" ? mesh.name : path.stem().string();
+            desc.name += "_" + std::to_string(i);
+            desc.path = path;
+
+            float* bufferPos = nullptr;
+            float* bufferNormals = nullptr;
+            float* bufferTangents = nullptr;
+            float* bufferUV = nullptr;
+
+            int stridePos = 0;
+            int strideNormals = 0;
+            int strideTangents = 0;
+            int strideUV = 0;
+
+            u32 vertexCount = 0;
+            u32 indexCount = 0;
+
+            // position
+            {
+                auto it = primitive.attributes.find("POSITION");
+                DEBUG_ASSERT(it != primitive.attributes.end(), "Primitive don't have position attribute");
+                const tinygltf::Accessor accessor = model.accessors[it->second];
+                const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                bufferPos = (float*)getBuffer(accessor, bufferView);
+                stridePos = accessor.ByteStride(bufferView)/sizeof(float);
+                vertexCount = accessor.count;
+            }
+
+            // normal
+            {
+                auto it = primitive.attributes.find("NORMAL");
+                if (it != primitive.attributes.end()) {
+                    const tinygltf::Accessor accessor = model.accessors[it->second];
+                    const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                    bufferNormals = (float*)getBuffer(accessor, bufferView);
+                    strideNormals = accessor.ByteStride(bufferView)/sizeof(float);
+                }
+            }
+
+            // uvs
+            {
+                auto it = primitive.attributes.find("TEXCOORD_0");
+                if (it != primitive.attributes.end()) {
+                    const tinygltf::Accessor accessor = model.accessors[it->second];
+                    const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                    bufferUV = (float*)getBuffer(accessor, bufferView);
+                    strideUV = accessor.ByteStride(bufferView)/sizeof(float);
+                }
+            }
+
+            // vertices
+            for (u32 v = 0; v < vertexCount; v++) {
+                MeshVertex vertex{};
+                vertex.pos = glm::make_vec3(&bufferPos[v * stridePos]);
+                vertex.normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * strideNormals]) : glm::vec3(0);
+                vertex.texCoord = bufferUV ? glm::make_vec3(&bufferUV[v * strideUV]) : glm::vec3(0);
+                desc.vertices.push_back(vertex);
+            }
+
+            // indices
+            DEBUG_ASSERT(primitive.indices > -1, "Non indexed primitive not supported!");
+            {
+                const tinygltf::Accessor accessor = model.accessors[primitive.indices];
+                const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                indexCount = accessor.count;
+                auto pushIndices = [&](auto* bufferIndex) {
+                    for (u32 i = 0; i < indexCount; i++) {
+                        desc.indices.push_back(bufferIndex[i]);
+                    }
+                };
+                switch (accessor.componentType) {
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+                    pushIndices((u32*)getBuffer(accessor, bufferView));
+                    break;
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+                    pushIndices((u16*)getBuffer(accessor, bufferView));
+                    break;
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+                    pushIndices((u8*)getBuffer(accessor, bufferView));
+                    break;
+                default:
+                    DEBUG_ASSERT(false, "Index type not supported!");
+                }
+            }
+            RID meshID = NewMesh();
+            Model model;
+            model.name = desc.name;
+            model.mesh = meshID;
+            model.parent = collection;
+            if (!collection) {
+                model.parent = sceneCollection;
+            }
+            if (primitive.material > -1) {
+                model.block.material = materials[primitive.material];
+            }
+            loadedModelsLock.lock();
+            loadedModels.push_back(model);
+            loadedModelsLock.unlock();
+            meshDescs[meshID] = std::move(desc);
+        }
+    }
+}
+
+RID AssetManager::CreateTexture(std::string name, u8* data, u32 width, u32 height) {
+    RID rid = NewTexture();
+    TextureDesc& desc = textureDescs[rid];
+    desc.data = data;
+    desc.width = width;
+    desc.height = height;
+    desc.path = name;
+    return rid;
+}
+
 RID AssetManager::LoadTexture(std::filesystem::path path) {
     // check if texture is already loaded
     RID rid = 0;
@@ -336,6 +555,10 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
         return 0;
     }
 
+    if (texChannels == 3) {
+        LOG_ERROR("RGB textures may not be supported!");
+    }
+
     // create texture desc
     rid = NewTexture();
     TextureDesc& desc = textureDescs[rid];
@@ -357,7 +580,8 @@ std::vector<Model*> AssetManager::LoadModels(std::filesystem::path path) {
     if (loadedModels.size() != 0) {
         LOG_WARN("Sync load models with loaded models waiting to fetch...");
     }
-    LoadOBJ(path);
+    if (IsOBJ(path)) { LoadOBJ(path); }
+    else if (IsGLTF(path)) { LoadGLTF(path); }
     return GetLoadedModels();
 }
 
@@ -368,13 +592,22 @@ std::vector<Model*> AssetManager::GetLoadedModels() {
     loadedModelsLock.unlock();
     std::vector<Model*> newModels(models.size());
     for (int i = 0; i < models.size(); i++) {
-        newModels[i] = Scene::CreateModel(models[i]);
+        newModels[i] = Scene::CreateModel(&models[i]);
     }
     return newModels;
 }
 
+bool AssetManager::IsOBJ(std::filesystem::path path) {
+    return path.extension() == ".obj";
+}
+
+bool AssetManager::IsGLTF(std::filesystem::path path) {
+    return path.extension() == ".gltf" || path.extension() == ".glb";
+}
+
 void AssetManager::AsyncLoadModels(std::filesystem::path path) {
-    std::thread(LoadOBJ, path).detach();
+    if (IsOBJ(path)) { std::thread(LoadOBJ, path).detach(); }
+    else if (IsGLTF(path)) { std::thread(LoadGLTF, path).detach(); }
 }
 
 void DirOnImgui(std::filesystem::path path) {
@@ -389,9 +622,9 @@ void DirOnImgui(std::filesystem::path path) {
                 ImGui::PushID(filePath.c_str());
                 if (ImGui::Selectable(fileName.c_str())) {
                 }
-                if (AssetManager::IsOBJ(entry.path())) {
+                if (AssetManager::IsModel(entry.path())) {
                     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-                        ImGui::SetDragDropPayload("model", filePath.c_str(), filePath.size());
+                        ImGui::SetDragDropPayload("mesh", filePath.c_str(), filePath.size());
                         ImGui::Text(fileName.c_str());
                         ImGui::EndDragDropSource();
                     }
@@ -414,7 +647,7 @@ void AssetManager::OnImgui() {
     const float totalWidth = ImGui::GetContentRegionAvailWidth();
     const float leftSpacing = ImGui::GetContentRegionAvailWidth()*1.0f/3.0f;
     if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) { 
-        DirOnImgui(std::filesystem::path("assets").parent_path());
+        DirOnImgui(std::filesystem::path("assets"));
     }
     if (ImGui::CollapsingHeader("Meshes")) {
         for (int i = 0; i < nextMeshRID; i++) {
@@ -444,11 +677,15 @@ void AssetManager::OnImgui() {
         for (RID rid = 0; rid < nextTextureRID; rid++) {
             ImGui::PushID(rid);
             if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                    ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
+                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::EndDragDropSource();
+                }
                 DrawTextureOnImgui(textures[rid]);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    std::string texturePath = textureDescs[rid].path.string();
-                    ImGui::SetDragDropPayload("texture", texturePath.c_str(), texturePath.size());
-                    DrawTextureOnImgui(textures[rid]);
+                    ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
+                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
                 ImGui::TreePop();

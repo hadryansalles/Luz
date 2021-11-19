@@ -2,11 +2,15 @@
 #include "Scene.hpp"
 #include "AssetManager.hpp"
 #include "GraphicsPipelineManager.hpp"
+#include "Window.hpp"
 
 #include <imgui/imgui_stdlib.h>
 
 namespace Scene {
- 
+
+void AcceptMeshPayload();
+void AcceptTexturePayload(RID& textureID);
+
 void Setup() {
     LUZ_PROFILE_FUNC();
     rootCollection = new Collection();
@@ -19,13 +23,22 @@ void Setup() {
     Scene::lightMeshes[0] = pointModel->mesh;
     Scene::lightMeshes[1] = dirModel->mesh;
     Scene::lightMeshes[2] = spotModel->mesh;
-    DeleteModel(pointModel);
-    DeleteModel(dirModel);
-    DeleteModel(spotModel);
+    DeleteEntity(pointModel);
+    DeleteEntity(dirModel);
+    DeleteEntity(spotModel);
 
+    // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
+    // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
+    // AssetManager::LoadModels("assets/ignore/cube.glb");
+    // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
+    // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");
+    // AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
+    // AssetManager::LoadModels("assets/ignore/helmet/SciFiHelmet.gltf");
+    // AssetManager::LoadModels("assets/ignore/head/scene.gltf");
+    // AssetManager::LoadModels("assets/ignore/sphere.glb");
     // AssetManager::AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
     // AssetManager::AsyncLoadModels("assets/cube.obj");
-    AssetManager::AsyncLoadModels("assets/ignore/coffee_cart/coffee_cart.obj");
+    // AssetManager::AsyncLoadModels("assets/ignore/coffee_cart/coffee_cart.obj");
     // AssetManager::AsyncLoadModels("assets/ignore/r3pu/r3pu.obj");
 }
 
@@ -52,16 +65,19 @@ void UpdateResources(int numFrame) {
         models[i] = model->block;
         models[i].model = model->transform.GetMatrix();
         if (!model->useColorMap) {
-            models[i].material.colorMap = 1;
+            models[i].material.colorMap = 0;
         }
         if (!model->useNormalMap) {
-            models[i].material.normalMap = 1;
+            models[i].material.normalMap = 0;
         }
-        if (!model->useMetallicMap) {
-            models[i].material.metallicMap = 1;
+        if (!model->useMetallicRoughnessMap) {
+            models[i].material.metallicRoughnessMap = 0;
         }
-        if (!model->useRoughnessMap) {
-            models[i].material.roughnessMap = 1;
+        if (!model->useEmissionMap) {
+            models[i].material.emissionMap = 0;
+        }
+        if (!model->useAoMap) {
+            models[i].material.aoMap = 0;
         }
     }
     for (int i = 0; i < lightEntities.size(); i++) {
@@ -69,13 +85,9 @@ void UpdateResources(int numFrame) {
         Light* light = lightEntities[i];
         light->id = id;
         models[id].model = light->transform.GetMatrix();
-        models[id].material = MaterialBlock();
-        models[id].material.color = light->block.color;
-        models[id].material.specular = 0;
-        models[id].material.emission = light->block.intensity;
-        models[id].material.opacity = lightGizmosOpacity;
-        models[id].material.roughness = 0;
-        models[id].material.colorMap = 1;
+        models[id].material.color = glm::vec4(0, 0, 0, lightGizmosOpacity);
+        models[id].material.emission = light->block.color * light->block.intensity;
+        models[id].material.emissionMap = 0;
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
@@ -102,17 +114,25 @@ Model* CreateModel() {
     return model;
 }
 
-Model* CreateModel(Model& copy) {
-    Model* model = new Model();
-    model->name = copy.name;
-    model->block = copy.block;
-    model->mesh = copy.mesh;
-    model->transform = copy.transform;
-    model->entityType = EntityType::Model;
-    entities.push_back(model);
-    modelEntities.push_back(model);
-    SetCollection(model, copy.parent);
-    return model;
+Model* CreateModel(Model* copy) {
+    Model* entity = new Model();
+
+    entity->name = copy->name;
+    entity->transform = copy->transform;
+    entity->entityType = EntityType::Model;
+    entities.push_back(entity);
+    SetCollection(entity, copy->parent);
+
+    entity->mesh = copy->mesh;
+    entity->block = copy->block;
+    entity->useAoMap = copy->useAoMap;
+    entity->useColorMap = copy->useColorMap;
+    entity->useNormalMap = copy->useNormalMap;
+    entity->useEmissionMap = copy->useEmissionMap;
+    entity->useMetallicRoughnessMap = copy->useMetallicRoughnessMap;
+    modelEntities.push_back(entity);
+
+    return entity;
 }
 
 Light* CreateLight() {
@@ -120,10 +140,25 @@ Light* CreateLight() {
     light->name = "Light";
     light->entityType = EntityType::Light;
     light->block.type = LightType::Point;
+    light->transform.SetScale(glm::vec3(0.1));
     entities.push_back(light);
     lightEntities.push_back(light);
     SetCollection(light, rootCollection);
     return light;
+}
+
+Light* CreateLight(Light* copy) {
+    Light* entity = new Light();
+
+    entity->name = copy->name;
+    entity->transform = copy->transform;
+    entity->entityType = EntityType::Light;
+    entities.push_back(entity);
+    SetCollection(entity, copy->parent);
+
+    entity->block = copy->block;
+    lightEntities.push_back(entity);
+    return entity;
 }
 
 Collection* CreateCollection() {
@@ -133,6 +168,68 @@ Collection* CreateCollection() {
     SetCollection(collection, rootCollection);
     entities.push_back(collection);
     return collection;
+}
+
+Collection* CreateCollection(Collection* copy) {
+    Collection* collection = new Collection();
+
+    collection->name = copy->name;
+    collection->transform = copy->transform;
+    collection->entityType = EntityType::Collection;
+    entities.push_back(collection);
+    SetCollection(collection, copy->parent);
+
+    for (int i = 0; i < copy->children.size(); i++) {
+        Entity* entity = CreateEntity(copy->children[i]);
+        SetCollection(entity, collection);
+    }
+    return collection;
+}
+
+Entity* CreateEntity(Entity* copy) {
+    Entity* entity = nullptr;
+    if (copy->entityType == EntityType::Collection) { 
+        entity = CreateCollection((Collection*)copy); 
+    } else if (copy->entityType == EntityType::Model) { 
+        entity = CreateModel((Model*)copy); 
+    } else if (copy->entityType == EntityType::Light) { 
+        entity = CreateLight((Light*)copy); 
+    }
+    DEBUG_ASSERT(entity != nullptr, "Entity type invalid during copy.");
+    return entity;
+}
+
+void DeleteCollection(Collection* collection) {
+    while (collection->children.size()) {
+        DeleteEntity(*collection->children.begin());
+    }
+}
+
+void DeleteEntity(Entity* entity) {
+    if (selectedEntity == entity) {
+        selectedEntity = nullptr;
+    }
+    if (copiedEntity == entity) {
+        copiedEntity = nullptr;
+    }
+    if (entity->parent != nullptr) {
+        RemoveFromCollection(entity);
+    }
+    if (entity->entityType == EntityType::Collection) {
+        DeleteCollection((Collection*)entity);
+    } else if (entity->entityType == EntityType::Model) {
+        auto it = std::find(modelEntities.begin(), modelEntities.end(), (Model*)entity);
+        DEBUG_ASSERT(it != modelEntities.end(), "Model isn't on the vector of models.");
+        modelEntities.erase(it);
+    } else if (entity->entityType == EntityType::Light) {
+        auto it = std::find(lightEntities.begin(), lightEntities.end(), (Light*)entity);
+        DEBUG_ASSERT(it != lightEntities.end(), "Model isn't on the vector of models.");
+        lightEntities.erase(it);
+    }
+    auto it = std::find(entities.begin(), entities.end(), entity);
+    DEBUG_ASSERT(it != entities.end(), "Entity isn't on the vector of entities.");
+    entities.erase(it);
+    delete entity;
 }
 
 void DeleteModel(Model* model) {
@@ -149,7 +246,6 @@ void DeleteModel(Model* model) {
         DEBUG_ASSERT(it != modelEntities.end(), "Model isn't on the vector of models.");
         modelEntities.erase(it);
     }
-    delete model;
 }
 
 void RemoveFromCollection(Entity* entity) {
@@ -174,9 +270,25 @@ void SetCollection(Entity* entity, Collection* collection) {
 }
 
 void OnImgui() {
+    bool controlPressed = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL);
+    if (selectedEntity) {
+        if(controlPressed && Window::IsKeyPressed(GLFW_KEY_C)) {
+            copiedEntity = selectedEntity;
+        }
+        if (Window::IsKeyPressed(GLFW_KEY_X)) {
+            DeleteEntity(selectedEntity);
+        }
+    }
+    if(controlPressed && Window::IsKeyPressed(GLFW_KEY_V)) {
+        if (copiedEntity != nullptr) {
+            selectedEntity = CreateEntity(copiedEntity);
+        }
+    }
     if (ImGui::CollapsingHeader("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
+        AcceptMeshPayload();
         OnImgui(rootCollection, true);
     }
+    AcceptMeshPayload();
     if (ImGui::Button("Add model")) {
         selectedEntity = CreateModel();
     }
@@ -198,6 +310,7 @@ void OnImgui(Collection* collection, bool root) {
     }
     if (open) {
         for (Entity* entity : collection->children) {
+            ImGui::PushID(entity);
             if (entity->entityType == EntityType::Collection) {
                 OnImgui((Collection*)entity);
             }
@@ -206,6 +319,7 @@ void OnImgui(Collection* collection, bool root) {
                     selectedEntity = entity;
                 }
             }
+            ImGui::PopID();
 
         }
         if (!root) {
@@ -221,34 +335,39 @@ void InspectModel(Model* model) {
     ImGui::Text("Mesh: %d", model->mesh);
     if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::TreeNode("Color")) {
-            ImGui::ColorEdit3("Value", glm::value_ptr(model->block.material.color));
-            ImGui::Checkbox("Texture", &model->useColorMap);
+            ImGui::ColorEdit3("Color", glm::value_ptr(model->block.material.color));
+            ImGui::Checkbox("Use texture", &model->useColorMap);
             DrawTextureOnImgui(AssetManager::textures[model->block.material.colorMap]);
+            AcceptTexturePayload(model->block.material.colorMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Normal")) {
-            ImGui::Checkbox("Texture", &model->useNormalMap);
+            ImGui::Checkbox("Use texture", &model->useNormalMap);
             DrawTextureOnImgui(AssetManager::textures[model->block.material.normalMap]);
+            AcceptTexturePayload(model->block.material.normalMap);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Metallic")) {
-            ImGui::DragFloat("Value", &model->block.material.metallic, 0.01);
-            ImGui::Checkbox("Texture", &model->useMetallicMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.metallicMap]);
+        if (ImGui::TreeNode("Metallic Roughness")) {
+            ImGui::DragFloat("Metallic", &model->block.material.metallic, 0.001, 0, 1);
+            ImGui::DragFloat("Roughness", &model->block.material.roughness, 0.001, 0, 1);
+            ImGui::Checkbox("Use texture", &model->useMetallicRoughnessMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.metallicRoughnessMap]);
+            AcceptTexturePayload(model->block.material.metallicRoughnessMap);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Roughness")) {
-            ImGui::DragFloat("Value", &model->block.material.roughness, 0.01);
-            ImGui::Checkbox("Texture", &model->useRoughnessMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.roughnessMap]);
+        if (ImGui::TreeNode("Emission")) {
+            ImGui::ColorEdit3("Emission", glm::value_ptr( model->block.material.emission));
+            ImGui::Checkbox("Use texture", &model->useEmissionMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.emissionMap]);
+            AcceptTexturePayload(model->block.material.emissionMap);
             ImGui::TreePop();
         }
-        ImGui::DragFloat("Specular", &model->block.material.specular, 0.01);
-        ImGui::Separator();
-        ImGui::DragFloat("Emission", &model->block.material.emission, 0.01);
-        ImGui::Separator();
-        ImGui::DragFloat("Opacity", &model->block.material.opacity, 0.001, 0, 1);
-        ImGui::Separator();
+        if (ImGui::TreeNode("Ambient Occlusion")) {
+            ImGui::Checkbox("Use texture", &model->useAoMap);
+            DrawTextureOnImgui(AssetManager::textures[model->block.material.aoMap]);
+            AcceptTexturePayload(model->block.material.aoMap);
+            ImGui::TreePop();
+        }
     }
 }
 
@@ -346,6 +465,30 @@ void RenderTransformGizmo(Transform& transform) {
     
     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.transform), glm::value_ptr(transform.position), 
         glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
+}
+
+void AcceptMeshPayload() {
+    if (ImGui::BeginDragDropTarget()) {
+        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("mesh");
+        if (payload) {
+            std::string path((const char*)payload->Data, payload->DataSize);
+            AssetManager::AsyncLoadModels(path);
+        }
+    }
+}
+
+void AcceptTexturePayload(RID& textureID) {
+    if (ImGui::BeginDragDropTarget()) {
+        const ImGuiPayload* payloadTexture = ImGui::AcceptDragDropPayload("texture");
+        if (payloadTexture) {
+            std::string path((const char*)payloadTexture->Data, payloadTexture->DataSize);
+            textureID = AssetManager::LoadTexture(path);
+        }
+        const ImGuiPayload* payloadTextureID = ImGui::AcceptDragDropPayload("textureID");
+        if (payloadTextureID) {
+            textureID = *(RID*)payloadTextureID->Data;
+        }
+    }
 }
 
 }

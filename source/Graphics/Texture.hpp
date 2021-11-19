@@ -10,6 +10,7 @@ struct TextureDesc {
     void* data                 = nullptr;
     uint32_t width             = 0;
     uint32_t height            = 0;
+
 };
 
 struct TextureResource {
@@ -18,7 +19,7 @@ struct TextureResource {
     ImTextureID   imguiRID  = nullptr;
 };
 
-void CreateTexture(TextureDesc& desc, TextureResource& res);
-void DestroyTexture(TextureResource& res);
+void CreateTextureResource(TextureDesc& desc, TextureResource& res);
+void DestroyTextureResource(TextureResource& res);
 void DrawTextureOnImgui(TextureResource& res);
 VkSampler CreateSampler(f32 maxLod);
