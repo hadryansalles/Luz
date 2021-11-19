@@ -41,7 +41,7 @@ struct MaterialBlock {
     f32 roughness   = 1;
     RID aoMap       = 0;
     RID colorMap    = 0;
-    RID normalMap   = 1;
+    RID normalMap   = 0;
     RID emissionMap = 1;
     RID metallicRoughnessMap = 0;
     u32 PADDING[2];

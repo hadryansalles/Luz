@@ -415,7 +415,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
             }
             collection->name = mesh.name != "" ? mesh.name : path.stem().string();
         }
-        for (int i = 0; i < mesh.primitives.size(); i++) { 
+        for (int i = 0; i < mesh.primitives.size(); i++) {
             const tinygltf::Primitive& primitive = mesh.primitives[i];
             MeshDesc desc{};
             desc.name = mesh.name != "" ? mesh.name : path.stem().string();
@@ -442,7 +442,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
                 const tinygltf::Accessor accessor = model.accessors[it->second];
                 const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
                 bufferPos = (float*)getBuffer(accessor, bufferView);
-                stridePos = accessor.ByteStride(bufferView)/sizeof(float);
+                stridePos = accessor.ByteStride(bufferView) / sizeof(float);
                 vertexCount = accessor.count;
             }
 
@@ -453,7 +453,18 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
                     const tinygltf::Accessor accessor = model.accessors[it->second];
                     const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
                     bufferNormals = (float*)getBuffer(accessor, bufferView);
-                    strideNormals = accessor.ByteStride(bufferView)/sizeof(float);
+                    strideNormals = accessor.ByteStride(bufferView) / sizeof(float);
+                }
+            }
+
+            // tangent
+            {
+                auto it = primitive.attributes.find("TANGENT");
+                if (it != primitive.attributes.end()) {
+                    const tinygltf::Accessor accessor = model.accessors[it->second];
+                    const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                    bufferTangents = (float*)getBuffer(accessor, bufferView);
+                    strideTangents = accessor.ByteStride(bufferView) / sizeof(float);
                 }
             }
 
@@ -464,7 +475,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
                     const tinygltf::Accessor accessor = model.accessors[it->second];
                     const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
                     bufferUV = (float*)getBuffer(accessor, bufferView);
-                    strideUV = accessor.ByteStride(bufferView)/sizeof(float);
+                    strideUV = accessor.ByteStride(bufferView) / sizeof(float);
                 }
             }
 
@@ -474,6 +485,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
                 vertex.pos = glm::make_vec3(&bufferPos[v * stridePos]);
                 vertex.normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * strideNormals]) : glm::vec3(0);
                 vertex.texCoord = bufferUV ? glm::make_vec3(&bufferUV[v * strideUV]) : glm::vec3(0);
+                vertex.tangent = bufferTangents ? glm::make_vec4(&bufferTangents[v * strideTangents]) : glm::vec4(0);
                 desc.vertices.push_back(vertex);
             }
 
@@ -502,6 +514,42 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
                     DEBUG_ASSERT(false, "Index type not supported!");
                 }
             }
+
+            // calculate tangents
+            if (!bufferTangents) {
+                glm::vec3* tan1 = new glm::vec3[desc.vertices.size()*2];
+                glm::vec3* tan2 = tan1 + vertexCount;
+                for (int indexID = 0; indexID < desc.indices.size(); indexID += 3) {
+                    int index1 = desc.indices[indexID + 0];
+                    int index2 = desc.indices[indexID + 2];
+                    int index3 = desc.indices[indexID + 1];
+                    MeshVertex& v1 = desc.vertices[index1];
+                    MeshVertex& v2 = desc.vertices[index2];
+                    MeshVertex& v3 = desc.vertices[index3];
+                    glm::vec3 e1 = v2.pos - v1.pos;
+                    glm::vec3 e2 = v3.pos - v1.pos;
+                    glm::vec2 duv1 = v2.texCoord - v1.texCoord;
+                    glm::vec2 duv2 = v3.texCoord - v1.texCoord;
+                    float f = 1.0f / (duv1.x * duv2.y - duv2.x * duv1.y);
+                    glm::vec3 sdir = f * (duv2.y * e1 - duv1.y * e2);
+                    glm::vec3 tdir = f * (duv1.x * e2 - duv2.x * e1);
+                    tan1[index1] += sdir;
+                    tan1[index2] += sdir;
+                    tan1[index3] += sdir;
+                    tan2[index1] += tdir;
+                    tan2[index2] += tdir;
+                    tan2[index3] += tdir;
+                }
+                for (int a = 0; a < desc.vertices.size(); a++) {
+                    glm::vec3 t = tan1[a];
+                    MeshVertex& v = desc.vertices[a];
+                    glm::vec3 n = v.normal;
+                    v.tangent = glm::vec4(glm::normalize(t - n * glm::dot(t, n)), 1.0);
+                    v.tangent.w = (glm::dot(glm::cross(n, t), tan2[a]) < 0.0f) ? -1.0f : 1.0f;
+                }
+                delete[] tan1;
+            }
+
             RID meshID = NewMesh();
             Model model;
             model.name = desc.name;

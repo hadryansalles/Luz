@@ -9,6 +9,7 @@
 struct MeshVertex {
     glm::vec3 pos;
     glm::vec3 normal;
+    glm::vec4 tangent;
     glm::vec2 texCoord;
 
     bool operator==(const MeshVertex& other) const {
@@ -28,7 +29,7 @@ struct MeshVertex {
     static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() {
         // describe how to extract each vertex attribute from the chunk of data
         // inside the binding description
-        std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+        std::vector<VkVertexInputAttributeDescription> attributeDescriptions(4);
         attributeDescriptions[0].binding  = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
@@ -41,8 +42,13 @@ struct MeshVertex {
 
         attributeDescriptions[2].binding  = 0;
         attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format   = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset   = offsetof(MeshVertex, texCoord);
+        attributeDescriptions[2].format   = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDescriptions[2].offset   = offsetof(MeshVertex, tangent);
+
+        attributeDescriptions[3].binding  = 0;
+        attributeDescriptions[3].location = 3;
+        attributeDescriptions[3].format   = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[3].offset   = offsetof(MeshVertex, texCoord);
 
         return attributeDescriptions;
     }

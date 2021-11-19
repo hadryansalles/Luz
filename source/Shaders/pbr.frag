@@ -6,7 +6,9 @@
 
 layout(location = 0) in vec4 fragPos;
 layout(location = 1) in vec3 fragNormal;
-layout(location = 2) in vec2 fragTexCoord;
+layout(location = 2) in vec3 fragTangent;
+layout(location = 3) in vec2 fragTexCoord;
+layout(location = 4) in mat3 fragTBN;
 
 layout(location = 0) out vec4 outColor;
 
@@ -77,12 +79,17 @@ void main() {
     vec4 albedo = texture(textures[model.colorMap], fragTexCoord)*model.color;
     vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
     vec4 emission = texture(textures[model.emissionMap], fragTexCoord)*vec4(model.emission, 1.0);
+    vec3 normalSample = texture(textures[model.normalMap], fragTexCoord).rgb;
     float occlusion = texture(textures[model.aoMap], fragTexCoord).r;
     float roughness = metallicRoughness.g*model.roughness;
     float metallic = metallicRoughness.b*model.metallic;
-    // outColor = vec4(0, roughness, metallic, 1);
-    // return;
-    vec3 N = normalize(fragNormal);
+
+    vec3 N;
+    if(fragTangent == vec3(0, 0, 0) || normalSample == vec3(1, 1, 1)) {
+        N = normalize(fragNormal); 
+    } else {
+        N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
+    }
     vec3 V = normalize(scene.camPos - fragPos.xyz);
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);

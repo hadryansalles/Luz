@@ -32,9 +32,9 @@ void Setup() {
     // AssetManager::LoadModels("assets/ignore/cube.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
     // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");
-    // AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
+     AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/SciFiHelmet.gltf");
-    // AssetManager::LoadModels("assets/ignore/head/scene.gltf");
+    //AssetManager::LoadModels("assets/ignore/head/scene.gltf");
     // AssetManager::LoadModels("assets/ignore/sphere.glb");
     // AssetManager::AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
     // AssetManager::AsyncLoadModels("assets/cube.obj");
@@ -288,7 +288,6 @@ void OnImgui() {
         AcceptMeshPayload();
         OnImgui(rootCollection, true);
     }
-    AcceptMeshPayload();
     if (ImGui::Button("Add model")) {
         selectedEntity = CreateModel();
     }

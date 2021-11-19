@@ -6,8 +6,6 @@
 #include "SwapChain.hpp"
 #include "Instance.hpp"
 #include "VulkanUtils.hpp"
-#include "UnlitGraphicsPipeline.hpp"
-
 
 void GraphicsPipelineManager::Create() {
     auto device = LogicalDevice::GetVkDevice();
