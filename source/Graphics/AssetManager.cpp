@@ -3,6 +3,7 @@
 #include "AssetManager.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "LogicalDevice.hpp"
+#include "RayTracing.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -98,6 +99,9 @@ void AssetManager::UpdateResources() {
     meshesLock.unlock();
     for (RID rid : toInitialize) {
         InitializeMesh(rid);
+    }
+    if (toInitialize.size()) {
+        RayTracing::CreateBLAS(toInitialize);
     }
 
     // initialize new textures

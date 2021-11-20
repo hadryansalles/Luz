@@ -3,6 +3,7 @@
 #include "AssetManager.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "Window.hpp"
+#include "RayTracing.hpp"
 
 #include <imgui/imgui_stdlib.h>
 
@@ -101,6 +102,7 @@ void UpdateResources(int numFrame) {
     scene.camPos = camera.GetPosition();
     scene.projView = camera.GetProj() * camera.GetView();
     UpdateBuffers(numFrame);
+    RayTracing::CreateTLAS();
 }
 
 void DestroyResources() {
@@ -116,6 +118,7 @@ Model* CreateModel() {
     entities.push_back(model);
     modelEntities.push_back(model);
     SetCollection(model, rootCollection);
+    RayTracing::SetRecreateTLAS();
     return model;
 }
 
@@ -136,7 +139,7 @@ Model* CreateModel(Model* copy) {
     entity->useEmissionMap = copy->useEmissionMap;
     entity->useMetallicRoughnessMap = copy->useMetallicRoughnessMap;
     modelEntities.push_back(entity);
-
+    RayTracing::SetRecreateTLAS();
     return entity;
 }
 
@@ -223,6 +226,7 @@ void DeleteEntity(Entity* entity) {
     if (entity->entityType == EntityType::Collection) {
         DeleteCollection((Collection*)entity);
     } else if (entity->entityType == EntityType::Model) {
+        RayTracing::SetRecreateTLAS();
         auto it = std::find(modelEntities.begin(), modelEntities.end(), (Model*)entity);
         DEBUG_ASSERT(it != modelEntities.end(), "Model isn't on the vector of models.");
         modelEntities.erase(it);

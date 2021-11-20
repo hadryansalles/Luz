@@ -13,20 +13,6 @@ void GraphicsPipelineManager::Create() {
     auto numFrames = SwapChain::GetNumFrames();
 
     VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
-
-    VkDescriptorPoolSize bufferPoolSizes[]   = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024} };
-    VkDescriptorPoolCreateInfo bufferPoolInfo{};
-    bufferPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    bufferPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    bufferPoolInfo.maxSets = (uint32_t)(1024);
-    bufferPoolInfo.poolSizeCount = 1;
-    bufferPoolInfo.pPoolSizes = bufferPoolSizes;
-
-    VkDescriptorPool bufferDescriptorPool;
-    auto result = vkCreateDescriptorPool(device, &bufferPoolInfo, allocator, &bufferDescriptorPool);
-    bufferDescriptorPools.push_back(bufferDescriptorPool);
-    DEBUG_VK(result, "Failed to create buffer descriptor pool!");
-
     VkDescriptorPoolCreateInfo imguiPoolInfo{};
     imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -34,7 +20,7 @@ void GraphicsPipelineManager::Create() {
     imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
     imguiPoolInfo.pPoolSizes = imguiPoolSizes;
 
-    result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
+    VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
     DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 
     // create bindless resources
@@ -47,7 +33,8 @@ void GraphicsPipelineManager::Create() {
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_UNIFORMS},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE}
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
+            {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1}
         };
 
         VkDescriptorPoolCreateInfo bindlessPoolInfo{};
@@ -80,6 +67,14 @@ void GraphicsPipelineManager::Create() {
         bindings.push_back(storageBuffersBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
 
+        VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+        accelerationStructureBinding.binding = ACCELERATION_STRUCTURE_BINDING;
+        accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        accelerationStructureBinding.descriptorCount = 1;
+        accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(accelerationStructureBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
         VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
         setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
         setLayoutBindingFlags.bindingCount = bindingFlags.size();
@@ -108,10 +103,6 @@ void GraphicsPipelineManager::Create() {
 }
 
 void GraphicsPipelineManager::Destroy() {
-    for (int i = 0; i < bufferDescriptorPools.size(); i++) {
-        vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), bufferDescriptorPools[i], Instance::GetAllocator());
-    }
-    bufferDescriptorPools.clear();
     vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), imguiDescriptorPool, Instance::GetAllocator());
 
     // bindless resources

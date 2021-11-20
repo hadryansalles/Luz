@@ -82,9 +82,9 @@ private:
         GraphicsPipelineManager::Create();
         PBRGraphicsPipeline::Create();
         CreateImgui();
+        RayTracing::Create();
         AssetManager::Create();
         Scene::CreateResources();
-        RayTracing::Create();
         createUniformProjection();
     }
 
@@ -101,6 +101,7 @@ private:
         auto instance = Instance::GetVkInstance();
 
         DestroyFrameResources();
+        RayTracing::Destroy();
         GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
         LogicalDevice::Destroy();

@@ -11,6 +11,8 @@
 #include "SwapChain.hpp"
 #include "PhysicalDevice.hpp"
 #include "Texture.hpp"
+#include "GraphicsPipelineManager.hpp"
+
 #include <imgui/imgui_impl_vulkan.h>
 #include <imgui/imgui.h>
 
@@ -40,6 +42,7 @@ struct RayTracingContext {
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups;
 
     bool useRayTracing = true;
+    bool recreateTLAS = false;
 
     ImageResource image;
     VkSampler sampler;
@@ -68,6 +71,7 @@ struct RayTracingContext {
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
     PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR;
     PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR;
+    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
 };
 
 struct RayTracingPushConstants {
@@ -83,20 +87,21 @@ struct RayTracingPushConstants {
 
 RayTracingContext ctx;
 
-void CreateBLAS(std::vector<Model*> models) {
+void CreateBLAS(std::vector<RID>& meshes) {
     LUZ_PROFILE_FUNC();
     VkDevice device = LogicalDevice::GetVkDevice();
 
     std::vector<BLASInput> blasInputs;
-    blasInputs.reserve(models.size());
+    blasInputs.reserve(meshes.size());
 
-    for (Model* model : models) {
-        MeshResource& mesh = AssetManager::meshes[model->mesh];
+    for (RID meshID : meshes) {
+        MeshResource& mesh = AssetManager::meshes[meshID];
 
         // BLAS builder requires raw device addresses.
         VkBufferDeviceAddressInfo vertexBufferInfo{};
         vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         vertexBufferInfo.buffer = mesh.vertexBuffer.buffer;
+        vertexBufferInfo.pNext = nullptr;
         VkDeviceAddress vertexAddress = ctx.vkGetBufferDeviceAddressKHR(device, &vertexBufferInfo);
         VkBufferDeviceAddressInfo indexBufferInfo{};
         indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -231,7 +236,7 @@ void CreateBLAS(std::vector<Model*> models) {
         }
     }
 
-    ctx.BLAS.clear();
+    // ctx.BLAS.clear();
     for(auto& b : buildAs) {
         ctx.BLAS.emplace_back(b.as);
     }
@@ -240,10 +245,24 @@ void CreateBLAS(std::vector<Model*> models) {
     LOG_INFO("Created BLAS.");
 }
 
-void CreateTLAS(std::vector<struct Model*> models) {
+void CreateTLAS() {
     LUZ_PROFILE_FUNC();
+    if (!ctx.useRayTracing) {
+        return;
+    }
     auto device = LogicalDevice::GetVkDevice();
+    bool update = ctx.TLAS.accel != VK_NULL_HANDLE;
+    
+    if (ctx.recreateTLAS) {
+        vkDeviceWaitIdle(device);
+        ctx.recreateTLAS = false;
+        update = false;
+        ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
+        ctx.TLAS.accel = VK_NULL_HANDLE;
+        BufferManager::Destroy(ctx.TLAS.buffer);
+    }
 
+    const std::vector<Model*>& models = Scene::modelEntities;
     std::vector<VkAccelerationStructureInstanceKHR> instances;
     instances.reserve(models.size());
     for (int i = 0; i < models.size(); i++) {
@@ -251,7 +270,7 @@ void CreateTLAS(std::vector<struct Model*> models) {
 
         VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-        addressInfo.accelerationStructure = ctx.BLAS[i].accel;
+        addressInfo.accelerationStructure = ctx.BLAS[model->mesh].accel;
 
         glm::mat4 modelMat = model->transform.GetMatrix();
         VkTransformMatrixKHR transform{};
@@ -278,17 +297,18 @@ void CreateTLAS(std::vector<struct Model*> models) {
         instances.emplace_back(rayInstance);
     }
 
-    VkBuildAccelerationStructureFlagsKHR flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-    DEBUG_ASSERT(ctx.TLAS.accel == VK_NULL_HANDLE, "TLAS already created!");
+    VkBuildAccelerationStructureFlagsKHR flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+    DEBUG_ASSERT(ctx.TLAS.accel == VK_NULL_HANDLE || update, "TLAS already created!");
     u32 countInstance = (u32)instances.size();
 
-    VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
     BufferDesc instancesBufferDesc;
     instancesBufferDesc.size = sizeof(VkAccelerationStructureInstanceKHR) * instances.size();
     instancesBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     instancesBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     BufferResource instancesBuffer;
     BufferManager::CreateStaged(instancesBufferDesc, instancesBuffer, instances.data());
+
+    VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
     
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -304,7 +324,6 @@ void CreateTLAS(std::vector<struct Model*> models) {
 
     // command create TLAS
     {
-        bool update = false;
         bool motion = false;
 
         // Wraps a device pointer to the above uploaded instances.
@@ -332,18 +351,49 @@ void CreateTLAS(std::vector<struct Model*> models) {
         sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
         ctx.vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &countInstance, &sizeInfo);
 
-        BufferDesc asBufferDesc;
-        asBufferDesc.size = sizeInfo.accelerationStructureSize;
-        asBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-        asBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        BufferManager::Create(asBufferDesc, ctx.TLAS.buffer);
+        if (!update) {
+            BufferDesc asBufferDesc;
+            asBufferDesc.size = sizeInfo.accelerationStructureSize;
+            asBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+            asBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+            BufferManager::Create(asBufferDesc, ctx.TLAS.buffer);
 
-        VkAccelerationStructureCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-        createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-        createInfo.size = sizeInfo.accelerationStructureSize;
-        createInfo.buffer = ctx.TLAS.buffer.buffer;
-        ctx.vkCreateAccelerationStructureKHR(device, &createInfo, nullptr, &ctx.TLAS.accel);
+            VkAccelerationStructureCreateInfoKHR createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+            createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+            createInfo.size = sizeInfo.accelerationStructureSize;
+            createInfo.buffer = ctx.TLAS.buffer.buffer;
+            ctx.vkCreateAccelerationStructureKHR(device, &createInfo, nullptr, &ctx.TLAS.accel);
+
+            VkWriteDescriptorSetAccelerationStructureKHR descriptorAccelerationStructure{};
+            descriptorAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+            descriptorAccelerationStructure.accelerationStructureCount = 1;
+            descriptorAccelerationStructure.pAccelerationStructures = &ctx.TLAS.accel;
+
+            std::vector<VkWriteDescriptorSet> writes;
+
+            VkWriteDescriptorSet writeAccelerationStructure{};
+            writeAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeAccelerationStructure.pNext = &descriptorAccelerationStructure;
+            writeAccelerationStructure.dstSet = ctx.descriptorSet;
+            writeAccelerationStructure.dstBinding = 0;
+            writeAccelerationStructure.dstArrayElement = 0;
+            writeAccelerationStructure.descriptorCount = 1;
+            writeAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+            writes.push_back(writeAccelerationStructure);
+
+            VkWriteDescriptorSet writeBindlessAccelerationStructure{};
+            writeBindlessAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeBindlessAccelerationStructure.pNext = &descriptorAccelerationStructure;
+            writeBindlessAccelerationStructure.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+            writeBindlessAccelerationStructure.dstBinding = GraphicsPipelineManager::ACCELERATION_STRUCTURE_BINDING;
+            writeBindlessAccelerationStructure.dstArrayElement = 0;
+            writeBindlessAccelerationStructure.descriptorCount = 1;
+            writeBindlessAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+            writes.push_back(writeBindlessAccelerationStructure);
+
+            vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+        }
 
         BufferDesc scratchDesc;
         scratchDesc.size = sizeInfo.buildScratchSize;
@@ -357,7 +407,7 @@ void CreateTLAS(std::vector<struct Model*> models) {
         VkDeviceAddress scratchAddress = ctx.vkGetBufferDeviceAddressKHR(device, &scratchInfo);
 
         // Update build information
-        buildInfo.srcAccelerationStructure  = VK_NULL_HANDLE;
+        buildInfo.srcAccelerationStructure  = ctx.TLAS.accel;
         buildInfo.dstAccelerationStructure  = ctx.TLAS.accel;
         buildInfo.scratchData.deviceAddress = scratchAddress;
 
@@ -375,6 +425,7 @@ void CreateTLAS(std::vector<struct Model*> models) {
 }
 
 void CreateImage() {
+    LUZ_PROFILE_FUNC();
     ImageDesc imageDesc;
     imageDesc.width = SwapChain::GetExtent().width;
     imageDesc.height = SwapChain::GetExtent().height;
@@ -418,6 +469,7 @@ void CreateImage() {
 }
 
 void CreatePipeline() {
+    LUZ_PROFILE_FUNC();
     VkDevice device = LogicalDevice::GetVkDevice();
 
     enum StageIndices {
@@ -501,6 +553,7 @@ void CreatePipeline() {
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
         poolInfo.maxSets = (uint32_t)(3);
         poolInfo.poolSizeCount = sizeof(poolSizes)/sizeof(VkDescriptorPoolSize);
         poolInfo.pPoolSizes = poolSizes;
@@ -509,22 +562,32 @@ void CreatePipeline() {
         DEBUG_VK(res, "Failed to create ray tracing descriptor pool!");
 
         VkDescriptorSetLayoutBinding bindings[2];
+        VkDescriptorBindingFlags bindingFlags[2];
         bindings[0].binding = 0;
         bindings[0].descriptorCount = 1;
         bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
         bindings[0].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
         bindings[0].pImmutableSamplers = VK_NULL_HANDLE;
+        bindingFlags[0] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
         bindings[1].binding = 1;
         bindings[1].descriptorCount = 1;
         bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         bindings[1].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
         bindings[1].pImmutableSamplers = VK_NULL_HANDLE;
+        bindingFlags[1] = 0;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+        setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        setLayoutBindingFlags.bindingCount = COUNT_OF(bindingFlags);
+        setLayoutBindingFlags.pBindingFlags = bindingFlags;
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
         layoutInfo.bindingCount = sizeof(bindings)/sizeof(VkDescriptorSetLayoutBinding);
         layoutInfo.pBindings = bindings;
+        layoutInfo.pNext = &setLayoutBindingFlags;
         res = vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &ctx.descriptorSetLayout);
         DEBUG_VK(res, "Failed to create ray tracing descriptor set layout!");
 
@@ -535,25 +598,6 @@ void CreatePipeline() {
         allocateInfo.pSetLayouts = &ctx.descriptorSetLayout;
         res = vkAllocateDescriptorSets(device, &allocateInfo, &ctx.descriptorSet);
         DEBUG_VK(res, "Failed to allocate ray tracing descriptor set!");
-    
-        VkWriteDescriptorSetAccelerationStructureKHR descriptorAccelerationStructure{};
-        descriptorAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-        descriptorAccelerationStructure.accelerationStructureCount = 1;
-        descriptorAccelerationStructure.pAccelerationStructures = &ctx.TLAS.accel;
-
-        std::vector<VkWriteDescriptorSet> writes;
-
-        VkWriteDescriptorSet writeAccelerationStructure{};
-        writeAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeAccelerationStructure.pNext = &descriptorAccelerationStructure;
-        writeAccelerationStructure.dstSet = ctx.descriptorSet;
-        writeAccelerationStructure.dstBinding = 0;
-        writeAccelerationStructure.dstArrayElement = 0;
-        writeAccelerationStructure.descriptorCount = 1;
-        writeAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-        writes.push_back(writeAccelerationStructure);
-
-        vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
     }
 
     // image
@@ -665,6 +709,7 @@ void CreateShaderBindingTable() {
 }
 
 void Create() {
+    LUZ_PROFILE_FUNC();
     VkDevice device = LogicalDevice::GetVkDevice();
     ctx.vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
     ctx.vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
@@ -674,13 +719,34 @@ void Create() {
     ctx.vkCreateRayTracingPipelinesKHR = (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR");
     ctx.vkGetRayTracingShaderGroupHandlesKHR = (PFN_vkGetRayTracingShaderGroupHandlesKHR)vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR");
     ctx.vkCmdTraceRaysKHR = (PFN_vkCmdTraceRaysKHR)vkGetDeviceProcAddr(device, "vkCmdTraceRaysKHR");
-    CreateBLAS(Scene::modelEntities);
-    CreateTLAS(Scene::modelEntities);
+    ctx.vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
+    // CreateBLAS();
+    // CreateTLAS(Scene::modelEntities);
     CreatePipeline();
     CreateShaderBindingTable();
 }
 
+void Destroy() {
+    VkDevice device = LogicalDevice::GetVkDevice();
+    for (int i = 0; i < ctx.BLAS.size(); i++) {
+        ctx.vkDestroyAccelerationStructureKHR(device, ctx.BLAS[i].accel, nullptr);
+        BufferManager::Destroy(ctx.BLAS[i].buffer);
+    }
+    ctx.BLAS.clear();
+    ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
+    BufferManager::Destroy(ctx.TLAS.buffer);
+    ImageManager::Destroy(ctx.image);
+    BufferManager::Destroy(ctx.SBTBuffer);
+    vkDestroyDescriptorPool(device, ctx.descriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(device, ctx.descriptorSetLayout, nullptr);
+    vkDestroySampler(device, ctx.sampler, nullptr);
+    vkDestroyPipelineLayout(device, ctx.pipelineLayout, nullptr);
+    vkDestroyPipeline(device, ctx.pipeline, nullptr);
+    ctx.TLAS.accel = VK_NULL_HANDLE;
+}
+
 void RayTrace(VkCommandBuffer& commandBuffer) {
+    LUZ_PROFILE_FUNC();
     if (ctx.useRayTracing) {
         RayTracingPushConstants constants;
         // constants.clearColor = glm::vec4(0, 0, 1, 1);
@@ -705,6 +771,7 @@ void RayTrace(VkCommandBuffer& commandBuffer) {
 }
 
 void OnImgui() {
+    LUZ_PROFILE_FUNC();
     if (ImGui::Begin("Ray Tracing")) {
         ImGui::Checkbox("Enabled", &ctx.useRayTracing);
         ImVec2 imgSize = ImVec2(ctx.image.width, ctx.image.height);
@@ -723,7 +790,12 @@ void OnImgui() {
 
 void UpdateViewport(VkExtent2D ext) {
     ImageManager::Destroy(ctx.image);
+    vkDestroySampler(LogicalDevice::GetVkDevice(), ctx.sampler, nullptr);
     CreateImage();
+}
+
+void SetRecreateTLAS() {
+    ctx.recreateTLAS = true;
 }
 
 }

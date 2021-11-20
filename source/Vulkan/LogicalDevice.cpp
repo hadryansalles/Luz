@@ -74,6 +74,11 @@ void LogicalDevice::Create() {
     accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
     accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
 
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+    rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+    rayQueryFeatures.rayQuery = VK_TRUE;
+    rayQueryFeatures.pNext = &accelerationStructureFeatures;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -81,7 +86,7 @@ void LogicalDevice::Create() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
     createInfo.pEnabledFeatures = &features;
-    createInfo.pNext = &accelerationStructureFeatures;
+    createInfo.pNext = &rayQueryFeatures;
 
     // specify the required layers to the device 
     if (Instance::IsLayersEnabled()) {
@@ -160,8 +165,16 @@ void LogicalDevice::EndSingleTimeCommands(VkCommandBuffer& commandBuffer) {
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    vkQueueSubmit(LogicalDevice::GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(LogicalDevice::GetGraphicsQueue());
+    // VkFenceCreateInfo fenceCreate{};
+    // fenceCreate.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    // VkFence singleTimeFence;
+    // vkCreateFence(device, &fenceCreate, nullptr, &singleTimeFence);
+
+    auto res = vkQueueSubmit(LogicalDevice::GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    DEBUG_VK(res, "Failed to submit single time command buffer");
+    // vkWaitForFences(device, 1, &singleTimeFence, VK_TRUE, 0);
+    res = vkQueueWaitIdle(LogicalDevice::GetGraphicsQueue());
+    DEBUG_VK(res, "Failed to wait idle command buffer");
 
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }

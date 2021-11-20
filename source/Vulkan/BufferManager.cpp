@@ -66,6 +66,8 @@ void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize offset,
 }
 
 void BufferManager::CreateStaged(const BufferDesc& desc, BufferResource& res, void* data) {
+    static int i = 0;
+    i++;
     BufferResource staging;
     BufferManager::Create(desc, res);
     CreateStagingBuffer(staging, data, desc.size);

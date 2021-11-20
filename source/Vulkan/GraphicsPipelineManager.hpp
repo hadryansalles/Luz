@@ -35,9 +35,6 @@ struct BindlessPushConstant {
 class GraphicsPipelineManager {
     static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
 
-    static inline int bufferDescriptors = 0;
-    static inline std::vector<VkDescriptorPool> bufferDescriptorPools;
-
     // bindless resources
     static inline VkDescriptorSet bindlessDescriptorSet          = VK_NULL_HANDLE;
     static inline VkDescriptorPool bindlessDescriptorPool        = VK_NULL_HANDLE;
@@ -59,4 +56,5 @@ public:
 
     static inline constexpr int TEXTURES_BINDING = 0;
     static inline constexpr int STORAGE_BINDING = 1;
+    static inline constexpr int ACCELERATION_STRUCTURE_BINDING = 2;
 };

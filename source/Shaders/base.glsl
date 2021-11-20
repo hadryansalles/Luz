@@ -1,6 +1,8 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_ray_query : enable
 
 layout(push_constant) uniform ConstantsBlock{
     int sceneBufferIndex;
@@ -56,6 +58,8 @@ layout(set = 0, binding = 1) readonly buffer SceneBlock {
 layout(set = 0, binding = 1) readonly buffer ModelBuffer {
     ModelBlock models[MAX_MODELS];
 } modelsBuffers[];
+
+layout(set = 0, binding = 2) uniform accelerationStructureEXT tlas;
 
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]
