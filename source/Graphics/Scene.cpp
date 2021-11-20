@@ -27,14 +27,19 @@ void Setup() {
     DeleteEntity(dirModel);
     DeleteEntity(spotModel);
 
+    AssetManager::LoadModels("assets/cube.glb");
+    Light* defaultLight = CreateLight();
+    defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
+    defaultLight->block.intensity = 30;
+
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
-    // AssetManager::LoadModels("assets/ignore/cube.glb");
+
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
     // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");
-     AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
+    // AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/SciFiHelmet.gltf");
-    //AssetManager::LoadModels("assets/ignore/head/scene.gltf");
+    // AssetManager::LoadModels("assets/ignore/head/scene.gltf");
     // AssetManager::LoadModels("assets/ignore/sphere.glb");
     // AssetManager::AsyncLoadModels("assets/ignore/sponza/sponza_semitransparent.obj");
     // AssetManager::AsyncLoadModels("assets/cube.obj");
@@ -288,14 +293,18 @@ void OnImgui() {
         AcceptMeshPayload();
         OnImgui(rootCollection, true);
     }
+    ImGui::Separator();
     if (ImGui::Button("Add model")) {
         selectedEntity = CreateModel();
     }
+    ImGui::SameLine();
     if (ImGui::Button("Add light")) {
         selectedEntity = CreateLight();
     }
-    ImGui::ColorEdit3("Ambient color", glm::value_ptr(scene.ambientLightColor));
-    ImGui::DragFloat("Ambient intensity", &scene.ambientLightIntensity, 0.01);
+    if (ImGui::CollapsingHeader("Ambient Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::ColorEdit3("Color", glm::value_ptr(scene.ambientLightColor));
+        ImGui::DragFloat("Intensity", &scene.ambientLightIntensity, 0.01);
+    }
 }
 
 void OnImgui(Collection* collection, bool root) {
