@@ -9,6 +9,7 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 
 ## Features
 - PBR Shading with metallic, roughness, normal, ambient occlusion and emission
+- Vulkan bindless resources
 - Scene hierarchy
 - Asynchronous glTF and OBJ model loading
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
