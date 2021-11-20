@@ -8,28 +8,25 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 <a name="features"/>
 
 ## Features
+- PBR Shading with metallic, roughness, normal, ambient occlusion and emission
 - Scene hierarchy
-- Asynchronous OBJ model loading
+- Asynchronous glTF and OBJ model loading
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 - Widgets for adjusting Vulkan settings at runtime
 
 ## Gallery
 
+- PBR Shading and glTF models
+![pbr](https://user-images.githubusercontent.com/37905502/142718124-12852254-7767-492f-9646-a961316ef7c6.gif)
+
 - Textures drag and drop
-![Alt Text](https://hadryansalles.github.io/assets/luz/texture_dragndrop.gif)
+![dragndrop](https://hadryansalles.github.io/assets/luz/texture_dragndrop.gif)
 
 - Asynchronous model loading
-![Alt Text](https://hadryansalles.github.io/assets/luz/async.gif)
-
-- Graphics Pipeline configuration at runtime
-![Alt Text](https://hadryansalles.github.io/assets/luz/polygon.gif)
+![async](https://hadryansalles.github.io/assets/luz/async.gif)
 
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
-![Alt Text](https://hadryansalles.github.io/assets/luz/cameras.gif)
-
-- ImGui and ImGuizmo integration
-![Alt Text](https://hadryansalles.github.io/assets/luz/imgui.gif)
-
+![cameras](https://hadryansalles.github.io/assets/luz/cameras.gif)
 
 <a name="build"/>
 
