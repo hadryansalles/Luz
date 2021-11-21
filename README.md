@@ -1,4 +1,9 @@
 # Luz Engine
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Windows](https://github.com/hadryansalles/Luz/actions/workflows/Windows.yml/badge.svg)](https://github.com/hadryansalles/Luz/actions/workflows/Windows.yml)
+[![Ubuntu](https://github.com/hadryansalles/Luz/actions/workflows/Ubuntu.yml/badge.svg)](https://github.com/hadryansalles/Luz/actions/workflows/Ubuntu.yml)
+
 A Vulkan engine that I'm developing to study and implement modern rendering techniques used by AAA games.
 - [Videos on Youtube](https://www.youtube.com/user/HadryanSalles/videos)
 - [Features](#features)
