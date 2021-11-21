@@ -1,0 +1,32 @@
+name: Windows
+
+on: push
+    
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      VULKAN_SDK: D:\VulkanSDK\
+    steps:
+    - name: Install Vulkan SDK
+      shell: cmd
+      run: |
+        curl -L --output VulkanSDK.exe https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe
+        .\VulkanSDK.exe --root D:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+    - uses: actions/checkout@v2
+      with:
+        submodules: 'true'
+    - name: Configure CMake
+      shell: cmd
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+    - name: Build
+      shell: cmd
+      run: | 
+        cd build
+        cmake --build .
