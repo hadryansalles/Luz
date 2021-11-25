@@ -254,12 +254,15 @@ void CreateTLAS() {
     bool update = ctx.TLAS.accel != VK_NULL_HANDLE;
     
     if (ctx.recreateTLAS) {
-        vkDeviceWaitIdle(device);
-        ctx.recreateTLAS = false;
         update = false;
-        ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
-        ctx.TLAS.accel = VK_NULL_HANDLE;
-        BufferManager::Destroy(ctx.TLAS.buffer);
+        if (ctx.TLAS.accel != VK_NULL_HANDLE) {
+            vkDeviceWaitIdle(device);
+            ctx.recreateTLAS = false;
+            update = false;
+            ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
+            ctx.TLAS.accel = VK_NULL_HANDLE;
+            BufferManager::Destroy(ctx.TLAS.buffer);
+        }
     }
 
     const std::vector<Model*>& models = Scene::modelEntities;
@@ -372,16 +375,6 @@ void CreateTLAS() {
 
             std::vector<VkWriteDescriptorSet> writes;
 
-            VkWriteDescriptorSet writeAccelerationStructure{};
-            writeAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeAccelerationStructure.pNext = &descriptorAccelerationStructure;
-            writeAccelerationStructure.dstSet = ctx.descriptorSet;
-            writeAccelerationStructure.dstBinding = 0;
-            writeAccelerationStructure.dstArrayElement = 0;
-            writeAccelerationStructure.descriptorCount = 1;
-            writeAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-            writes.push_back(writeAccelerationStructure);
-
             VkWriteDescriptorSet writeBindlessAccelerationStructure{};
             writeBindlessAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writeBindlessAccelerationStructure.pNext = &descriptorAccelerationStructure;
@@ -424,295 +417,6 @@ void CreateTLAS() {
     BufferManager::Destroy(instancesBuffer);
 }
 
-void CreateImage() {
-    LUZ_PROFILE_FUNC();
-    ImageDesc imageDesc;
-    imageDesc.width = SwapChain::GetExtent().width;
-    imageDesc.height = SwapChain::GetExtent().height;
-    imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageDesc.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageDesc.format = SwapChain::GetImageFormat();
-    imageDesc.mipLevels = 1;
-    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
-    imageDesc.layout = VK_IMAGE_LAYOUT_GENERAL;
-    ImageManager::Create(imageDesc, ctx.image);
-    ctx.sampler = CreateSampler(1);
-    ctx.imguiTextureID = ImGui_ImplVulkan_AddTexture(ctx.sampler, ctx.image.view, VK_IMAGE_LAYOUT_GENERAL);
-
-    ctx.viewport.x = 0;
-    ctx.viewport.y = 0;
-    ctx.viewport.width = imageDesc.width;
-    ctx.viewport.height = imageDesc.height;
-    ctx.viewport.minDepth = 0;
-    ctx.viewport.maxDepth = 1;
-
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    imageInfo.imageView = ctx.image.view;
-    imageInfo.sampler = VK_NULL_HANDLE;
-
-    std::vector<VkWriteDescriptorSet> writes;
-
-    VkWriteDescriptorSet writeImage{};
-    writeImage.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writeImage.dstSet = ctx.descriptorSet;
-    writeImage.dstBinding = 1;
-    writeImage.dstArrayElement = 0;
-    writeImage.descriptorCount = 1;
-    writeImage.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    writeImage.pImageInfo = &imageInfo;
-    writes.push_back(writeImage);
-
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), writes.size(), writes.data(), 0, nullptr);
-}
-
-void CreatePipeline() {
-    LUZ_PROFILE_FUNC();
-    VkDevice device = LogicalDevice::GetVkDevice();
-
-    enum StageIndices {
-        RaygenStage,
-        MissStage,
-        MissStage2,
-        ClosestHitStage,
-        ShaderGroupCount
-    };
-
-    std::vector<VkPipelineShaderStageCreateInfo> stages(ShaderGroupCount);
-
-    ShaderDesc raygenDesc;
-    raygenDesc.shaderBytes = FileManager::ReadRawBytes("bin/rt.rgen.spv");
-    raygenDesc.stageBit = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-    ShaderResource raygenStage;
-    Shader::Create(raygenDesc, raygenStage);
-    stages[RaygenStage] = raygenStage.stageCreateInfo;
-
-    ShaderDesc missDesc;
-    missDesc.shaderBytes = FileManager::ReadRawBytes("bin/rt.rmiss.spv");
-    missDesc.stageBit = VK_SHADER_STAGE_MISS_BIT_KHR;
-    ShaderResource missStage;
-    Shader::Create(missDesc, missStage);
-    stages[MissStage] = missStage.stageCreateInfo;
-
-    ShaderDesc shadowDesc;
-    shadowDesc.shaderBytes = FileManager::ReadRawBytes("bin/rtShadow.rmiss.spv");
-    shadowDesc.stageBit = VK_SHADER_STAGE_MISS_BIT_KHR;
-    ShaderResource shadowStage;
-    Shader::Create(shadowDesc, shadowStage);
-    stages[MissStage2] = shadowStage.stageCreateInfo;
-
-    ShaderDesc hitDesc;
-    hitDesc.shaderBytes = FileManager::ReadRawBytes("bin/rt.rchit.spv");
-    hitDesc.stageBit = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-    ShaderResource hitStage;
-    Shader::Create(hitDesc, hitStage);
-    stages[ClosestHitStage] = hitStage.stageCreateInfo;
-
-    VkRayTracingShaderGroupCreateInfoKHR group{};
-    group.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-    group.anyHitShader       = VK_SHADER_UNUSED_KHR;
-    group.closestHitShader   = VK_SHADER_UNUSED_KHR;
-    group.generalShader      = VK_SHADER_UNUSED_KHR;
-    group.intersectionShader = VK_SHADER_UNUSED_KHR;
-
-    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    group.generalShader = RaygenStage;
-    ctx.shaderGroups.push_back(group);
-
-    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    group.generalShader = MissStage;
-    ctx.shaderGroups.push_back(group);
-
-    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    group.generalShader = MissStage2;
-    ctx.shaderGroups.push_back(group);
-
-    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-    group.generalShader = VK_SHADER_UNUSED_KHR;
-    group.closestHitShader = ClosestHitStage;
-    ctx.shaderGroups.push_back(group);
-
-    VkPushConstantRange pushConstant{};
-    pushConstant.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
-    pushConstant.offset = 0;
-    pushConstant.size = sizeof(RayTracingPushConstants);
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-
-    // descriptor sets
-    {
-        VkDescriptorPoolSize poolSizes[] = { 
-            {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 3}, 
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3} 
-        };
-
-        VkDescriptorPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-        poolInfo.maxSets = (uint32_t)(3);
-        poolInfo.poolSizeCount = sizeof(poolSizes)/sizeof(VkDescriptorPoolSize);
-        poolInfo.pPoolSizes = poolSizes;
-
-        VkResult res = vkCreateDescriptorPool(device, &poolInfo, nullptr, &ctx.descriptorPool);
-        DEBUG_VK(res, "Failed to create ray tracing descriptor pool!");
-
-        VkDescriptorSetLayoutBinding bindings[2];
-        VkDescriptorBindingFlags bindingFlags[2];
-        bindings[0].binding = 0;
-        bindings[0].descriptorCount = 1;
-        bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-        bindings[0].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-        bindings[0].pImmutableSamplers = VK_NULL_HANDLE;
-        bindingFlags[0] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-
-        bindings[1].binding = 1;
-        bindings[1].descriptorCount = 1;
-        bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        bindings[1].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-        bindings[1].pImmutableSamplers = VK_NULL_HANDLE;
-        bindingFlags[1] = 0;
-
-        VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
-        setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-        setLayoutBindingFlags.bindingCount = COUNT_OF(bindingFlags);
-        setLayoutBindingFlags.pBindingFlags = bindingFlags;
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-        layoutInfo.bindingCount = sizeof(bindings)/sizeof(VkDescriptorSetLayoutBinding);
-        layoutInfo.pBindings = bindings;
-        layoutInfo.pNext = &setLayoutBindingFlags;
-        res = vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &ctx.descriptorSetLayout);
-        DEBUG_VK(res, "Failed to create ray tracing descriptor set layout!");
-
-        VkDescriptorSetAllocateInfo allocateInfo{};
-        allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocateInfo.descriptorPool = ctx.descriptorPool;
-        allocateInfo.descriptorSetCount = 1;
-        allocateInfo.pSetLayouts = &ctx.descriptorSetLayout;
-        res = vkAllocateDescriptorSets(device, &allocateInfo, &ctx.descriptorSet);
-        DEBUG_VK(res, "Failed to allocate ray tracing descriptor set!");
-    }
-
-    // image
-    {
-        CreateImage();
-    }
-
-    // image
-    {
-        CreateImage();
-    }
-
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &ctx.descriptorSetLayout;
-
-    VkResult res = vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &ctx.pipelineLayout);
-    DEBUG_VK(res, "Failed to create ray tracing pipeline layout!");
-
-    VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT };
-
-    VkPipelineDynamicStateCreateInfo dynamicInfo{};
-    dynamicInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicInfo.pDynamicStates = dynamicStates;
-    dynamicInfo.dynamicStateCount = COUNT_OF(dynamicStates);
-
-    VkRayTracingPipelineCreateInfoKHR pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-    pipelineInfo.stageCount = (u32)stages.size();
-    pipelineInfo.pStages = stages.data();
-    pipelineInfo.groupCount = (u32)ctx.shaderGroups.size();
-    pipelineInfo.pGroups = ctx.shaderGroups.data();
-    pipelineInfo.maxPipelineRayRecursionDepth = 1;
-    pipelineInfo.layout = ctx.pipelineLayout;
-    pipelineInfo.pDynamicState = &dynamicInfo;
-        
-    ctx.vkCreateRayTracingPipelinesKHR(device, {}, {}, 1, & pipelineInfo, nullptr, & ctx.pipeline);
-
-    for (VkPipelineShaderStageCreateInfo& stage : stages) {
-        vkDestroyShaderModule(device, stage.module, nullptr);
-    }
-}
-
-void CreateShaderBindingTable() {
-    VkDevice device = LogicalDevice::GetVkDevice();
-
-    ctx.properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-    VkPhysicalDeviceProperties2 prop2{};
-    prop2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    prop2.pNext = &ctx.properties;
-    vkGetPhysicalDeviceProperties2(PhysicalDevice::GetVkPhysicalDevice(), &prop2);
-
-    u32 missCount = 2;
-    u32 hitCount = 1;
-    u32 handleCount = 1 + missCount + hitCount;
-    u32 handleSize= ctx.properties.shaderGroupHandleSize;
-    u32 handleSizeAligned = ALIGN_AS(handleSize, ctx.properties.shaderGroupHandleAlignment);
-
-    ctx.rgenRegion.stride = ALIGN_AS(handleSizeAligned, ctx.properties.shaderGroupBaseAlignment);
-    ctx.rgenRegion.size = ctx.rgenRegion.stride;
-
-    ctx.missRegion.stride = handleSizeAligned;
-    ctx.missRegion.size = ALIGN_AS(missCount * handleSizeAligned, ctx.properties.shaderGroupBaseAlignment);
-
-    ctx.hitRegion.stride = handleSizeAligned;
-    ctx.hitRegion.size = ALIGN_AS(hitCount * handleSizeAligned, ctx.properties.shaderGroupBaseAlignment);
-
-    u32 dataSize = handleCount * handleSize;
-    std::vector<u8> handles(dataSize);
-    VkResult res = ctx.vkGetRayTracingShaderGroupHandlesKHR(device, ctx.pipeline, 0, handleCount, dataSize, handles.data());
-    DEBUG_VK(res, "Failed to get ray tracing shader group handles!");
-
-    BufferDesc sbtDesc;
-    sbtDesc.size = ctx.rgenRegion.size + ctx.missRegion.size + ctx.hitRegion.size + ctx.callRegion.size;
-    sbtDesc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
-    sbtDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    BufferManager::Create(sbtDesc, ctx.SBTBuffer);
-
-    VkBufferDeviceAddressInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    info.buffer = ctx.SBTBuffer.buffer;
-    VkDeviceAddress sbtAddress = ctx.vkGetBufferDeviceAddressKHR(device, &info);
-
-    ctx.rgenRegion.deviceAddress = sbtAddress;
-    ctx.missRegion.deviceAddress = sbtAddress + ctx.rgenRegion.size;
-    ctx.hitRegion.deviceAddress = sbtAddress + ctx.rgenRegion.size + ctx.missRegion.size;
-
-    auto getHandle = [&](int i) { return handles.data() + i * handleSize; };
-    void* pvoidSBTBuffer;
-    u8* pData = nullptr;
-    u32 handleIdx = 0;
-
-    vkMapMemory(device, ctx.SBTBuffer.memory, 0, sbtDesc.size, 0, &pvoidSBTBuffer);
-    u8* pSBTBuffer = (u8*)pvoidSBTBuffer;
-
-    // ray gen
-    pData = pSBTBuffer;
-    memcpy(pData, getHandle(handleIdx++), handleSize);
-
-    // miss
-    pData = pSBTBuffer + ctx.rgenRegion.size;
-    for (u32 c = 0; c < missCount; c++) {
-        memcpy(pData, getHandle(handleIdx++), handleSize);
-        pData += ctx.missRegion.stride;
-    }
-
-    // hit
-    pData = pSBTBuffer + ctx.rgenRegion.size + ctx.missRegion.size;
-    for (u32 c = 0; c < hitCount; c++) {
-        memcpy(pData, getHandle(handleIdx++), handleSize);
-        pData += ctx.hitRegion.stride;
-    }
-
-    vkUnmapMemory(device, ctx.SBTBuffer.memory);
-}
-
 void Create() {
     LUZ_PROFILE_FUNC();
     VkDevice device = LogicalDevice::GetVkDevice();
@@ -725,10 +429,6 @@ void Create() {
     ctx.vkGetRayTracingShaderGroupHandlesKHR = (PFN_vkGetRayTracingShaderGroupHandlesKHR)vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR");
     ctx.vkCmdTraceRaysKHR = (PFN_vkCmdTraceRaysKHR)vkGetDeviceProcAddr(device, "vkCmdTraceRaysKHR");
     ctx.vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
-    // CreateBLAS();
-    // CreateTLAS(Scene::modelEntities);
-    CreatePipeline();
-    CreateShaderBindingTable();
 }
 
 void Destroy() {
@@ -740,39 +440,7 @@ void Destroy() {
     ctx.BLAS.clear();
     ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
     BufferManager::Destroy(ctx.TLAS.buffer);
-    ImageManager::Destroy(ctx.image);
-    BufferManager::Destroy(ctx.SBTBuffer);
-    vkDestroyDescriptorPool(device, ctx.descriptorPool, nullptr);
-    vkDestroyDescriptorSetLayout(device, ctx.descriptorSetLayout, nullptr);
-    vkDestroySampler(device, ctx.sampler, nullptr);
-    vkDestroyPipelineLayout(device, ctx.pipelineLayout, nullptr);
-    vkDestroyPipeline(device, ctx.pipeline, nullptr);
     ctx.TLAS.accel = VK_NULL_HANDLE;
-}
-
-void RayTrace(VkCommandBuffer& commandBuffer) {
-    LUZ_PROFILE_FUNC();
-    if (ctx.useRayTracing) {
-        RayTracingPushConstants constants;
-        // constants.clearColor = glm::vec4(0, 0, 1, 1);
-        // constants.lightPosition = glm::vec3(20, 0, 0);
-        // constants.lightIntensity = 3.0f;
-        // constants.viewProj = Scene::camera.GetView() * Scene::camera.GetProj();
-        // constants.viewInverse = glm::inverse(Scene::camera.GetView());
-        // constants.projInverse = glm::inverse(Scene::camera.GetProj());
-        constants.view = Scene::camera.GetView();
-        constants.proj = Scene::camera.GetProj();
-
-        auto ext = SwapChain::GetExtent();
-
-        VkPipelineBindPoint point = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
-        vkCmdBindPipeline(commandBuffer, point, ctx.pipeline);
-        vkCmdSetViewport(commandBuffer, 0, 1, &ctx.viewport);
-        vkCmdBindDescriptorSets(commandBuffer, point, ctx.pipelineLayout, 0, 1, &ctx.descriptorSet, 0, nullptr);
-        auto stages = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
-        vkCmdPushConstants(commandBuffer, ctx.pipelineLayout, stages, 0, sizeof(RayTracingPushConstants), &constants);
-        ctx.vkCmdTraceRaysKHR(commandBuffer, &ctx.rgenRegion, &ctx.missRegion, &ctx.hitRegion, &ctx.callRegion, ext.width, ext.height, 1);
-    }
 }
 
 void OnImgui() {
@@ -791,12 +459,6 @@ void OnImgui() {
         ImGui::Image(ctx.imguiTextureID, size);
     }
     ImGui::End();
-}
-
-void UpdateViewport(VkExtent2D ext) {
-    ImageManager::Destroy(ctx.image);
-    vkDestroySampler(LogicalDevice::GetVkDevice(), ctx.sampler, nullptr);
-    CreateImage();
 }
 
 void SetRecreateTLAS() {

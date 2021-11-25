@@ -291,8 +291,6 @@ private:
 
         vkCmdEndRenderPass(commandBuffer);
 
-        RayTracing::RayTrace(commandBuffer);
-
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
         }
@@ -339,7 +337,6 @@ private:
         // the easiest way to fix this is fliping the scaling factor of the y axis
         auto ext = SwapChain::GetExtent();
         Scene::camera.SetExtent(ext.width, ext.height);
-        RayTracing::UpdateViewport(ext);
     }
 
     void updateUniformBuffer(uint32_t currentImage) {

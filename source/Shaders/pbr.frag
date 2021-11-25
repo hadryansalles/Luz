@@ -46,14 +46,26 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-float rand(float n){return fract(sin(n) * 43758.5453123);}
+float TraceShadowRay(vec3 O, vec3 L, float numSamples, float tMin) {
+    int numShadows = 0;
+    for(int i = 0; i < numSamples; i++) {
+        // Ray Query for shadow
+        vec3 direction = normalize(L);
+        float tMax = length(L);
+        // Initializes a ray query object but does not start traversal
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, O, tMin, direction, tMax);
 
-vec3 cosineSampleHemisphere(vec2 rand) {
-    float r = sqrt(rand.x);
-    float theta = 6.283 * rand.y;
-    float x = r * cos(theta);
-    float y = r * sin(theta);
-    return vec3(x, y, sqrt(max(0.0, 1.0 - rand.x)));
+        // Start traversal: return false if traversal is complete
+        while(rayQueryProceedEXT(rayQuery)) {}
+
+        // Returns type of committed (true) intersection
+        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+            // Got an intersection == Shadow
+            numShadows++;
+        }
+    }
+    return numShadows/numSamples;
 }
 
 void main() {
@@ -80,20 +92,23 @@ void main() {
         LightBlock light = scene.lights[i];
         vec3 L = normalize(light.position - fragPos.xyz);
         float attenuation = 1;
+        float shadowFactor = 1.0;
         if(light.type == LIGHT_TYPE_DIRECTIONAL) {
             L = normalize(-light.direction);
+            shadowFactor = TraceShadowRay(fragPos.xyz, L*10000, 1, 0.001);
         } else if(light.type == LIGHT_TYPE_SPOT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
             float theta = dot(L, normalize(-light.direction));
             float epsilon = light.innerAngle - light.outerAngle;
             attenuation *= clamp((theta - light.outerAngle)/epsilon, 0.0, 1.0);
-
+            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, 1, 0.001);
         } else if(light.type == LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
+            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, 1, 0.001);
         }
-        vec3 radiance = light.color * light.intensity * attenuation;
+        vec3 radiance = light.color * light.intensity * attenuation * (1.0 - shadowFactor);
 
         vec3 H = normalize(V + L);
         float NDF = DistributionGGX(N, H, roughness);
@@ -113,33 +128,6 @@ void main() {
     }
 
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion;
-
-    float numShadows = 0;
-    float maxShadows = 8;
-    for(int i = 0; i < maxShadows; i++) {
-        // Ray Query for shadow
-        vec3  origin    = fragPos.xyz;
-        vec3 lightPos = scene.lights[0].position;
-        lightPos += 0.6*vec3(rand(i-1), rand(i), rand(i+1));
-        vec3  direction = normalize(lightPos - fragPos.xyz);  // vector to light
-        float tMin      = 0.01f;
-        float tMax      = length(lightPos - fragPos.xyz);
-
-        // Initializes a ray query object but does not start traversal
-        rayQueryEXT rayQuery;
-        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, tMin, direction, tMax);
-
-        // Start traversal: return false if traversal is complete
-        while(rayQueryProceedEXT(rayQuery)) {}
-
-        // Returns type of committed (true) intersection
-        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-            // Got an intersection == Shadow
-            numShadows++;
-        }
-    }
-
-    Lo *= 1.0 - numShadows/maxShadows;
 
     vec3 color = ambient + Lo + emission.rgb;
     color = color / (color + vec3(1.0));
