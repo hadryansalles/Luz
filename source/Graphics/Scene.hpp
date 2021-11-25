@@ -22,7 +22,9 @@ struct LightBlock {
     glm::vec3 direction = glm::vec3(.0f, .0f, 1.0f);
     f32 outerAngle = 0;
     u32 type = 0;
-    u32 PADDING[3];
+    u32 numShadowSamples = 1;
+    float radius = 1;
+    u32 PADDING[1];
 };
 
 struct SceneBlock {
@@ -56,6 +58,7 @@ struct ConstantsBlock {
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
+    int frameID;
 };
 
 enum class EntityType {

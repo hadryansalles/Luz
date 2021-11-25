@@ -46,15 +46,32 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-float TraceShadowRay(vec3 O, vec3 L, float numSamples, float tMin) {
+vec2 WhiteNoise(vec3 p3)
+{
+	p3 = fract(p3 * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yzx+33.33);
+    return fract((p3.xx+p3.yz)*p3.zy);
+}
+
+vec2 DiskSample(vec2 rng, float radius) {
+    float pointRadius = radius*sqrt(rng.x);
+    float pointAngle = rng.y * 2.0f * PI;
+    return vec2(pointRadius*cos(pointAngle), pointRadius*sin(pointAngle));
+}
+
+float TraceShadowRay(vec3 O, vec3 L, int numSamples, float radius) {
+    vec3 lightTangent = normalize(cross(L, vec3(0, 1, 0)));
+    vec3 lightBitangent = normalize(cross(lightTangent, L));
     int numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
+        vec2 rng = WhiteNoise(vec3(fragPos.xy, frame + numSamples*i));
+        vec2 diskSample = DiskSample(rng, radius);
         // Ray Query for shadow
-        vec3 direction = normalize(L);
         float tMax = length(L);
+        vec3 direction = normalize(L + diskSample.x * lightTangent + diskSample.y * lightBitangent);
         // Initializes a ray query object but does not start traversal
         rayQueryEXT rayQuery;
-        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, O, tMin, direction, tMax);
+        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, O, 0.001, direction, tMax);
 
         // Start traversal: return false if traversal is complete
         while(rayQueryProceedEXT(rayQuery)) {}
@@ -76,7 +93,6 @@ void main() {
     float occlusion = texture(textures[model.aoMap], fragTexCoord).r;
     float roughness = metallicRoughness.g*model.roughness;
     float metallic = metallicRoughness.b*model.metallic;
-
     vec3 N;
     if(fragTangent == vec3(0, 0, 0) || normalSample == vec3(1, 1, 1)) {
         N = normalize(fragNormal); 
@@ -95,18 +111,18 @@ void main() {
         float shadowFactor = 1.0;
         if(light.type == LIGHT_TYPE_DIRECTIONAL) {
             L = normalize(-light.direction);
-            shadowFactor = TraceShadowRay(fragPos.xyz, L*10000, 1, 0.001);
+            shadowFactor = TraceShadowRay(fragPos.xyz, L*10000, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_SPOT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
             float theta = dot(L, normalize(-light.direction));
             float epsilon = light.innerAngle - light.outerAngle;
             attenuation *= clamp((theta - light.outerAngle)/epsilon, 0.0, 1.0);
-            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, 1, 0.001);
+            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
-            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, 1, 0.001);
+            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, light.numShadowSamples, light.radius);
         }
         vec3 radiance = light.color * light.intensity * attenuation * (1.0 - shadowFactor);
 

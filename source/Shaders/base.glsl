@@ -8,6 +8,7 @@ layout(push_constant) uniform ConstantsBlock{
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
+    int frame;
 };
 
 #define SCENE_BUFFER_INDEX 0
@@ -29,6 +30,8 @@ struct LightBlock {
     vec3 direction;
     float outerAngle;
     int type;
+    int numShadowSamples;
+    float radius;
 };
 
 struct ModelBlock {

@@ -46,6 +46,7 @@ public:
     }
 
 private:
+    u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
 
     void WaitToInit(float seconds) {
@@ -230,6 +231,7 @@ private:
         ConstantsBlock constants;
         constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
         constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+        constants.frameID = frameCount;
 
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -310,6 +312,8 @@ private:
         updateCommandBuffer(image);
 
         SwapChain::SubmitAndPresent(image);
+
+        frameCount = (frameCount + 1) % (1 << 15);
     }
 
     void RecreateFrameResources() {

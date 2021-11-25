@@ -28,10 +28,14 @@ void Setup() {
     DeleteEntity(dirModel);
     DeleteEntity(spotModel);
 
-    AssetManager::LoadModels("assets/cube.glb");
+    Model* cube = AssetManager::LoadModel("assets/cube.glb");
+    Model* plane = CreateModel(cube);
+    plane->transform.SetPosition(glm::vec3(0, -1, 0));
+    plane->transform.SetScale(glm::vec3(10, 0.0001, 10));
     Light* defaultLight = CreateLight();
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
+
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
@@ -404,6 +408,8 @@ void InspectLight(Light* light) {
             light->block.innerAngle = glm::radians(innerAngle);
             light->block.outerAngle = glm::radians(outerAngle);
         }
+        ImGui::DragInt("Shadow samples", (int*) &light->block.numShadowSamples, 1, 0, 64);
+        ImGui::DragFloat("Shadow radius", &light->block.radius, 0.01, 0);
     }
 }
 
