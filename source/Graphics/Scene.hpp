@@ -34,6 +34,9 @@ struct SceneBlock {
     glm::mat4 projView = glm::mat4(1.0f);
     glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
     u32 numLights = 0;
+    u32 aoNumSamples = 1;
+    float aoScale = 0.1;
+    u32 useBlueNoise = 0;
 };
 
 struct MaterialBlock {
@@ -95,6 +98,7 @@ struct Model : Entity {
 struct Light : Entity {
     RID id = 0;
     LightBlock block;
+    bool shadows = true;
 };
 
 struct Collection : Entity {
@@ -120,6 +124,9 @@ namespace Scene {
 
     inline bool renderLightGizmos = true;
     inline float lightGizmosOpacity = 1.0f;
+
+    inline bool aoActive = true;
+    inline int aoNumSamples = 1;
 
     inline RID lightMeshes[3];
 

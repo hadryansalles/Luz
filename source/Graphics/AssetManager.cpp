@@ -29,6 +29,7 @@ void AssetManager::Setup() {
     blackTexture[3] = 255;
     CreateTexture("White", whiteTexture, 1, 1);
     CreateTexture("Black", blackTexture, 1, 1);
+    LoadTexture("assets/blue_noise.png");
 }
 
 void AssetManager::Create() {

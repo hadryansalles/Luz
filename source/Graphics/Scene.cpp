@@ -101,6 +101,9 @@ void UpdateResources(int numFrame) {
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
+        if (!light->shadows) {
+            scene.lights[scene.numLights].numShadowSamples = 0;
+        }
         scene.numLights++;
     }
     scene.camPos = camera.GetPosition();
@@ -313,6 +316,18 @@ void OnImgui() {
         ImGui::ColorEdit3("Color", glm::value_ptr(scene.ambientLightColor));
         ImGui::DragFloat("Intensity", &scene.ambientLightIntensity, 0.01);
     }
+    if (ImGui::CollapsingHeader("Ambient Occlusion", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Enabled", &aoActive);
+        ImGui::DragInt("Samples", &aoNumSamples, 1, 1);
+        ImGui::DragFloat("Scale", &scene.aoScale, 0.01, 0);
+        scene.aoScale = std::max(scene.aoScale, 0.0f);
+        scene.aoNumSamples = aoActive ? aoNumSamples : 0;
+    }
+    {
+        bool active = scene.useBlueNoise == 1;
+        ImGui::Checkbox("Blue noise", &active);
+        scene.useBlueNoise = active ? 1 : 0;
+    }
 }
 
 void OnImgui(Collection* collection, bool root) {
@@ -408,8 +423,12 @@ void InspectLight(Light* light) {
             light->block.innerAngle = glm::radians(innerAngle);
             light->block.outerAngle = glm::radians(outerAngle);
         }
-        ImGui::DragInt("Shadow samples", (int*) &light->block.numShadowSamples, 1, 0, 64);
-        ImGui::DragFloat("Shadow radius", &light->block.radius, 0.01, 0);
+    }
+    if (ImGui::CollapsingHeader("Shadows")) {
+        ImGui::Checkbox("Active", &light->shadows);
+        ImGui::DragInt("Num samples", (int*) &light->block.numShadowSamples, 1, 1, 64);
+        ImGui::DragFloat("Radius", &light->block.radius, 0.01, 0.0f);
+        light->block.radius = std::max(light->block.radius, 0.0f);
     }
 }
 
@@ -433,39 +452,37 @@ void RenderTransformGizmo(Transform& transform) {
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
-            currentGizmoOperation = ImGuizmo::TRANSLATE;
-        }
-        if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
-            currentGizmoOperation = ImGuizmo::ROTATE;
-        }
-        if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
-            currentGizmoOperation = ImGuizmo::SCALE;
-        }
-        if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
-            currentGizmoOperation = ImGuizmo::TRANSLATE;
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
-            currentGizmoOperation = ImGuizmo::ROTATE;
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
-            currentGizmoOperation = ImGuizmo::SCALE;
-        }
+    if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+        currentGizmoOperation = ImGuizmo::TRANSLATE;
+    }
+    if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+        currentGizmoOperation = ImGuizmo::ROTATE;
+    }
+    if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+        currentGizmoOperation = ImGuizmo::SCALE;
+    }
+    if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {
+        currentGizmoOperation = ImGuizmo::TRANSLATE;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Rotate", currentGizmoOperation == ImGuizmo::ROTATE)) {
+        currentGizmoOperation = ImGuizmo::ROTATE;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Scale", currentGizmoOperation == ImGuizmo::SCALE)) {
+        currentGizmoOperation = ImGuizmo::SCALE;
+    }
 
-        if (currentGizmoOperation != ImGuizmo::SCALE) {
-            if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
-                currentGizmoMode = ImGuizmo::LOCAL;
-            }
-            ImGui::SameLine();
-            if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
-                currentGizmoMode = ImGuizmo::WORLD;
-            }
-        } else {
+    if (currentGizmoOperation != ImGuizmo::SCALE) {
+        if (ImGui::RadioButton("Local", currentGizmoMode == ImGuizmo::LOCAL)) {
             currentGizmoMode = ImGuizmo::LOCAL;
         }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("World", currentGizmoMode == ImGuizmo::WORLD)) {
+            currentGizmoMode = ImGuizmo::WORLD;
+        }
+    } else {
+        currentGizmoMode = ImGuizmo::LOCAL;
     }
     glm::mat4 modelMat = transform.GetMatrix();
     glm::mat4 guizmoProj(camera.GetProj());

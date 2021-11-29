@@ -56,6 +56,9 @@ layout(set = 0, binding = 1) readonly buffer SceneBlock {
     mat4 projView;
     vec3 camPos;
     int numLights;
+    int aoNumSamples;
+    float aoScale;
+    int useBlueNoise;
 } sceneBuffers[];
 
 layout(set = 0, binding = 1) readonly buffer ModelBuffer {
@@ -66,3 +69,7 @@ layout(set = 0, binding = 2) uniform accelerationStructureEXT tlas;
 
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]
+#define WHITE_TEXTURE textures[0]
+#define BLACK_TEXTURE textures[1]
+// #define CHECKER_TEXTURE textures[2]
+#define BLUE_NOISE_TEXTURE textures[2]

@@ -46,8 +46,7 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec2 WhiteNoise(vec3 p3)
-{
+vec2 WhiteNoise(vec3 p3) {
 	p3 = fract(p3 * vec3(.1031, .1030, .0973));
     p3 += dot(p3, p3.yzx+33.33);
     return fract((p3.xx+p3.yz)*p3.zy);
@@ -59,13 +58,62 @@ vec2 DiskSample(vec2 rng, float radius) {
     return vec2(pointRadius*cos(pointAngle), pointRadius*sin(pointAngle));
 }
 
-float TraceShadowRay(vec3 O, vec3 L, int numSamples, float radius) {
+vec3 HemisphereSample(vec2 rng) {
+    float r = sqrt(rng.x);
+    float theta = 6.283 * rng.y;
+    float x = r * cos(theta);
+    float y = r * sin(theta);
+    return vec3(x, y, sqrt(max(0.0, 1.0 - rng.x)));
+}
+
+float TraceAORays(vec3 normal) {
+    if(scene.aoNumSamples == 0) {
+        return 1;
+    }
+    float ao = 0;
+    vec3 tangent = abs(normal.z) > 0.5 ? vec3(0.0, -normal.z, normal.y) : vec3(-normal.y, normal.x, 0.0);
+    vec3 bitangent = cross(normal, tangent);
+    float tMax = scene.aoScale;
+    float tMin = 0.00001;
+    for(int i = 0; i < scene.aoNumSamples; i++) {
+        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * scene.aoNumSamples + i)));
+        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
+        vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, gl_FragCoord.xy + frame*scene.aoNumSamples + i).xy;
+        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + scene.aoNumSamples*i));
+        vec3 randomVec = HemisphereSample(rng);
+        vec3 direction = tangent*randomVec.x + bitangent*randomVec.y + normal*randomVec.z;
+        // Ray Query for shadow
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, fragPos.xyz, tMin, direction, tMax);
+
+        while(rayQueryProceedEXT(rayQuery)) {}
+
+        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+            // ao += rayQueryGetIntersectionTEXT(rayQuery, true)/tMax;
+            // ao += 1.0/float(scene.aoNumSamples);
+        } else {
+            ao += 1.0/float(scene.aoNumSamples);
+            // ao += 1;
+        }
+    }
+    return clamp(ao, 0.0, 1.0);
+}
+
+float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
+    if(numSamples == 0) {
+        return 0;
+    }
     vec3 lightTangent = normalize(cross(L, vec3(0, 1, 0)));
     vec3 lightBitangent = normalize(cross(lightTangent, L));
-    int numShadows = 0;
+    float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
-        vec2 rng = WhiteNoise(vec3(fragPos.xy, frame + numSamples*i));
+        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
+        vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, gl_FragCoord.xy).xy;
+        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + numSamples*i));
         vec2 diskSample = DiskSample(rng, radius);
+        // vec2 diskSample = BlueNoiseInDisk[(i+frame)%64];
         // Ray Query for shadow
         float tMax = length(L);
         vec3 direction = normalize(L + diskSample.x * lightTangent + diskSample.y * lightBitangent);
@@ -87,6 +135,9 @@ float TraceShadowRay(vec3 O, vec3 L, int numSamples, float radius) {
 
 void main() {
     vec4 albedo = texture(textures[model.colorMap], fragTexCoord)*model.color;
+    if(albedo.a < 0.5) {
+        discard;
+    }
     vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
     vec4 emission = texture(textures[model.emissionMap], fragTexCoord)*vec4(model.emission, 1.0);
     vec3 normalSample = texture(textures[model.normalMap], fragTexCoord).rgb;
@@ -143,7 +194,8 @@ void main() {
         Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
     }
 
-    vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion;
+    float rayTracedAo = TraceAORays(N);
+    vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
 
     vec3 color = ambient + Lo + emission.rgb;
     color = color / (color + vec3(1.0));
