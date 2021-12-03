@@ -21,6 +21,7 @@ layout(push_constant) uniform ConstantsBlock{
 #define LIGHT_TYPE_SPOT 2
 
 #define PI 3.14159265359
+#define GOLDEN_RATIO 2.118033988749895
 
 struct LightBlock {
     vec3 color;
@@ -57,7 +58,10 @@ layout(set = 0, binding = 1) readonly buffer SceneBlock {
     vec3 camPos;
     int numLights;
     int aoNumSamples;
-    float aoScale;
+    float aoMin;
+    float aoMax;
+    float aoPower;
+    ivec2 viewSize;
     int useBlueNoise;
 } sceneBuffers[];
 
@@ -69,6 +73,7 @@ layout(set = 0, binding = 2) uniform accelerationStructureEXT tlas;
 
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]
+#define GET_MODEL(id) modelsBuffer[modelBufferIndex].models[(id)]
 #define WHITE_TEXTURE textures[0]
 #define BLACK_TEXTURE textures[1]
 // #define CHECKER_TEXTURE textures[2]

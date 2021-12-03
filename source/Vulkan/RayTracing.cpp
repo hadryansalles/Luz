@@ -292,7 +292,7 @@ void CreateTLAS() {
 
         VkAccelerationStructureInstanceKHR rayInstance{};
         rayInstance.transform = transform;
-        rayInstance.instanceCustomIndex = i;
+        rayInstance.instanceCustomIndex = model->id;
         rayInstance.accelerationStructureReference = ctx.vkGetAccelerationStructureDeviceAddressKHR(device, &addressInfo);
         rayInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
         rayInstance.mask = 0xFF;

@@ -4,6 +4,7 @@
 #include "GraphicsPipelineManager.hpp"
 #include "Window.hpp"
 #include "RayTracing.hpp"
+#include "SwapChain.hpp"
 
 #include <imgui/imgui_stdlib.h>
 
@@ -35,7 +36,6 @@ void Setup() {
     Light* defaultLight = CreateLight();
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
-
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
@@ -69,6 +69,7 @@ void UpdateBuffers(int numFrame) {
 void UpdateResources(int numFrame) {
     LUZ_PROFILE_FUNC();
     scene.numLights = 0;
+    scene.viewSize = glm::vec2(SwapChain::GetExtent().width, SwapChain::GetExtent().height);
     for (int i = 0; i < modelEntities.size(); i++) {
         Model* model = modelEntities[i];
         model->id = i;
@@ -319,8 +320,9 @@ void OnImgui() {
     if (ImGui::CollapsingHeader("Ambient Occlusion", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Enabled", &aoActive);
         ImGui::DragInt("Samples", &aoNumSamples, 1, 1);
-        ImGui::DragFloat("Scale", &scene.aoScale, 0.01, 0);
-        scene.aoScale = std::max(scene.aoScale, 0.0f);
+        ImGui::DragFloat("Min", &scene.aoMin, 0.0001, 0.0f, 1.0f, "%.8f", ImGuiSliderFlags_Logarithmic);
+        ImGui::DragFloat("Max", &scene.aoMax, 0.01, 0.0f, 10.0f, "%.4f");
+        ImGui::DragFloat("Power", &scene.aoPower, 0.001, 0.0f, 100.0f, "%.4f");
         scene.aoNumSamples = aoActive ? aoNumSamples : 0;
     }
     {

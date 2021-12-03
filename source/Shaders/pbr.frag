@@ -66,6 +66,12 @@ vec3 HemisphereSample(vec2 rng) {
     return vec3(x, y, sqrt(max(0.0, 1.0 - rng.x)));
 }
 
+vec4 BlueNoiseSample(int i) {
+    vec2 blueNoiseSize = textureSize(BLUE_NOISE_TEXTURE, 0);
+    ivec2 fragUV = ivec2(mod(gl_FragCoord.xy + GOLDEN_RATIO*blueNoiseSize*(frame%64 + i*vec2(5, 7)), blueNoiseSize));
+    return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
+}
+
 float TraceAORays(vec3 normal) {
     if(scene.aoNumSamples == 0) {
         return 1;
@@ -73,12 +79,13 @@ float TraceAORays(vec3 normal) {
     float ao = 0;
     vec3 tangent = abs(normal.z) > 0.5 ? vec3(0.0, -normal.z, normal.y) : vec3(-normal.y, normal.x, 0.0);
     vec3 bitangent = cross(normal, tangent);
-    float tMax = scene.aoScale;
-    float tMin = 0.00001;
+    float tMin = scene.aoMin;
+    float tMax = scene.aoMax;
     for(int i = 0; i < scene.aoNumSamples; i++) {
         // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * scene.aoNumSamples + i)));
         vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
-        vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, gl_FragCoord.xy + frame*scene.aoNumSamples + i).xy;
+        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
+        // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
         vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
         // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + scene.aoNumSamples*i));
         vec3 randomVec = HemisphereSample(rng);
@@ -90,14 +97,33 @@ float TraceAORays(vec3 normal) {
         while(rayQueryProceedEXT(rayQuery)) {}
 
         if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-            // ao += rayQueryGetIntersectionTEXT(rayQuery, true)/tMax;
-            // ao += 1.0/float(scene.aoNumSamples);
+            ao += rayQueryGetIntersectionTEXT(rayQuery, true)/(tMax*scene.aoNumSamples);
         } else {
             ao += 1.0/float(scene.aoNumSamples);
             // ao += 1;
         }
     }
-    return clamp(ao, 0.0, 1.0);
+    return clamp(pow(ao, scene.aoPower), 0.0, 1.0);
+}
+
+vec3 TraceReflectionRay(vec3 N, vec3 V) {
+    // V = from cam to frag
+    vec3 normal = normalize(fragNormal);
+    vec3 viewDir = normalize(fragPos.xyz - scene.camPos);
+    vec3 direction = reflect(viewDir, normal);
+    float tMin = 0.1;
+    float tMax = 10000.0;
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, fragPos.xyz, tMin, direction, tMax);
+
+    while(rayQueryProceedEXT(rayQuery)) {}
+
+    if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+        int id = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, true);
+        return modelsBuffers[modelBufferIndex].models[id].color.rgb;
+    } else {
+        return vec3(0, 0, 0);
+    }
 }
 
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
@@ -109,7 +135,7 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
         vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
-        vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, gl_FragCoord.xy).xy;
+        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
         vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
         // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + numSamples*i));
         vec2 diskSample = DiskSample(rng, radius);
@@ -151,6 +177,10 @@ void main() {
         N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
     }
     vec3 V = normalize(scene.camPos - fragPos.xyz);
+    // if(metallic == 1) {
+    //     outColor = vec4(TraceReflectionRay(N, V), 1.0);
+    // }
+    // else {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);
 
@@ -200,4 +230,5 @@ void main() {
     vec3 color = ambient + Lo + emission.rgb;
     color = color / (color + vec3(1.0));
     outColor = vec4(pow(color, vec3(1.0/2.2)), albedo.a);
+    // }
 }

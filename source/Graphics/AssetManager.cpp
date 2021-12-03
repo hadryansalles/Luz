@@ -416,6 +416,10 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
         Collection* collection = nullptr;
         if (mesh.primitives.size() > 1) {
             collection = Scene::CreateCollection();
+            if (model.nodes.size() > 0) {
+                glm::vec3 scale(model.nodes[0].scale[0], model.nodes[0].scale[1], model.nodes[0].scale[2]);
+                collection->transform.SetScale(scale);
+            }
             if (sceneCollection) {
                 Scene::SetCollection(collection, sceneCollection);
             }

@@ -51,7 +51,7 @@ void Camera::UpdateProj(){
 }
 
 void Camera::Update(Transform* selectedTransform) {
-    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+    if (!autoOrbit && ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
         return;
     }
     bool viewDirty = false;
@@ -81,6 +81,9 @@ void Camera::Update(Transform* selectedTransform) {
     }
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_3) || Window::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) {
         move = -Window::GetDeltaMouse();
+    }
+    if (autoOrbit) {
+        drag.x = 1*Window::GetDeltaTime();
     }
     float scroll = Window::GetDeltaScroll();
     float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1 : 1;
@@ -159,6 +162,7 @@ void Camera::OnImgui() {
     auto viewDirty = false;
     auto projDirty = false;
     if (ImGui::CollapsingHeader("Camera")) {
+        ImGui::Checkbox("Auto orbit", &autoOrbit);
         // type
         {
             ImGui::Text("Projection:");

@@ -35,7 +35,10 @@ struct SceneBlock {
     glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
     u32 numLights = 0;
     u32 aoNumSamples = 1;
-    float aoScale = 0.1;
+    float aoMin = 0.001;
+    float aoMax = 0.1;
+    float aoPower = 1.45;
+    glm::ivec2 viewSize;
     u32 useBlueNoise = 0;
 };
 

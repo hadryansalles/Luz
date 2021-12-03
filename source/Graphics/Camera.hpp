@@ -36,6 +36,7 @@ private:
     static inline float speed = 0.01;
     static inline float zoomSpeed = 0.1;
     static inline float rotationSpeed = 0.3;
+    static inline bool autoOrbit = false;
 
     void UpdateView();
     void UpdateProj();
