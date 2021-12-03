@@ -13,6 +13,7 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 <a name="features"/>
 
 ## Features
+- Real-time ray traced shadows and ambient occlusion
 - PBR Shading with metallic, roughness, normal, ambient occlusion and emission
 - Vulkan bindless resources
 - Scene hierarchy
@@ -37,6 +38,7 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 <a name="build"/>
 
 ## Requirements
+- A GPU that supports VK_KHR_ray_query extension ([list of supported GPUs](https://vulkan.gpuinfo.org/listdevicescoverage.php?extension=VK_KHR_ray_query&platform=all))
 - C++17 compiler. Tested with ``Visual Studio 2019``, ``Clang`` and ``GCC``
 - [CMake 3.7](https://cmake.org/download/) or higher
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
