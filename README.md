@@ -22,17 +22,17 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 
 ## Gallery
 
+- Ray traced shadows and ambient occlusion
+![raytraced](https://user-images.githubusercontent.com/37905502/144621461-52f1ab97-ff6b-4f6f-a83a-cc6f67f5ead6.gif)
+
 - PBR Shading and glTF models
-![pbr](https://user-images.githubusercontent.com/37905502/142718124-12852254-7767-492f-9646-a961316ef7c6.gif)
+![pbr](https://user-images.githubusercontent.com/37905502/144612584-1d752a16-c978-4f43-93d6-2e2362b2804b.gif)
 
 - Textures drag and drop
-![dragndrop](https://hadryansalles.github.io/assets/luz/texture_dragndrop.gif)
+![dragndrop](https://user-images.githubusercontent.com/37905502/144619247-737d37c1-ba67-4f9a-abf4-63e4d2f965d6.gif)
 
 - Asynchronous model loading
-![async](https://hadryansalles.github.io/assets/luz/async.gif)
-
-- Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
-![cameras](https://hadryansalles.github.io/assets/luz/cameras.gif)
+![async](https://user-images.githubusercontent.com/37905502/144617077-167d6a0b-4455-4aa3-9a60-2c2b5c49dd14.gif)
 
 <a name="build"/>
 
