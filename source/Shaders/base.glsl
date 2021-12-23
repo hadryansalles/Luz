@@ -4,13 +4,6 @@
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_ray_query : enable
 
-layout(push_constant) uniform ConstantsBlock{
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-    int frame;
-};
-
 #define SCENE_BUFFER_INDEX 0
 #define MODEL_BUFFER_INDEX 1
 
@@ -70,6 +63,7 @@ layout(set = 0, binding = 1) readonly buffer ModelBuffer {
 } modelsBuffers[];
 
 layout(set = 0, binding = 2) uniform accelerationStructureEXT tlas;
+layout(set = 0, binding = 3) uniform sampler2D imageAttachs[];
 
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]

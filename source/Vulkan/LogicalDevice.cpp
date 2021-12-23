@@ -22,7 +22,7 @@ void LogicalDevice::Create() {
         createInfo.pQueuePriorities = &priority;
         queueCreateInfos.push_back(createInfo);
     }
-    
+
     auto supportedFeatures = PhysicalDevice::GetFeatures();
 
     // logical device features
@@ -79,6 +79,11 @@ void LogicalDevice::Create() {
     rayQueryFeatures.rayQuery = VK_TRUE;
     rayQueryFeatures.pNext = &accelerationStructureFeatures;
 
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
+    dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+    dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+    dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -86,7 +91,7 @@ void LogicalDevice::Create() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
     createInfo.pEnabledFeatures = &features;
-    createInfo.pNext = &rayQueryFeatures;
+    createInfo.pNext = &dynamicRenderingFeatures;
 
     // specify the required layers to the device 
     if (Instance::IsLayersEnabled()) {
@@ -165,14 +170,8 @@ void LogicalDevice::EndSingleTimeCommands(VkCommandBuffer& commandBuffer) {
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    // VkFenceCreateInfo fenceCreate{};
-    // fenceCreate.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    // VkFence singleTimeFence;
-    // vkCreateFence(device, &fenceCreate, nullptr, &singleTimeFence);
-
     auto res = vkQueueSubmit(LogicalDevice::GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
     DEBUG_VK(res, "Failed to submit single time command buffer");
-    // vkWaitForFences(device, 1, &singleTimeFence, VK_TRUE, 0);
     res = vkQueueWaitIdle(LogicalDevice::GetGraphicsQueue());
     DEBUG_VK(res, "Failed to wait idle command buffer");
 

@@ -2,6 +2,13 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
+layout(push_constant) uniform ConstantsBlock {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int modelID;
+    int frame;
+};
+
 #include "base.glsl"
 
 layout(location = 0) in vec3 inPosition;
