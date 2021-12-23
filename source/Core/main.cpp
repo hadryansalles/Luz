@@ -15,6 +15,7 @@
 #include "AssetManager.hpp"
 #include "Scene.hpp"
 #include "RayTracing.hpp"
+#include "DeferredRenderer.hpp"
 
 #include <stb_image.h>
 
@@ -62,6 +63,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         PBRGraphicsPipeline::Setup();
+        DeferredShading::Setup();
         AssetManager::Setup();
         SetupImgui();
         Scene::Setup();
@@ -84,6 +86,7 @@ private:
         PBRGraphicsPipeline::Create();
         CreateImgui();
         RayTracing::Create();
+        DeferredShading::Create();
         AssetManager::Create();
         Scene::CreateResources();
         createUniformProjection();
@@ -115,7 +118,9 @@ private:
         LUZ_PROFILE_FUNC();
         PBRGraphicsPipeline::Destroy();
         Scene::DestroyResources();
+        
         DestroyImgui();
+        DeferredShading::Destroy();
 
         SwapChain::Destroy();
         LOG_INFO("Destroyed SwapChain.");
@@ -151,7 +156,7 @@ private:
 
     bool DirtyGlobalResources() {
         bool dirty = false;
-        dirty |= Instance::IsDirty();
+        // dirty |= Instance::IsDirty();
         dirty |= PhysicalDevice::IsDirty();
         dirty |= LogicalDevice::IsDirty();
         return dirty;
@@ -215,6 +220,7 @@ private:
         ImGui::End();
 
         RayTracing::OnImgui();
+        DeferredShading::OnImgui(0);
 
         ImGui::ShowDemoWindow();
 
@@ -256,7 +262,9 @@ private:
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
         renderPassInfo.pClearValues = clearValues.data();
 
-        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        // vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        DeferredShading::BeginRendering(commandBuffer, frameIndex);
 
         auto gpo = PBRGraphicsPipeline::GetResource();
         auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -286,12 +294,18 @@ private:
                 constants.modelID = light->id;
                 vkCmdPushConstants(commandBuffer, gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
                 vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
+                // vkCmdDraw(commandBuffer, 6, 1, 0, 0);
             }
-        } 
+        }
 
+        DeferredShading::EndRendering(commandBuffer, frameIndex);
+
+        DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
+        DeferredShading::EndPresentPass(commandBuffer, frameIndex);
 
-        vkCmdEndRenderPass(commandBuffer);
+
+        // vkCmdEndRenderPass(commandBuffer);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
@@ -333,6 +347,7 @@ private:
         PBRGraphicsPipeline::Create();
         Scene::CreateResources();
         CreateImgui();
+        DeferredShading::Create();
         createUniformProjection();
     }
 

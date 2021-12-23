@@ -33,7 +33,7 @@ private:
     static inline VkFormat              colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
     static inline VkColorSpaceKHR       colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     static inline VkPresentModeKHR      presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    static inline VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_4_BIT;
+    static inline VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
     static VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities);
     static VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
@@ -51,9 +51,13 @@ public:
     static inline uint32_t              GetNumFrames()               { return images.size();     }
     static inline uint32_t              GetFramesInFlight()          { return framesInFlight;    }
     static inline VkRenderPass          GetRenderPass()              { return renderPass;        }
+    static inline VkFramebuffer         GetFramebuffer(uint32_t i)   { return framebuffers[i];   }
     static inline VkSwapchainKHR        GetVkSwapChain()             { return swapChain;         }
     static inline VkSampleCountFlagBits GetNumSamples()              { return numSamples;        }
-    static inline VkFramebuffer         GetFramebuffer(uint32_t i)   { return framebuffers[i];   }
     static inline VkCommandBuffer       GetCommandBuffer(uint32_t i) { return commandBuffers[i]; }
     static inline VkFormat              GetImageFormat()             { return colorFormat;       }
+    static inline VkFormat              GetDepthFormat()             { return depthFormat;       }
+    static inline VkImage               GetImage(u32 i)              { return images[i];         }
+    static inline VkImageView           GetView(u32 i)               { return views[i];          }
+    static inline ImageResource&        GetDepthImage()              { return depthRes;          }
 };

@@ -252,7 +252,7 @@ void CreateTLAS() {
     }
     auto device = LogicalDevice::GetVkDevice();
     bool update = ctx.TLAS.accel != VK_NULL_HANDLE;
-    
+
     if (ctx.recreateTLAS) {
         update = false;
         if (ctx.TLAS.accel != VK_NULL_HANDLE) {

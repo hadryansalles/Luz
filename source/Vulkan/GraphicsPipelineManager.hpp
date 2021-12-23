@@ -19,10 +19,9 @@ struct GraphicsPipelineDesc {
 };
 
 struct GraphicsPipelineResource {
-    VkPipeline            pipeline                    = VK_NULL_HANDLE;
-    VkPipelineLayout      layout                      = VK_NULL_HANDLE;
-    bool                  dirty                       = false;
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    VkPipeline            pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout      layout   = VK_NULL_HANDLE;
+    bool                  dirty    = false;
 };
 
 struct BindlessPushConstant {
@@ -43,6 +42,7 @@ class GraphicsPipelineManager {
 public:
     static void Create();
     static void Destroy();
+    static void CreateDefaultDesc(GraphicsPipelineDesc& desc);
     static void CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void DestroyPipeline(GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
@@ -57,4 +57,5 @@ public:
     static inline constexpr int TEXTURES_BINDING = 0;
     static inline constexpr int STORAGE_BINDING = 1;
     static inline constexpr int ACCELERATION_STRUCTURE_BINDING = 2;
+    static inline constexpr int IMAGE_ATTACHMENT_BINDING = 3;
 };

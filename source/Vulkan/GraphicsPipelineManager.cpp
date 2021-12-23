@@ -6,6 +6,7 @@
 #include "SwapChain.hpp"
 #include "Instance.hpp"
 #include "VulkanUtils.hpp"
+#include "AssetManager.hpp"
 
 void GraphicsPipelineManager::Create() {
     auto device = LogicalDevice::GetVkDevice();
@@ -27,11 +28,12 @@ void GraphicsPipelineManager::Create() {
     {
         const u32 MAX_UNIFORMS = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorUniformBuffers-10;
         const u32 MAX_STORAGE = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorStorageBuffers;
-        const u32 MAX_TEXTURES = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorSampledImages-10;
+        const u32 MAX_ATTACHIMAGES = 32;
+        const u32 MAX_SAMPLEDIMAGES = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorSampledImages-MAX_ATTACHIMAGES;
 
         // create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_UNIFORMS},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
             {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1}
@@ -54,9 +56,17 @@ void GraphicsPipelineManager::Create() {
         VkDescriptorSetLayoutBinding texturesBinding{};
         texturesBinding.binding = TEXTURES_BINDING;
         texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        texturesBinding.descriptorCount = MAX_TEXTURES;
+        texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
         texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(texturesBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding imageAttachBinding{};
+        imageAttachBinding.binding = IMAGE_ATTACHMENT_BINDING;
+        imageAttachBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        imageAttachBinding.descriptorCount = MAX_ATTACHIMAGES;
+        imageAttachBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(imageAttachBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
 
         VkDescriptorSetLayoutBinding storageBuffersBinding{};
@@ -113,6 +123,64 @@ void GraphicsPipelineManager::Destroy() {
         bindlessDescriptorPool = VK_NULL_HANDLE;
         bindlessDescriptorLayout = VK_NULL_HANDLE;
     }
+}
+
+void GraphicsPipelineManager::CreateDefaultDesc(GraphicsPipelineDesc& desc) {
+    desc.bindingDesc = MeshVertex::getBindingDescription();
+    desc.attributesDesc = MeshVertex::getAttributeDescriptions();
+
+    desc.rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    // fragments beyond near and far planes are clamped to them
+    desc.rasterizer.depthClampEnable = VK_FALSE;
+    desc.rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    desc.rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    // line thickness in terms of number of fragments
+    desc.rasterizer.lineWidth = 1.0f;
+    desc.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    desc.rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    desc.rasterizer.depthBiasEnable = VK_FALSE;
+    desc.rasterizer.depthBiasConstantFactor = 0.0f;
+    desc.rasterizer.depthBiasClamp = 0.0f;
+    desc.rasterizer.depthBiasSlopeFactor = 0.0f;
+
+    desc.multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    desc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
+    desc.multisampling.sampleShadingEnable = VK_FALSE;
+    desc.multisampling.minSampleShading = 0.5f;
+    desc.multisampling.pSampleMask = nullptr;
+
+    desc.depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    desc.depthStencil.depthTestEnable = VK_TRUE;
+    desc.depthStencil.depthWriteEnable = VK_TRUE;
+    desc.depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    desc.depthStencil.depthBoundsTestEnable = VK_FALSE;
+    desc.depthStencil.minDepthBounds = 0.0f;
+    desc.depthStencil.maxDepthBounds = 1.0f;
+    desc.depthStencil.stencilTestEnable = VK_FALSE;
+    desc.depthStencil.front = {};
+    desc.depthStencil.back = {};
+
+    desc.colorBlendAttachment.colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
+    desc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+    desc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    desc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+    desc.colorBlendAttachment.blendEnable = VK_TRUE;
+    desc.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    desc.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    desc.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    desc.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    desc.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    desc.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    desc.colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    desc.colorBlendState.logicOpEnable = VK_FALSE;
+    desc.colorBlendState.logicOp = VK_LOGIC_OP_COPY;
+    desc.colorBlendState.attachmentCount = 1;
+    desc.colorBlendState.pAttachments = &desc.colorBlendAttachment;
+    desc.colorBlendState.blendConstants[0] = 0.0f;
+    desc.colorBlendState.blendConstants[1] = 0.0f;
+    desc.colorBlendState.blendConstants[2] = 0.0f;
+    desc.colorBlendState.blendConstants[3] = 0.0f;
 }
 
 void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
@@ -179,6 +247,15 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &res.layout);
     DEBUG_VK(vkRes, "Failed to create pipeline layout!");
 
+    VkFormat colorFormat = SwapChain::GetImageFormat();
+    VkPipelineRenderingCreateInfoKHR pipelineRendering{};
+    pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    pipelineRendering.colorAttachmentCount = 1;
+    pipelineRendering.pColorAttachmentFormats = &colorFormat;
+    pipelineRendering.depthAttachmentFormat = SwapChain::GetDepthFormat();
+    pipelineRendering.stencilAttachmentFormat = SwapChain::GetDepthFormat();
+    pipelineRendering.viewMask = 0;
+
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = 2;
@@ -192,12 +269,13 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     pipelineInfo.pColorBlendState = &desc.colorBlendState;
     pipelineInfo.pDynamicState = nullptr;
     pipelineInfo.layout = res.layout;
-    pipelineInfo.renderPass = SwapChain::GetRenderPass();
+    // pipelineInfo.renderPass = SwapChain::GetRenderPass();
     pipelineInfo.subpass = 0;
     // if we were creating this pipeline by deriving it from another
     // we should specify here
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
+    pipelineInfo.pNext = &pipelineRendering;
 
     vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &res.pipeline);
     DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
@@ -212,9 +290,6 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
 void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
     vkDestroyPipeline(LogicalDevice::GetVkDevice(), res.pipeline, Instance::GetAllocator());
     vkDestroyPipelineLayout(LogicalDevice::GetVkDevice(), res.layout, Instance::GetAllocator());
-    for (int i = 0; i < res.descriptorSetLayouts.size(); i++) {
-        vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), res.descriptorSetLayouts[i], Instance::GetAllocator());
-    }
 }
 
 void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
