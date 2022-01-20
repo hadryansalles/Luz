@@ -9,9 +9,9 @@ void PBRGraphicsPipeline::Setup() {
     desc.name = "PBR";
 
     desc.shaderStages.resize(2);
-    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/pbr.vert.spv");
+    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/opaque.vert.spv");
     desc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/pbr.frag.spv");
+    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/opaque.frag.spv");
     desc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     desc.bindingDesc = MeshVertex::getBindingDescription();
@@ -48,23 +48,25 @@ void PBRGraphicsPipeline::Setup() {
     desc.depthStencil.front = {};
     desc.depthStencil.back = {};
 
-    desc.colorBlendAttachment.colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
-    desc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-    desc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-    desc.colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-    desc.colorBlendAttachment.blendEnable = VK_TRUE;
-    desc.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    desc.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    desc.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    desc.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    desc.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    desc.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    desc.colorBlendAttachments.resize(1);
+
+    desc.colorBlendAttachments[0].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
+    desc.colorBlendAttachments[0].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+    desc.colorBlendAttachments[0].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    desc.colorBlendAttachments[0].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+    desc.colorBlendAttachments[0].blendEnable = VK_TRUE;
+    desc.colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    desc.colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    desc.colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
+    desc.colorBlendAttachments[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    desc.colorBlendAttachments[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    desc.colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
 
     desc.colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     desc.colorBlendState.logicOpEnable = VK_FALSE;
     desc.colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    desc.colorBlendState.attachmentCount = 1;
-    desc.colorBlendState.pAttachments = &desc.colorBlendAttachment;
+    desc.colorBlendState.attachmentCount = desc.colorBlendAttachments.size();
+    desc.colorBlendState.pAttachments = desc.colorBlendAttachments.data();
     desc.colorBlendState.blendConstants[0] = 0.0f;
     desc.colorBlendState.blendConstants[1] = 0.0f;
     desc.colorBlendState.blendConstants[2] = 0.0f;

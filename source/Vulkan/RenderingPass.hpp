@@ -7,7 +7,7 @@ struct RenderingPass {
     int useDepthAttachment = false;
     int numColorAttachments = 0;
     GraphicsPipelineDesc gpoDesc;
-    GraphicsPipelineResource gpoRes;
+    GraphicsPipelineResource gpo;
     std::vector<RID> colorAttachments;
     RID depthAttachment;
 };

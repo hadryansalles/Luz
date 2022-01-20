@@ -14,21 +14,14 @@ struct GraphicsPipelineDesc {
     VkPipelineRasterizationStateCreateInfo         rasterizer{};
     VkPipelineMultisampleStateCreateInfo           multisampling{};
     VkPipelineDepthStencilStateCreateInfo          depthStencil{};
-    VkPipelineColorBlendAttachmentState            colorBlendAttachment{};
     VkPipelineColorBlendStateCreateInfo            colorBlendState{};
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments{};
 };
 
 struct GraphicsPipelineResource {
     VkPipeline            pipeline = VK_NULL_HANDLE;
     VkPipelineLayout      layout   = VK_NULL_HANDLE;
     bool                  dirty    = false;
-};
-
-struct BindlessPushConstant {
-    int frameID;
-    int numFrames;
-    int textureID;
-    int modelID;
 };
 
 class GraphicsPipelineManager {
