@@ -234,11 +234,6 @@ private:
         auto instance = Instance::GetVkInstance();
         auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
 
-        ConstantsBlock constants;
-        constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
-        constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
-        constants.frameID = frameCount;
-
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = 0;
@@ -248,62 +243,32 @@ private:
             throw std::runtime_error("failed to begin recording command buffer!");
         }
 
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = SwapChain::GetRenderPass();
-        renderPassInfo.framebuffer = SwapChain::GetFramebuffer(frameIndex);
+        DeferredShading::BeginOpaquePass(commandBuffer, DeferredShading::opaquePass);
 
-        renderPassInfo.renderArea.offset = { 0, 0 };
-        renderPassInfo.renderArea.extent = SwapChain::GetExtent();
-
-        std::array<VkClearValue, 2> clearValues{}; 
-        clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
-        clearValues[1].depthStencil = { 1.0f, 0 };
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        // vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        DeferredShading::BeginRendering(commandBuffer, frameIndex);
-
-        auto gpo = PBRGraphicsPipeline::GetResource();
-        auto BIND_GRAPHICS = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gpo.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, BIND_GRAPHICS, gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+        DeferredShading::OpaqueConstants constants;
+        constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
+        constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+        constants.frameID = frameCount;
 
         for (Model* model : Scene::modelEntities) {
-            MeshResource& mesh = AssetManager::meshes[model->mesh];
-            VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
             constants.modelID = model->id;
-            vkCmdPushConstants(commandBuffer, gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-            vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
+            DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
+            DeferredShading::RenderMesh(commandBuffer, model->mesh);
         }
 
         if (Scene::renderLightGizmos) {
             for (Light* light : Scene::lightEntities) {
-                MeshResource& mesh = AssetManager::meshes[Scene::lightMeshes[light->block.type]];
-                VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
                 constants.modelID = light->id;
-                vkCmdPushConstants(commandBuffer, gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(ConstantsBlock), &constants);
-                vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
-                // vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+                DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
+                DeferredShading::RenderMesh(commandBuffer, Scene::lightMeshes[light->block.type]);
             }
         }
 
-        DeferredShading::EndRendering(commandBuffer, frameIndex);
+        DeferredShading::EndPass(commandBuffer);
 
         DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
         DeferredShading::EndPresentPass(commandBuffer, frameIndex);
-
 
         // vkCmdEndRenderPass(commandBuffer);
 

@@ -6,6 +6,9 @@
 #include <glm/gtx/quaternion.hpp>
 
 struct Transform {
+
+    static inline bool globalDirty = false;
+
     glm::vec3 position = glm::vec3(.0f);
     glm::vec3 rotation = glm::vec3(.0f);
     glm::vec3 scale = glm::vec3(1.0f);
@@ -20,22 +23,26 @@ struct Transform {
         this->transform = rhs.transform;
         this->dirty = rhs.dirty;
         this->parent = rhs.parent;
+        globalDirty = true;
         return *this;
     }
 
     void SetPosition(glm::vec3 pos) {
         position = pos;
         dirty = true;
+        globalDirty = true;
     }
 
     void SetRotation(glm::vec3 rot) {
         rotation = rot;
         dirty = true;
+        globalDirty = true;
     }
 
     void SetScale(glm::vec3 scl) {
         scale = scl;
         dirty = true;
+        globalDirty = true;
     }
 
     void SetMatrix(glm::mat4 mat) {
@@ -45,6 +52,7 @@ struct Transform {
         glm::decompose(mat, scale, rot, position, skew, persp);
         rotation = glm::degrees(glm::eulerAngles(rot));
         dirty = true;
+        globalDirty = true;
     }
 
     glm::mat4 GetMatrix() {

@@ -19,7 +19,7 @@ void RenderingPassManager::Destroy() {
 
 void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
     LUZ_PROFILE_FUNC();
-    GraphicsPipelineManager::CreatePipeline(pass.gpoDesc, pass.gpoRes);
+    GraphicsPipelineManager::CreatePipeline(pass.gpoDesc, pass.gpo);
     VkExtent2D extent =  SwapChain::GetExtent();
     for(int i = 0; i < pass.numColorAttachments; i++) {
         ImageDesc desc;
@@ -93,7 +93,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
 }
 
 void RenderingPassManager::DestroyRenderingPass(RenderingPass& pass) {
-    GraphicsPipelineManager::DestroyPipeline(pass.gpoRes);
+    GraphicsPipelineManager::DestroyPipeline(pass.gpo);
     pass.colorAttachments.clear();
     pass.depthAttachment = 0;
 }

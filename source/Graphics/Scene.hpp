@@ -60,13 +60,6 @@ struct ModelBlock {
     MaterialBlock material;
 };
 
-struct ConstantsBlock {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-    int frameID;
-};
-
 enum class EntityType {
     Invalid,
     Model,
