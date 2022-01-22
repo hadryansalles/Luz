@@ -16,7 +16,7 @@ namespace DeferredShading {
 struct Context {
     PFN_vkCmdBeginRenderingKHR vkCmdBeginRendering;
     PFN_vkCmdEndRenderingKHR vkCmdEndRendering;
-    const char* presentTypes[3] = { "Albedo", "Normal", "Depth" };
+    const char* presentTypes[6] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth" };
     int presentType = 0;
 };
 
@@ -29,6 +29,21 @@ Context ctx;
 
 void Setup() {
     {
+        GraphicsPipelineManager::CreateDefaultDesc(lightPass.gpoDesc);
+        lightPass.gpoDesc.name = "Light";
+        lightPass.gpoDesc.shaderStages.resize(2);
+        lightPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        lightPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        std::vector<std::vector<char>> shaderBytes = FileManager::ReadShaders({"bin/light.vert.spv", "bin/light.frag.spv"});
+        lightPass.gpoDesc.shaderStages[0].shaderBytes = shaderBytes[0];
+        lightPass.gpoDesc.shaderStages[1].shaderBytes = shaderBytes[1];
+        lightPass.gpoDesc.attributesDesc.clear();
+        lightPass.gpoDesc.bindingDesc = {};
+        lightPass.gpoDesc.useDepthAttachment = false;
+        lightPass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
+        lightPass.clearColors = { {0, 0, 0, 1} };
+    }
+    {
         GraphicsPipelineManager::CreateDefaultDesc(opaquePass.gpoDesc);
         opaquePass.gpoDesc.name = "Opaque";
         opaquePass.gpoDesc.shaderStages.resize(2);
@@ -37,8 +52,10 @@ void Setup() {
         std::vector<std::vector<char>> shaderBytes = FileManager::ReadShaders({"bin/opaque.vert.spv", "bin/opaque.frag.spv"});
         opaquePass.gpoDesc.shaderStages[0].shaderBytes = shaderBytes[0];
         opaquePass.gpoDesc.shaderStages[1].shaderBytes = shaderBytes[1];
-        opaquePass.numColorAttachments = 2;
-        opaquePass.useDepthAttachment = true;
+        opaquePass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R32G32B32A32_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM};
+        opaquePass.clearColors = { {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1} };
+        opaquePass.gpoDesc.useDepthAttachment = true;
+        opaquePass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT;
     }
     {
         GraphicsPipelineManager::CreateDefaultDesc(presentPass.gpoDesc);
@@ -51,8 +68,7 @@ void Setup() {
         presentPass.gpoDesc.shaderStages[1].shaderBytes = shaderBytes[1];
         presentPass.gpoDesc.attributesDesc.clear();
         presentPass.gpoDesc.bindingDesc = {};
-        presentPass.numColorAttachments = 0;
-        presentPass.useDepthAttachment = false;
+        presentPass.gpoDesc.useDepthAttachment = false;
     }
 }
 
@@ -61,6 +77,7 @@ void Create() {
     RenderingPassManager::Create();
     ctx.vkCmdBeginRendering = (PFN_vkCmdBeginRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdBeginRenderingKHR");
     ctx.vkCmdEndRendering = (PFN_vkCmdEndRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR");
+    RenderingPassManager::CreateRenderingPass(lightPass);
     RenderingPassManager::CreateRenderingPass(opaquePass);
     RenderingPassManager::CreateRenderingPass(presentPass);
 }
@@ -68,6 +85,7 @@ void Create() {
 void Destroy() {
     RenderingPassManager::DestroyRenderingPass(opaquePass);
     RenderingPassManager::DestroyRenderingPass(presentPass);
+    RenderingPassManager::DestroyRenderingPass(lightPass);
     RenderingPassManager::Destroy();
 }
 
@@ -84,43 +102,12 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
     vkCmdPushConstants(commandBuffer, pass.gpo.layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
-void BeginOpaquePass(VkCommandBuffer commandBuffer, RenderingPass& pass) {
-    ImageResource albedoImage = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[0]];
-    ImageResource normalImage = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[1]];
-    ImageResource depthImage = RenderingPassManager::imageAttachments[opaquePass.depthAttachment];
-
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, albedoImage.image);
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, normalImage.image);
-    ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, depthImage.image);
-
-    VkRenderingAttachmentInfoKHR albedoAttach{};
-    albedoAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    albedoAttach.imageView = albedoImage.view;
-    albedoAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    albedoAttach.resolveMode = VK_RESOLVE_MODE_NONE;
-    albedoAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    albedoAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    albedoAttach.clearValue.color = { 0, 0, 0, 1.0f };
-
-    VkRenderingAttachmentInfoKHR normalAttach{};
-    normalAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    normalAttach.imageView = normalImage.view;
-    normalAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    normalAttach.resolveMode = VK_RESOLVE_MODE_NONE;
-    normalAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    normalAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    normalAttach.clearValue.color = { 0, 0, 0, 1.0f };
-
-    VkRenderingAttachmentInfoKHR depthAttach{};
-    depthAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    depthAttach.imageView = depthImage.view;
-    depthAttach.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttach.resolveMode = VK_RESOLVE_MODE_NONE;
-    depthAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    depthAttach.clearValue.depthStencil = { 1.0f, 0 };
-
-    VkRenderingAttachmentInfoKHR colorAttachs[] = { albedoAttach, normalAttach };
+void BeginOpaquePass(VkCommandBuffer commandBuffer) {
+    for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
+        ImageResource image = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
+        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image.image);
+    }
+    ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, RenderingPassManager::imageAttachments[opaquePass.depthAttachment].image);
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -129,36 +116,76 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer, RenderingPass& pass) {
     renderingInfo.renderArea.extent = SwapChain::GetExtent();
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
-    renderingInfo.colorAttachmentCount = COUNT_OF(colorAttachs);
-    renderingInfo.pColorAttachments = colorAttachs;
-    renderingInfo.pDepthAttachment = &depthAttach;
-    renderingInfo.pStencilAttachment = &depthAttach;
+    renderingInfo.colorAttachmentCount = opaquePass.colorAttachInfos.size();
+    renderingInfo.pColorAttachments = opaquePass.colorAttachInfos.data();
+    renderingInfo.pDepthAttachment = &opaquePass.depthAttachInfo;
+    renderingInfo.pStencilAttachment = &opaquePass.depthAttachInfo;
 
     ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.gpo.pipeline);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.pipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
 }
+
 
 void EndPass(VkCommandBuffer commandBuffer) {
     ctx.vkCmdEndRendering(commandBuffer);
 }
 
-void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
-    ImageResource albedoImage = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[0]];
-    ImageResource normalImage = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[1]];
-    ImageResource depthImage = RenderingPassManager::imageAttachments[opaquePass.depthAttachment];
+void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
+    for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
+        ImageResource res = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
+        ImageManager::BarrierColorAttachmentToRead(commandBuffer, res.image);
+    }
+    ImageResource depthRes = RenderingPassManager::imageAttachments[opaquePass.depthAttachment];
+    ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes.image);
 
+    constants.albedoRID = opaquePass.colorAttachments[0];
+    constants.normalRID = opaquePass.colorAttachments[1];
+    constants.materialRID = opaquePass.colorAttachments[2];
+    constants.emissionRID = opaquePass.colorAttachments[3];
+    constants.depthRID = opaquePass.depthAttachment;
+
+    ImageResource lightColorRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes.image);
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = 1;
+    renderingInfo.renderArea.extent = SwapChain::GetExtent();
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.flags = 0;
+    renderingInfo.colorAttachmentCount = lightPass.colorAttachInfos.size();
+    renderingInfo.pColorAttachments = lightPass.colorAttachInfos.data();
+    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.pipeline);
+    vkCmdPushConstants(commandBuffer, lightPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+    ctx.vkCmdEndRendering(commandBuffer);
+}
+
+void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
     PresentConstant constants;
     if (ctx.presentType == 0) {
-        ImageManager::BarrierColorAttachmentToRead(commandBuffer, albedoImage.image);
-        constants.imageRID = opaquePass.colorAttachments[0];
+        constants.imageRID = lightPass.colorAttachments[0];
+        ImageResource& res = RenderingPassManager::imageAttachments[constants.imageRID];
+        ImageManager::BarrierColorAttachmentToRead(commandBuffer, res.image);
     } else if (ctx.presentType == 1) {
-        ImageManager::BarrierColorAttachmentToRead(commandBuffer, normalImage.image);
-        constants.imageRID = opaquePass.colorAttachments[1];
+        constants.imageRID = opaquePass.colorAttachments[0];
     } else if (ctx.presentType == 2) {
-        ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthImage.image);
+        constants.imageRID = opaquePass.colorAttachments[1];
+    } else if (ctx.presentType == 3) {
+        constants.imageRID = opaquePass.colorAttachments[2];
+    } else if (ctx.presentType == 4) {
+        constants.imageRID = opaquePass.colorAttachments[3];
+    } else if (ctx.presentType == 5) {
         constants.imageRID = opaquePass.depthAttachment;
     }
     constants.imageType = ctx.presentType;

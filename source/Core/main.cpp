@@ -243,12 +243,11 @@ private:
             throw std::runtime_error("failed to begin recording command buffer!");
         }
 
-        DeferredShading::BeginOpaquePass(commandBuffer, DeferredShading::opaquePass);
+        DeferredShading::BeginOpaquePass(commandBuffer);
 
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
         constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
-        constants.frameID = frameCount;
 
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;
@@ -265,6 +264,11 @@ private:
         }
 
         DeferredShading::EndPass(commandBuffer);
+
+        DeferredShading::LightConstants lightPassConstants;
+        lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
+        lightPassConstants.frameID = frameCount;
+        DeferredShading::LightPass(commandBuffer, lightPassConstants);
 
         DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
         ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);

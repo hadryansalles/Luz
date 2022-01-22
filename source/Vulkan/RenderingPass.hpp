@@ -4,12 +4,14 @@
 #include "GraphicsPipelineManager.hpp"
 
 struct RenderingPass {
-    int useDepthAttachment = false;
-    int numColorAttachments = 0;
     GraphicsPipelineDesc gpoDesc;
     GraphicsPipelineResource gpo;
+    std::vector<VkClearColorValue> clearColors;
+    VkClearDepthStencilValue clearDepth;
     std::vector<RID> colorAttachments;
     RID depthAttachment;
+    std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
+    VkRenderingAttachmentInfoKHR depthAttachInfo;
 };
 
 class RenderingPassManager {
