@@ -6,23 +6,23 @@ layout(push_constant) uniform ConstantsBlock {
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
-    int frame;
 };
 
 #include "base.glsl"
 
-layout(location = 0) in vec4 fragPos;
-layout(location = 1) in vec3 fragNormal;
-layout(location = 2) in vec3 fragTangent;
-layout(location = 3) in vec2 fragTexCoord;
-layout(location = 4) in mat3 fragTBN;
+layout(location = 0) in vec3 fragNormal;
+layout(location = 1) in vec3 fragTangent;
+layout(location = 2) in vec2 fragTexCoord;
+layout(location = 3) in mat3 fragTBN;
 
 layout(location = 0) out vec4 outAlbedo;
 layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outMaterial;
+layout(location = 3) out vec4 outEmission;
 
 void main() {
     vec4 albedo = texture(textures[model.colorMap], fragTexCoord)*model.color;
-    if(albedo.a < 0.5) {
+    if(albedo.a < 1) {
         discard;
     }
     vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
@@ -38,5 +38,7 @@ void main() {
         N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
     }
     outAlbedo = albedo; 
-    outNormal = vec4(0.5 + N/2.0, 1);
+    outNormal = vec4(N, 1.0);
+    outMaterial = vec4(occlusion, roughness, metallic, 1.0);
+    outEmission = emission;
 }

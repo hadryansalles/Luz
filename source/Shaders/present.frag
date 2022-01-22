@@ -22,8 +22,9 @@ float LinearizeDepth(float depth) {
 void main() {
     vec4 value = texture(imageAttachs[imageRID], fragTexCoord);
     if(imageType == 2) {
-        float depth = LinearizeDepth(texture(imageAttachs[imageRID], fragTexCoord).r);
-        value = vec4(depth).xxxx;
+        value = (value + 1.0)/2.0;
+    } else if(imageType == 6) {
+        value = LinearizeDepth(value.r).xxxx;
     }
     outColor = vec4(value.rgb, 1.0);
 }

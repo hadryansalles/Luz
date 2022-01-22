@@ -14,8 +14,9 @@ struct GraphicsPipelineDesc {
     VkPipelineRasterizationStateCreateInfo         rasterizer{};
     VkPipelineMultisampleStateCreateInfo           multisampling{};
     VkPipelineDepthStencilStateCreateInfo          depthStencil{};
-    VkPipelineColorBlendStateCreateInfo            colorBlendState{};
-    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments{};
+    std::vector<VkFormat> colorFormats;
+    bool useDepthAttachment = false;
+    VkFormat depthFormat;
 };
 
 struct GraphicsPipelineResource {

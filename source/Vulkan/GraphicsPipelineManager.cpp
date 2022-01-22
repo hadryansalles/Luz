@@ -159,35 +159,6 @@ void GraphicsPipelineManager::CreateDefaultDesc(GraphicsPipelineDesc& desc) {
     desc.depthStencil.stencilTestEnable = VK_FALSE;
     desc.depthStencil.front = {};
     desc.depthStencil.back = {};
-
-    desc.colorBlendAttachments.resize(2);
-    desc.colorBlendAttachments[0].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
-    desc.colorBlendAttachments[0].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-    desc.colorBlendAttachments[0].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-    desc.colorBlendAttachments[0].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-    desc.colorBlendAttachments[0].blendEnable = VK_FALSE;
-
-    desc.colorBlendAttachments[1].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
-    desc.colorBlendAttachments[1].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-    desc.colorBlendAttachments[1].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-    desc.colorBlendAttachments[1].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-    desc.colorBlendAttachments[1].blendEnable = VK_FALSE;
-    // desc.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    // desc.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    // desc.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    // desc.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    // desc.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    // desc.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-
-    desc.colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    desc.colorBlendState.logicOpEnable = VK_FALSE;
-    desc.colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    desc.colorBlendState.attachmentCount = desc.colorBlendAttachments.size();
-    desc.colorBlendState.pAttachments = desc.colorBlendAttachments.data();
-    desc.colorBlendState.blendConstants[0] = 0.0f;
-    desc.colorBlendState.blendConstants[1] = 0.0f;
-    desc.colorBlendState.blendConstants[2] = 0.0f;
-    desc.colorBlendState.blendConstants[3] = 0.0f;
 }
 
 void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
@@ -254,15 +225,40 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &res.layout);
     DEBUG_VK(vkRes, "Failed to create pipeline layout!");
 
-    VkFormat colorFormat = SwapChain::GetImageFormat();
-    VkFormat colorFormats[] = { colorFormat, colorFormat };
     VkPipelineRenderingCreateInfoKHR pipelineRendering{};
     pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    pipelineRendering.colorAttachmentCount = 2;
-    pipelineRendering.pColorAttachmentFormats = colorFormats;
-    pipelineRendering.depthAttachmentFormat = SwapChain::GetDepthFormat();
-    pipelineRendering.stencilAttachmentFormat = SwapChain::GetDepthFormat();
+    pipelineRendering.colorAttachmentCount = desc.colorFormats.size();
+    pipelineRendering.pColorAttachmentFormats = desc.colorFormats.data();
+    pipelineRendering.depthAttachmentFormat = desc.depthFormat;
+    pipelineRendering.stencilAttachmentFormat = desc.depthFormat;
     pipelineRendering.viewMask = 0;
+
+    std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
+    for (int i = 0; i < desc.colorFormats.size(); i++) {
+        blendAttachments[i].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
+        blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+        blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+        blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+        blendAttachments[i].blendEnable = VK_FALSE;
+    }
+
+    // desc.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    // desc.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    // desc.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    // desc.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    // desc.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    // desc.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo colorBlendState{};
+    colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlendState.logicOpEnable = VK_FALSE;
+    colorBlendState.logicOp = VK_LOGIC_OP_COPY;
+    colorBlendState.attachmentCount = blendAttachments.size();
+    colorBlendState.pAttachments = blendAttachments.data();
+    colorBlendState.blendConstants[0] = 0.0f;
+    colorBlendState.blendConstants[1] = 0.0f;
+    colorBlendState.blendConstants[2] = 0.0f;
+    colorBlendState.blendConstants[3] = 0.0f;
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -274,7 +270,7 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     pipelineInfo.pRasterizationState = &desc.rasterizer;
     pipelineInfo.pMultisampleState = &desc.multisampling;
     pipelineInfo.pDepthStencilState = &desc.depthStencil;
-    pipelineInfo.pColorBlendState = &desc.colorBlendState;
+    pipelineInfo.pColorBlendState = &colorBlendState;
     pipelineInfo.pDynamicState = nullptr;
     pipelineInfo.layout = res.layout;
     // pipelineInfo.renderPass = SwapChain::GetRenderPass();
