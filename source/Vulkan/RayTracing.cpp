@@ -43,6 +43,7 @@ struct RayTracingContext {
 
     bool useRayTracing = true;
     bool recreateTLAS = false;
+    bool autoUpdateTLAS = true;
 
     ImageResource image;
     VkSampler sampler;
@@ -247,7 +248,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
 
 void CreateTLAS() {
     LUZ_PROFILE_FUNC();
-    if (!ctx.useRayTracing) {
+    if (!ctx.autoUpdateTLAS || !ctx.useRayTracing) {
         return;
     }
     auto device = LogicalDevice::GetVkDevice();
@@ -447,6 +448,7 @@ void OnImgui() {
     LUZ_PROFILE_FUNC();
     if (ImGui::Begin("Ray Tracing")) {
         ImGui::Checkbox("Enabled", &ctx.useRayTracing);
+        ImGui::Checkbox("Auto Update", &ctx.autoUpdateTLAS);
         ImVec2 imgSize = ImVec2(ctx.image.width, ctx.image.height);
         ImVec2 winSize = ImGui::GetContentRegionAvail();
         float t;

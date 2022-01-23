@@ -4,6 +4,7 @@
 #include <vector>
 
 struct ShaderDesc {
+    std::string path;
     std::vector<char> shaderBytes;
     VkShaderStageFlagBits stageBit;
 };

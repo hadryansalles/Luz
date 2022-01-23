@@ -37,8 +37,9 @@ public:
     static void Create();
     static void Destroy();
     static void CreateDefaultDesc(GraphicsPipelineDesc& desc);
-    static void CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
+    static void CreatePipeline(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void DestroyPipeline(GraphicsPipelineResource& res);
+    static void ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
 
     static void WriteStorage(StorageBuffer& uniform, int index);

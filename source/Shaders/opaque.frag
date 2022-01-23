@@ -22,7 +22,7 @@ layout(location = 3) out vec4 outEmission;
 
 void main() {
     vec4 albedo = texture(textures[model.colorMap], fragTexCoord)*model.color;
-    if(albedo.a < 1) {
+    if(albedo.a < 0.5) {
         discard;
     }
     vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
@@ -39,6 +39,6 @@ void main() {
     }
     outAlbedo = albedo; 
     outNormal = vec4(N, 1.0);
-    outMaterial = vec4(occlusion, roughness, metallic, 1.0);
+    outMaterial = vec4(roughness, metallic, occlusion, 1.0);
     outEmission = emission;
 }

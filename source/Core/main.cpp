@@ -137,6 +137,10 @@ private:
             }
             Scene::camera.Update(selectedTransform);
             drawFrame();
+            if (Window::IsKeyPressed(GLFW_KEY_R)) {
+                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+                DeferredShading::ReloadShaders();
+            }
             if (DirtyGlobalResources()) {
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
                 DestroyVulkan();
