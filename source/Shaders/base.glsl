@@ -48,6 +48,8 @@ layout(set = 0, binding = 1) readonly buffer SceneBlock {
     vec3 ambientLightColor;
     float ambientLightIntensity;
     mat4 projView;
+    mat4 inverseProj;
+    mat4 inverseView;
     vec3 camPos;
     int numLights;
     int aoNumSamples;

@@ -29,6 +29,7 @@ inline RenderingPass presentPass;
 void Setup();
 void Create();
 void Destroy();
+void ReloadShaders();
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
 

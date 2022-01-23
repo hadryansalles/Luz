@@ -109,6 +109,8 @@ void UpdateResources(int numFrame) {
     }
     scene.camPos = camera.GetPosition();
     scene.projView = camera.GetProj() * camera.GetView();
+    scene.inverseProj = glm::inverse(camera.GetProj());
+    scene.inverseView = glm::inverse(camera.GetView());
     UpdateBuffers(numFrame);
     RayTracing::CreateTLAS();
 }

@@ -32,6 +32,8 @@ struct SceneBlock {
     glm::vec3 ambientLightColor = glm::vec3(1.0f);
     f32 ambientLightIntensity = 0.03f;
     glm::mat4 projView = glm::mat4(1.0f);
+    glm::mat4 inverseProj = glm::mat4(1.0f);
+    glm::mat4 inverseView = glm::mat4(1.0f);
     glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
     u32 numLights = 0;
     u32 aoNumSamples = 1;

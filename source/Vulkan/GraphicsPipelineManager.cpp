@@ -7,6 +7,7 @@
 #include "Instance.hpp"
 #include "VulkanUtils.hpp"
 #include "AssetManager.hpp"
+#include "FileManager.hpp"
 
 void GraphicsPipelineManager::Create() {
     auto device = LogicalDevice::GetVkDevice();
@@ -161,7 +162,7 @@ void GraphicsPipelineManager::CreateDefaultDesc(GraphicsPipelineDesc& desc) {
     desc.depthStencil.back = {};
 }
 
-void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
+void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
 
@@ -169,6 +170,9 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.shaderStages.size());
 
     for (int i = 0; i < shaderResources.size(); i++) {
+        if (desc.shaderStages[i].shaderBytes.empty()) {
+            desc.shaderStages[i].shaderBytes = FileManager::ReadRawBytes(desc.shaderStages[i].path);
+        }
         Shader::Create(desc.shaderStages[i], shaderResources[i]);
         shaderStages[i] = shaderResources[i].stageCreateInfo;
     }
@@ -294,6 +298,14 @@ void GraphicsPipelineManager::CreatePipeline(const GraphicsPipelineDesc& desc, G
 void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
     vkDestroyPipeline(LogicalDevice::GetVkDevice(), res.pipeline, Instance::GetAllocator());
     vkDestroyPipelineLayout(LogicalDevice::GetVkDevice(), res.layout, Instance::GetAllocator());
+}
+
+void GraphicsPipelineManager::ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
+    for (int i = 0; i < desc.shaderStages.size(); i++) {
+        desc.shaderStages[i].shaderBytes.clear();
+    }
+    DestroyPipeline(res);
+    CreatePipeline(desc, res);
 }
 
 void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
