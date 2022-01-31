@@ -117,6 +117,9 @@ void AssetManager::UpdateResources() {
 
 void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
     LUZ_PROFILE_FUNC();
+    if (rids.empty()) {
+        return;
+    }
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     const RID count = rids.size();
     std::vector<VkDescriptorImageInfo> imageInfos(count);
@@ -143,6 +146,7 @@ void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
         writes[i].pImageInfo = &imageInfos[i];
     }
     vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
+    DEBUG_TRACE("Update descriptor sets in UpdateTexturesDescriptor!");
 }
 
 void AssetManager::InitializeMesh(RID rid) {
@@ -417,8 +421,10 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
         if (mesh.primitives.size() > 1) {
             collection = Scene::CreateCollection();
             if (model.nodes.size() > 0) {
-                glm::vec3 scale(model.nodes[0].scale[0], model.nodes[0].scale[1], model.nodes[0].scale[2]);
-                collection->transform.SetScale(scale);
+                if (model.nodes[0].scale.size() == 3) {
+                    glm::vec3 scale(model.nodes[0].scale[0], model.nodes[0].scale[1], model.nodes[0].scale[2]);
+                    collection->transform.SetScale(scale);
+                }
             }
             if (sceneCollection) {
                 Scene::SetCollection(collection, sceneCollection);

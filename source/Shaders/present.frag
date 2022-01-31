@@ -5,8 +5,13 @@
 #include "base.glsl"
 
 layout(push_constant) uniform PresentConstants {
-    int imageRID;
-    int imageType;
+    int presentMode;
+    int lightRID;
+    int albedoRID;
+    int normalRID;
+    int materialRID;
+    int emissionRID;
+    int depthRID;
 };
 
 layout(location = 0) in vec2 fragTexCoord;
@@ -20,7 +25,47 @@ float LinearizeDepth(float depth) {
 }
 
 void main() {
-    vec4 value = texture(imageAttachs[imageRID], fragTexCoord);
+    int imageType = presentMode;
+    vec2 fragCoord = fragTexCoord;
+    if(presentMode == 6) {
+        fragCoord = vec2(fragTexCoord.x*3, fragTexCoord.y*2);
+        if(fragTexCoord.y < 0.5) {
+            if(fragTexCoord.x < 1.0/3.0) {
+                imageType = 0;
+            } else if(fragTexCoord.x < 2.0/3.0) {
+                imageType = 1;
+                fragCoord.x -= 1;
+            } else {
+                imageType = 2;
+                fragCoord.x -= 2;
+            }
+        } else {
+            fragCoord.y -= 1;
+            if(fragTexCoord.x < 1.0/3.0) {
+                imageType = 3;
+            } else if(fragTexCoord.x < 2.0/3.0) {
+                imageType = 4;
+                fragCoord.x -= 1;
+            } else {
+                imageType = 5;
+                fragCoord.x -= 2;
+            }
+        }
+        fragCoord.x = 1.0/6.0 + fragCoord.x*2.0/3.0;
+    }
+    int imageRID = lightRID;
+    if(imageType == 1) {
+        imageRID = albedoRID;
+    } else if(imageType == 2) {
+        imageRID = normalRID;
+    } else if(imageType == 3) {
+        imageRID = materialRID;
+    } else if(imageType == 4) {
+        imageRID = emissionRID;
+    } else if(imageType == 5) {
+        imageRID = depthRID;
+    }    
+    vec4 value = texture(imageAttachs[imageRID], fragCoord);
     if(imageType == 2) {
         value = (value + 1.0)/2.0;
     } else if(imageType == 5) {

@@ -359,6 +359,7 @@ uint32_t SwapChain::Acquire() {
         DEBUG_VK(res, "Failed to acquire swap chain image!");
     }
 
+    currentImageIndex = imageIndex;
     return imageIndex;
 }
 

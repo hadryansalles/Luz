@@ -16,13 +16,18 @@ namespace DeferredShading {
 struct Context {
     PFN_vkCmdBeginRenderingKHR vkCmdBeginRendering;
     PFN_vkCmdEndRenderingKHR vkCmdEndRendering;
-    const char* presentTypes[6] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth" };
+    const char* presentTypes[7] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth", "All"};
     int presentType = 0;
 };
 
 struct PresentConstant {
-    int imageRID;
     int imageType;
+    int lightRID;
+    int albedoRID;
+    int normalRID;
+    int materialRID;
+    int emissionRID;
+    int depthRID;
 };
 
 Context ctx;
@@ -134,7 +139,6 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
 }
 
-
 void EndPass(VkCommandBuffer commandBuffer) {
     ctx.vkCmdEndRendering(commandBuffer);
 }
@@ -178,22 +182,17 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
 }
 
 void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
+    ImageResource& lightRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
+    ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes.image);
+
     PresentConstant constants;
-    if (ctx.presentType == 0) {
-        constants.imageRID = lightPass.colorAttachments[0];
-        ImageResource& res = RenderingPassManager::imageAttachments[constants.imageRID];
-        ImageManager::BarrierColorAttachmentToRead(commandBuffer, res.image);
-    } else if (ctx.presentType == 1) {
-        constants.imageRID = opaquePass.colorAttachments[0];
-    } else if (ctx.presentType == 2) {
-        constants.imageRID = opaquePass.colorAttachments[1];
-    } else if (ctx.presentType == 3) {
-        constants.imageRID = opaquePass.colorAttachments[2];
-    } else if (ctx.presentType == 4) {
-        constants.imageRID = opaquePass.colorAttachments[3];
-    } else if (ctx.presentType == 5) {
-        constants.imageRID = opaquePass.depthAttachment;
-    }
+    constants.lightRID = lightPass.colorAttachments[0];
+    constants.albedoRID = opaquePass.colorAttachments[0];
+    constants.normalRID = opaquePass.colorAttachments[1];
+    constants.materialRID = opaquePass.colorAttachments[2];
+    constants.emissionRID = opaquePass.colorAttachments[3];
+    constants.depthRID = opaquePass.depthAttachment;
+
     constants.imageType = ctx.presentType;
 
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, SwapChain::GetImage(numFrame));

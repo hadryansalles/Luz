@@ -28,6 +28,7 @@ private:
     static inline int        newAdditionalImages = 0;
     static inline int        newFramesInFlight   = 2;
     static inline bool       dirty               = true;
+    static inline int        currentImageIndex   = 0;
 
     // preferred, warn if not available
     static inline VkFormat              colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -60,4 +61,5 @@ public:
     static inline VkImage               GetImage(u32 i)              { return images[i];         }
     static inline VkImageView           GetView(u32 i)               { return views[i];          }
     static inline ImageResource&        GetDepthImage()              { return depthRes;          }
+    static inline int                   GetCurrentImageIndex()       { return currentImageIndex; }
 };

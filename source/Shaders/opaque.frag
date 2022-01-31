@@ -2,6 +2,8 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
+layout(early_fragment_tests) in;
+
 layout(push_constant) uniform ConstantsBlock {
     int sceneBufferIndex;
     int modelBufferIndex;
