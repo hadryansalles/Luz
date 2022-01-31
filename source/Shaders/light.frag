@@ -1,9 +1,6 @@
-
-#version 450
+#version 460
 
 #extension GL_GOOGLE_include_directive : enable
-
-#include "base.glsl"
 
 layout(push_constant) uniform PresentConstants {
     int sceneBufferIndex;
@@ -14,6 +11,9 @@ layout(push_constant) uniform PresentConstants {
     int emissionRID;
     int depthRID;
 };
+
+#include "base.glsl"
+
 
 layout(location = 0) in vec2 fragTexCoord;
 
