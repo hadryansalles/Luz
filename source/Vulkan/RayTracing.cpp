@@ -39,7 +39,6 @@ struct BuildAccelerationStructure {
 struct RayTracingContext {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
-    std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups;
 
     bool useRayTracing = true;
     bool recreateTLAS = false;
@@ -57,12 +56,6 @@ struct RayTracingContext {
     VkDescriptorSet descriptorSet;
 
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR properties;
-
-    BufferResource SBTBuffer;
-    VkStridedDeviceAddressRegionKHR rgenRegion{};
-    VkStridedDeviceAddressRegionKHR missRegion{};
-    VkStridedDeviceAddressRegionKHR callRegion{};
-    VkStridedDeviceAddressRegionKHR hitRegion{};
 
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR;
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
@@ -387,6 +380,7 @@ void CreateTLAS() {
             writes.push_back(writeBindlessAccelerationStructure);
 
             vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+            DEBUG_TRACE("Update descriptor sets in CreateTLAS!");
         }
 
         BufferDesc scratchDesc;

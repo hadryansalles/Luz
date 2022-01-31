@@ -110,6 +110,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
     }
 
     vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
+    DEBUG_TRACE("Update descriptor sets in CreateRenderingPass!");
 }
 
 void RenderingPassManager::DestroyRenderingPass(RenderingPass& pass) {

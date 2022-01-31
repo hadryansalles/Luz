@@ -121,6 +121,41 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     return numShadows/numSamples;
 }
 
+float TraceAORays(vec3 fragPos, vec3 normal) {
+    if(scene.aoNumSamples == 0) {
+        return 1;
+    }
+    float ao = 0;
+    vec3 tangent = abs(normal.z) > 0.5 ? vec3(0.0, -normal.z, normal.y) : vec3(-normal.y, normal.x, 0.0);
+    vec3 bitangent = cross(normal, tangent);
+    float tMin = scene.aoMin;
+    float tMax = scene.aoMax;
+    for(int i = 0; i < scene.aoNumSamples; i++) {
+        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * scene.aoNumSamples + i)));
+        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
+        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
+        // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
+        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + scene.aoNumSamples*i));
+        vec3 randomVec = HemisphereSample(rng);
+        vec3 direction = tangent*randomVec.x + bitangent*randomVec.y + normal*randomVec.z;
+        // Ray Query for shadow
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, fragPos, tMin, direction, tMax);
+
+        while(rayQueryProceedEXT(rayQuery)) {}
+
+        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+            ao += rayQueryGetIntersectionTEXT(rayQuery, true)/(tMax*scene.aoNumSamples);
+        } else {
+            ao += 1.0/float(scene.aoNumSamples);
+            // ao += 1;
+        }
+    }
+    return clamp(pow(ao, scene.aoPower), 0.0, 1.0);
+}
+
+
 void main() {
     vec4 albedo = texture(imageAttachs[albedoRID], fragTexCoord);
     vec3 N = texture(imageAttachs[normalRID], fragTexCoord).xyz;
@@ -135,25 +170,28 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);
     vec3 Lo = vec3(0.0);
+    float shadowBias = 0.01;
+    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     for(int i = 0; i < scene.numLights; i++) {
         LightBlock light = scene.lights[i];
-        vec3 L = normalize(light.position - fragPos.xyz);
+        vec3 L_ = light.position - fragPos.xyz;
+        vec3 L = normalize(L_);
         float attenuation = 1;
         float shadowFactor = 0.0;
         if(light.type == LIGHT_TYPE_DIRECTIONAL) {
             L = normalize(-light.direction);
-            shadowFactor = TraceShadowRay(fragPos.xyz, L*10000, light.numShadowSamples, light.radius);
+            shadowFactor = TraceShadowRay(shadowOrigin, L*10000, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_SPOT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
             float theta = dot(L, normalize(-light.direction));
             float epsilon = light.innerAngle - light.outerAngle;
             attenuation *= clamp((theta - light.outerAngle)/epsilon, 0.0, 1.0);
-            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, light.numShadowSamples, light.radius);
+            shadowFactor = TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
-            shadowFactor = TraceShadowRay(fragPos.xyz, L*dist, light.numShadowSamples, light.radius);
+            shadowFactor = TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         }
         vec3 radiance = light.color * light.intensity * attenuation * (1.0 - shadowFactor);
 
@@ -174,7 +212,9 @@ void main() {
         Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
     }
 
-    vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion;
+    float rayTracedAo = TraceAORays(shadowOrigin, N);
+    // float rayTracedAo = 1;
+    vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
     vec3 color = ambient + Lo;
     color = color / (color + vec3(1.0));
     outColor = vec4(pow(color, vec3(1.0/2.2)) + emission.rgb, 1.0);

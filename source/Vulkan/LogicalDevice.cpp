@@ -71,6 +71,7 @@ void LogicalDevice::Create() {
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
     accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
     accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+    accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
     accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
     accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
 

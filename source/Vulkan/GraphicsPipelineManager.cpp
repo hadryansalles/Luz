@@ -425,4 +425,5 @@ void GraphicsPipelineManager::WriteStorage(StorageBuffer& uniform, int index) {
         writes[i].pBufferInfo = &bufferInfos[i];
     }
     vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), numFrames, writes.data(), 0, nullptr);
+    DEBUG_TRACE("Update descriptor sets in WriteStorage!");
 }
