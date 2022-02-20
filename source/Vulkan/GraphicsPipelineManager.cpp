@@ -277,6 +277,7 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     pipelineInfo.pColorBlendState = &colorBlendState;
     pipelineInfo.pDynamicState = nullptr;
     pipelineInfo.layout = res.layout;
+    pipelineInfo.renderPass = VK_NULL_HANDLE;
     // pipelineInfo.renderPass = SwapChain::GetRenderPass();
     pipelineInfo.subpass = 0;
     // if we were creating this pipeline by deriving it from another

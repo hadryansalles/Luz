@@ -71,6 +71,8 @@ void Setup() {
         // std::vector<std::vector<char>> shaderBytes = FileManager::ReadShaders({"bin/present.vert.spv", "bin/present.frag.spv"});
         // presentPass.gpoDesc.shaderStages[0].shaderBytes = shaderBytes[0];
         // presentPass.gpoDesc.shaderStages[1].shaderBytes = shaderBytes[1];
+        presentPass.gpoDesc.colorFormats = { VK_FORMAT_B8G8R8A8_UNORM };
+        presentPass.crateAttachments = false;
         presentPass.gpoDesc.attributesDesc.clear();
         presentPass.gpoDesc.bindingDesc = {};
         presentPass.gpoDesc.useDepthAttachment = false;

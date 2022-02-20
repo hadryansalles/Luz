@@ -49,6 +49,7 @@ public:
 private:
     u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
+    bool drawUi = true;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -137,6 +138,9 @@ private:
             }
             Scene::camera.Update(selectedTransform);
             drawFrame();
+            if (Window::IsKeyPressed(GLFW_KEY_F1)) {
+                drawUi = !drawUi;
+            }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
                 vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
                 DeferredShading::ReloadShaders();
@@ -275,7 +279,9 @@ private:
         DeferredShading::LightPass(commandBuffer, lightPassConstants);
 
         DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
-        ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
+        if (drawUi) {
+            ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
+        }
         DeferredShading::EndPresentPass(commandBuffer, frameIndex);
 
         // vkCmdEndRenderPass(commandBuffer);

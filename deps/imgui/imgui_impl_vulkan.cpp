@@ -826,6 +826,16 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     dynamic_state.pDynamicStates = dynamic_states;
 
     ImGui_ImplVulkan_CreatePipelineLayout(device, allocator);
+    
+    VkFormat formats[] = { VK_FORMAT_B8G8R8A8_UNORM };
+
+    VkPipelineRenderingCreateInfoKHR pipelineRendering{};
+    pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    pipelineRendering.colorAttachmentCount = IM_ARRAYSIZE(formats);
+    pipelineRendering.pColorAttachmentFormats = formats;
+    pipelineRendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+    pipelineRendering.stencilAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+    pipelineRendering.viewMask = 0;
 
     VkGraphicsPipelineCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -841,8 +851,10 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     info.pColorBlendState = &blend_info;
     info.pDynamicState = &dynamic_state;
     info.layout = g_PipelineLayout;
-    info.renderPass = renderPass;
+    // info.renderPass = renderPass;
+    info.renderPass = VK_NULL_HANDLE;
     info.subpass = subpass;
+    info.pNext = &pipelineRendering;
     VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, pipeline);
     check_vk_result(err);
 }
