@@ -25,6 +25,7 @@ struct ImageDesc {
     uint32_t width;
     uint32_t height;
     uint32_t mipLevels = 1;
+    uint32_t layers = 1;
 };
 
 class ImageManager {
@@ -32,6 +33,7 @@ public:
     static void Create(const ImageDesc& desc, ImageResource& res);
     static void Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer);
     static void Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res);
+    static void CreateCubeImage(std::vector<void*> data, u32 width, u32 height, u16 channels, ImageResource& res);
     static void Destroy(ImageResource& res);
 
     static void InsertBarrier (

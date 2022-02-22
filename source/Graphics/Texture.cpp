@@ -16,6 +16,14 @@ void CreateTextureResource(TextureDesc& desc, TextureResource& res) {
     res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
 }
 
+void CreateCubeTextureResource(CubeTextureDesc& desc, TextureResource& res) {
+    ImageManager::CreateCubeImage(desc.data, desc.width, desc.height, 4, res.image);
+    // res.sampler = CreateCubeSampler();
+    res.sampler = CreateSampler(1);
+    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    // res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
+}
+
 void DestroyTextureResource(TextureResource& res) {
     ImageManager::Destroy(res.image);
     vkDestroySampler(LogicalDevice::GetVkDevice(), res.sampler, Instance::GetAllocator());
@@ -29,6 +37,43 @@ void DrawTextureOnImgui(TextureResource& res) {
     ImVec2 size = ImVec2((f32)res.image.width/maxSize, (f32)res.image.height/maxSize);
     size = ImVec2(size.x*hSpace, size.y * hSpace);
     ImGui::Image(res.imguiRID, size);
+}
+
+VkSampler CreateCubeSampler() {
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    // get the max ansotropy level of my device
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(PhysicalDevice::GetVkPhysicalDevice(), &properties);
+
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+    // what color to return when clamp is active in addressing mode
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+    // if comparison is enabled, texels will be compared to a value an the result 
+    // is used in filtering operations, can be used in PCF on shadow maps
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 1;
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    auto vkRes = vkCreateSampler(LogicalDevice::GetVkDevice(), &samplerInfo, nullptr, &sampler);
+    DEBUG_VK(vkRes, "Failed to create texture sampler!");
+
+    return sampler;
 }
 
 VkSampler CreateSampler(f32 maxLod) {

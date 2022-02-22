@@ -83,6 +83,8 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
 }
 
 void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
+
+    DEBUG_ASSERT(desc.layers == 1 || desc.layers == 6, "Layers count not supported!");
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();
 
@@ -96,7 +98,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     imageInfo.extent.height = desc.height;
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = desc.mipLevels;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = desc.layers;
     imageInfo.format = desc.format;
     imageInfo.tiling = desc.tiling;
     imageInfo.initialLayout = desc.layout;
@@ -104,6 +106,9 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.samples = desc.numSamples;
     imageInfo.flags = 0;
+    if (imageInfo.arrayLayers > 1) {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
 
     auto result = vkCreateImage(device, &imageInfo, allocator, &res.image);
     DEBUG_VK(result, "Failed to create image!");
@@ -149,20 +154,28 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
 
     commandBuffer = LogicalDevice::BeginSingleTimeCommands();
 
-    VkBufferImageCopy region{};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
+    std::vector<VkBufferImageCopy> regions;
 
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
+    int offset = desc.size / desc.layers;
 
-    region.imageOffset = { 0, 0, 0 };
-    region.imageExtent = { desc.width, desc.height, 1 };
+    for (int i = 0; i < desc.layers; i++) {
+        VkBufferImageCopy region{};
+        region.bufferOffset = offset*i;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
 
-    vkCmdCopyBufferToImage(commandBuffer, buffer.buffer, res.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = i;
+        region.imageSubresource.layerCount = 1;
+
+        region.imageOffset = { 0, 0, 0 };
+        region.imageExtent = { desc.width, desc.height, 1 };
+
+        regions.push_back(region);
+    }
+
+    vkCmdCopyBufferToImage(commandBuffer, buffer.buffer, res.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions.size(), regions.data());
     LogicalDevice::EndSingleTimeCommands(commandBuffer);
 
     VkFormatProperties formatProperties;
@@ -236,12 +249,16 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = res.image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    if (desc.layers > 1) {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    }
     viewInfo.format = desc.format;
     viewInfo.subresourceRange.aspectMask = desc.aspect;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = desc.mipLevels;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.layerCount = desc.layers;
 
     result = vkCreateImageView(device, &viewInfo, allocator, &res.view);
     DEBUG_VK(result, "Failed to create image view!");
@@ -265,6 +282,36 @@ void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 m
 
     BufferResource staging;
     BufferManager::CreateStagingBuffer(staging, data, imageDesc.size);
+    Create(imageDesc, res, staging);
+    BufferManager::Destroy(staging);
+}
+
+void ImageManager::CreateCubeImage(std::vector<void*> data, u32 width, u32 height, u16 channels, ImageResource& res) {
+    ImageDesc imageDesc{};
+    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+    imageDesc.width = width;
+    imageDesc.height = height;
+    imageDesc.mipLevels = 1;
+    imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+    imageDesc.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageDesc.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    imageDesc.layers = 6;
+    imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageDesc.size = (u64) width * height * channels;
+    
+    DEBUG_ASSERT(data.size() != 6, "Cube Image don't have 6 images!");
+    std::vector<unsigned char> single_data;
+    for (int i = 0; i < 6; i++) {
+        std::vector<unsigned char> slice_data;
+        slice_data.assign(&(data[i]), &(data[i]) + imageDesc.size);
+        single_data.insert(single_data.end(), slice_data.begin(), slice_data.end());
+    }
+    BufferResource staging;
+    BufferManager::CreateStagingBuffer(staging, single_data.data(), imageDesc.size*6);
     Create(imageDesc, res, staging);
     BufferManager::Destroy(staging);
 }

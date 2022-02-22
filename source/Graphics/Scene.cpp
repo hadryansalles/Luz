@@ -7,6 +7,7 @@
 #include "SwapChain.hpp"
 
 #include <imgui/imgui_stdlib.h>
+#include <stb_image.h>
 
 namespace Scene {
 
@@ -58,6 +59,24 @@ void CreateResources() {
     BufferManager::CreateStorageBuffer(Scene::modelsBuffer, sizeof(Scene::models));
     GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer, SCENE_BUFFER_INDEX);
     GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer, MODELS_BUFFER_INDEX);
+    CubeTextureDesc cubeDesc;
+    cubeDesc.paths = { 
+        "assets/ignore/skybox/right.jpg", 
+        "assets/ignore/skybox/left.jpg", 
+        "assets/skybox/ignore/top.jpg",
+        "assets/skybox/ignore/bottom.jpg",
+        "assets/skybox/ignore/front.jpg",
+        "assets/skybox/ignore/back.jpg"
+    };
+    for (int i = 0; i < cubeDesc.paths.size(); i++) {
+        int texWidth, texHeight, texChannels;
+        stbi_uc* pixels = stbi_load(cubeDesc.paths[i].string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        cubeDesc.height = texHeight;
+        cubeDesc.width = texWidth;
+        cubeDesc.data.push_back(pixels);
+    }
+    TextureResource cubeRes;
+    CreateCubeTextureResource(cubeDesc, cubeRes);
 }
 
 void UpdateBuffers(int numFrame) {
