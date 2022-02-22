@@ -42,6 +42,7 @@ struct ModelBlock {
 };
 
 layout(set = 0, binding = 0) uniform sampler2D textures[];
+layout(set = 0, binding = 0) uniform samplerCube cubeTextures[];
 
 layout(set = 0, binding = 1) readonly buffer SceneBlock {
     LightBlock lights[MAX_LIGHTS];

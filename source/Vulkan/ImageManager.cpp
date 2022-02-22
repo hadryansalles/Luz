@@ -156,7 +156,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
 
     std::vector<VkBufferImageCopy> regions;
 
-    int offset = desc.size / desc.layers;
+    int offset = desc.size;
 
     for (int i = 0; i < desc.layers; i++) {
         VkBufferImageCopy region{};
@@ -173,6 +173,27 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
         region.imageExtent = { desc.width, desc.height, 1 };
 
         regions.push_back(region);
+    }
+
+    if (desc.layers == 6) {
+        VkImageSubresourceRange colorRange{};
+        colorRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        colorRange.baseMipLevel = 0;
+        colorRange.levelCount = 1;
+        colorRange.baseArrayLayer = 0;
+        colorRange.layerCount = 6;
+
+        ImageManager::InsertBarrier(
+            commandBuffer,
+            res.image,
+            0,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            colorRange
+        );
     }
 
     vkCmdCopyBufferToImage(commandBuffer, buffer.buffer, res.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions.size(), regions.data());
@@ -286,7 +307,7 @@ void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 m
     BufferManager::Destroy(staging);
 }
 
-void ImageManager::CreateCubeImage(std::vector<void*> data, u32 width, u32 height, u16 channels, ImageResource& res) {
+void ImageManager::CreateCubeImage(void* data, u32 width, u32 height, u16 channels, ImageResource& res) {
     ImageDesc imageDesc{};
     imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
     imageDesc.width = width;
@@ -303,15 +324,8 @@ void ImageManager::CreateCubeImage(std::vector<void*> data, u32 width, u32 heigh
     imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     imageDesc.size = (u64) width * height * channels;
     
-    DEBUG_ASSERT(data.size() != 6, "Cube Image don't have 6 images!");
-    std::vector<unsigned char> single_data;
-    for (int i = 0; i < 6; i++) {
-        std::vector<unsigned char> slice_data;
-        slice_data.assign(&(data[i]), &(data[i]) + imageDesc.size);
-        single_data.insert(single_data.end(), slice_data.begin(), slice_data.end());
-    }
     BufferResource staging;
-    BufferManager::CreateStagingBuffer(staging, single_data.data(), imageDesc.size*6);
+    BufferManager::CreateStagingBuffer(staging, data, imageDesc.size*6);
     Create(imageDesc, res, staging);
     BufferManager::Destroy(staging);
 }

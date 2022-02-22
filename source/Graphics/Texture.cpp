@@ -16,12 +16,20 @@ void CreateTextureResource(TextureDesc& desc, TextureResource& res) {
     res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
 }
 
-void CreateCubeTextureResource(CubeTextureDesc& desc, TextureResource& res) {
+void CreateCubeTextureResource(TextureDesc& desc, TextureResource& res) {
+    // int single_size = desc.width * desc.height * 4;
+    // unsigned char* data = new unsigned char[single_size * 6];
+    // memcpy(&(data[0]), desc.data[0], single_size);
+    // memcpy(&(data[single_size * 1]), desc.data[1], single_size);
+    // memcpy(&(data[single_size * 2]), desc.data[2], single_size);
+    // memcpy(&(data[single_size * 3]), desc.data[3], single_size);
+    // memcpy(&(data[single_size * 4]), desc.data[4], single_size);
+    // memcpy(&(data[single_size * 5]), desc.data[5], single_size);
     ImageManager::CreateCubeImage(desc.data, desc.width, desc.height, 4, res.image);
     // res.sampler = CreateCubeSampler();
     res.sampler = CreateSampler(1);
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    // res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
+    res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
 }
 
 void DestroyTextureResource(TextureResource& res) {

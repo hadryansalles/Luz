@@ -33,7 +33,7 @@ public:
     static void Create(const ImageDesc& desc, ImageResource& res);
     static void Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer);
     static void Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res);
-    static void CreateCubeImage(std::vector<void*> data, u32 width, u32 height, u16 channels, ImageResource& res);
+    static void CreateCubeImage(void* data, u32 width, u32 height, u16 channels, ImageResource& res);
     static void Destroy(ImageResource& res);
 
     static void InsertBarrier (

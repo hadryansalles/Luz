@@ -199,7 +199,12 @@ void AssetManager::RecenterMesh(RID rid) {
 void AssetManager::InitializeTexture(RID id) {
     TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
-    CreateTextureResource(desc, res);
+    if (desc.paths.size() == 1) {
+        CreateTextureResource(desc, res);
+    }
+    else {
+        CreateCubeTextureResource(desc, res);
+    }
 }
 
 bool AssetManager::IsModel(std::filesystem::path path) {
@@ -373,7 +378,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
         desc.data = buffer;
         desc.width = image.width;
         desc.height = image.height;
-        desc.path = texture.name;
+        desc.paths = { texture.name };
     }
 
     std::vector<MaterialBlock> materials(model.materials.size());
@@ -591,7 +596,48 @@ RID AssetManager::CreateTexture(std::string name, u8* data, u32 width, u32 heigh
     desc.data = data;
     desc.width = width;
     desc.height = height;
-    desc.path = name;
+    desc.paths = { name };
+    return rid;
+}
+
+RID AssetManager::LoadCubeTexture(std::vector<std::filesystem::path> paths) {
+    DEBUG_ASSERT(paths.size() == 6, "Invalid cube map without 6 textures!");
+    
+    // create texture desc
+    RID rid = NewTexture();
+    TextureDesc& desc = textureDescs[rid];
+    desc.paths = paths;
+    stbi_uc* datas[6];
+    for (int i = 0; i < paths.size(); i++) {
+        int texWidth, texHeight, texChannels;
+        stbi_uc* pixels = stbi_load(paths[i].string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        if (!pixels) {
+            LOG_ERROR("Failed to load image file {}", paths[i].string().c_str());
+            return 0;
+        }
+        desc.height = texHeight;
+        desc.width = texWidth;
+        datas[i] = pixels;
+        if (texChannels == 3) {
+            LOG_ERROR("RGB textures may not be supported!");
+        }
+    }
+
+    int single_size = desc.height * desc.width * 4;
+    desc.data = new stbi_uc[single_size*6];
+    memcpy(&(((stbi_uc*)desc.data)[0]), datas[0], single_size);
+    memcpy(&(((stbi_uc*)desc.data)[single_size * 1]), datas[1], single_size);
+    memcpy(&(((stbi_uc*)desc.data)[single_size * 2]), datas[2], single_size);
+    memcpy(&(((stbi_uc*)desc.data)[single_size * 3]), datas[3], single_size);
+    memcpy(&(((stbi_uc*)desc.data)[single_size * 4]), datas[4], single_size);
+    memcpy(&(((stbi_uc*)desc.data)[single_size * 5]), datas[5], single_size);
+    delete[] datas[0];
+    delete[] datas[1];
+    delete[] datas[2];
+    delete[] datas[3];
+    delete[] datas[4];
+    delete[] datas[5];
+
     return rid;
 }
 
@@ -601,7 +647,7 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
     path = std::filesystem::absolute(path);
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
-        if (textureDescs[i].path == path) {
+        if (textureDescs[i].paths[0] == path) {
             rid = i;
             break;
         }
@@ -629,7 +675,7 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
     desc.data = pixels;
     desc.width = texWidth;
     desc.height = texHeight;
-    desc.path = path;
+    desc.paths = { path };
 
     return rid;
 }
@@ -740,7 +786,7 @@ void AssetManager::OnImgui() {
     if (ImGui::CollapsingHeader("Textures")) {
         for (RID rid = 0; rid < nextTextureRID; rid++) {
             ImGui::PushID(rid);
-            if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
+            if (ImGui::TreeNode(textureDescs[rid].paths[0].stem().string().c_str())) {
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
                     ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));

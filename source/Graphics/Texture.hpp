@@ -6,17 +6,10 @@
 #include "ImageManager.hpp"
 
 struct TextureDesc {
-    std::filesystem::path path = "";
+    std::vector<std::filesystem::path> paths;
     void* data                 = nullptr;
     uint32_t width             = 0;
     uint32_t height            = 0;
-};
-
-struct CubeTextureDesc {
-    std::vector<std::filesystem::path> paths;
-    std::vector<void*> data;
-    uint32_t width  = 0;
-    uint32_t height = 0;
 };
 
 struct TextureResource {
@@ -26,7 +19,7 @@ struct TextureResource {
 };
 
 void CreateTextureResource(TextureDesc& desc, TextureResource& res);
-void CreateCubeTextureResource(CubeTextureDesc& desc, TextureResource& res);
+void CreateCubeTextureResource(TextureDesc& desc, TextureResource& res);
 void DestroyTextureResource(TextureResource& res);
 void DrawTextureOnImgui(TextureResource& res);
 VkSampler CreateSampler(f32 maxLod);

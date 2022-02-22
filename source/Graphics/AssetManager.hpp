@@ -127,6 +127,7 @@ public:
 
     static RID CreateTexture(std::string name, u8* data, u32 width, u32 height);
     static RID LoadTexture(std::filesystem::path path);
+    static RID LoadCubeTexture(std::vector<std::filesystem::path> paths);
 
     static Model* LoadModel(std::filesystem::path path);
     static void AsyncLoadModels(std::filesystem::path path);

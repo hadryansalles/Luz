@@ -41,6 +41,16 @@ void Setup() {
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
 
+    std::vector<std::filesystem::path> cubePaths = { 
+        "assets/ignore/skybox/right.jpg", 
+        "assets/ignore/skybox/left.jpg", 
+        "assets/ignore/skybox/top.jpg",
+        "assets/ignore/skybox/bottom.jpg",
+        "assets/ignore/skybox/front.jpg",
+        "assets/ignore/skybox/back.jpg"
+    };
+    AssetManager::LoadCubeTexture(cubePaths);
+
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
     // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
@@ -59,24 +69,6 @@ void CreateResources() {
     BufferManager::CreateStorageBuffer(Scene::modelsBuffer, sizeof(Scene::models));
     GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer, SCENE_BUFFER_INDEX);
     GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer, MODELS_BUFFER_INDEX);
-    CubeTextureDesc cubeDesc;
-    cubeDesc.paths = { 
-        "assets/ignore/skybox/right.jpg", 
-        "assets/ignore/skybox/left.jpg", 
-        "assets/skybox/ignore/top.jpg",
-        "assets/skybox/ignore/bottom.jpg",
-        "assets/skybox/ignore/front.jpg",
-        "assets/skybox/ignore/back.jpg"
-    };
-    for (int i = 0; i < cubeDesc.paths.size(); i++) {
-        int texWidth, texHeight, texChannels;
-        stbi_uc* pixels = stbi_load(cubeDesc.paths[i].string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-        cubeDesc.height = texHeight;
-        cubeDesc.width = texWidth;
-        cubeDesc.data.push_back(pixels);
-    }
-    TextureResource cubeRes;
-    CreateCubeTextureResource(cubeDesc, cubeRes);
 }
 
 void UpdateBuffers(int numFrame) {
