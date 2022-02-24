@@ -165,7 +165,7 @@ void main() {
     float depth = texture(imageAttachs[depthRID], fragTexCoord).r;
     vec4 envmap = texture(imageAttachs[envmapRID], fragTexCoord);
     if(depth == 1.0) {
-        outColor = envmap;
+        discard;
     } else {
         float occlusion = material.b;
         float roughness = material.r;
@@ -215,6 +215,8 @@ void main() {
 
             float NdotL = max(dot(N, L), 0.0);
             Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
+            vec3 reflected = reflect(-V, N);
+            Lo += (1.0-roughness*roughness)*texture(cubeTextures[scene.envmap], reflected).rgb*0.1;
         }
 
         float rayTracedAo = TraceAORays(shadowOrigin, N);

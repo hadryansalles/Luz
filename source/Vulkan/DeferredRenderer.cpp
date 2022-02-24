@@ -55,11 +55,12 @@ void Setup() {
         envmapPass.gpoDesc.shaderStages[0].path = "bin/envmap.vert.spv";
         envmapPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
         envmapPass.gpoDesc.shaderStages[1].path = "bin/envmap.frag.spv";
+        envmapPass.gpoDesc.useDepthAttachment = false;
+        envmapPass.crateAttachments = false;
         envmapPass.gpoDesc.attributesDesc.clear();
         envmapPass.gpoDesc.bindingDesc = {};
-        envmapPass.gpoDesc.useDepthAttachment = false;
         envmapPass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
-        envmapPass.clearColors = { {0, 0, 0, 1} };
+        // envmapPass.clearColors = { {0, 0, 0, 1} };
     }
     {
         GraphicsPipelineManager::CreateDefaultDesc(opaquePass.gpoDesc);
@@ -163,8 +164,17 @@ void EndPass(VkCommandBuffer commandBuffer) {
 }
 
 void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants) {
-    ImageResource envmapRes = RenderingPassManager::imageAttachments[envmapPass.colorAttachments[0]];
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, envmapRes.image);
+    ImageResource lightColorRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes.image);
+
+    VkRenderingAttachmentInfoKHR lightAttach = {};
+    lightAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    lightAttach.imageView = lightColorRes.view;
+    lightAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    lightAttach.resolveMode = VK_RESOLVE_MODE_NONE;
+    lightAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    lightAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    lightAttach.clearValue.color = lightPass.clearColors[0];
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -173,8 +183,8 @@ void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants) {
     renderingInfo.renderArea.extent = SwapChain::GetExtent();
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
-    renderingInfo.colorAttachmentCount = envmapPass.colorAttachInfos.size();
-    renderingInfo.pColorAttachments = envmapPass.colorAttachInfos.data();
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &lightAttach;
     renderingInfo.pDepthAttachment = nullptr;
     renderingInfo.pStencilAttachment = nullptr;
 
@@ -195,18 +205,26 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     ImageResource depthRes = RenderingPassManager::imageAttachments[opaquePass.depthAttachment];
     ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes.image);
 
-    ImageResource envmapRes = RenderingPassManager::imageAttachments[envmapPass.colorAttachments[0]];
-    ImageManager::BarrierColorAttachmentToRead(commandBuffer, envmapRes.image);
+    // ImageResource envmapRes = RenderingPassManager::imageAttachments[envmapPass.colorAttachments[0]];
+    // ImageManager::BarrierColorAttachmentToRead(commandBuffer, envmapRes.image);
 
     constants.albedoRID = opaquePass.colorAttachments[0];
     constants.normalRID = opaquePass.colorAttachments[1];
     constants.materialRID = opaquePass.colorAttachments[2];
     constants.emissionRID = opaquePass.colorAttachments[3];
     constants.depthRID = opaquePass.depthAttachment;
-    constants.envmapRID = envmapPass.colorAttachments[0];
+    // constants.envmapRID = envmapPass.colorAttachments[0];
 
     ImageResource lightColorRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes.image);
+
+    VkRenderingAttachmentInfoKHR lightAttach = {};
+    lightAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    lightAttach.imageView = lightColorRes.view;
+    lightAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    lightAttach.resolveMode = VK_RESOLVE_MODE_NONE;
+    lightAttach.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    lightAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -215,8 +233,8 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     renderingInfo.renderArea.extent = SwapChain::GetExtent();
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
-    renderingInfo.colorAttachmentCount = lightPass.colorAttachInfos.size();
-    renderingInfo.pColorAttachments = lightPass.colorAttachInfos.data();
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &lightAttach;
     renderingInfo.pDepthAttachment = nullptr;
     renderingInfo.pStencilAttachment = nullptr;
 
