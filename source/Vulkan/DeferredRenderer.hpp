@@ -20,9 +20,11 @@ struct LightConstants {
     int materialRID;
     int emissionRID;
     int depthRID;
+    int envmapRID;
 };
 
 inline RenderingPass opaquePass;
+inline RenderingPass envmapPass;
 inline RenderingPass lightPass;
 inline RenderingPass presentPass;
 
@@ -34,6 +36,8 @@ void ReloadShaders();
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants);
+
+void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants);
 
 void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* data, u32 size);
 void BeginOpaquePass(VkCommandBuffer commandBuffer);

@@ -49,7 +49,7 @@ void Setup() {
         "assets/ignore/skybox/front.jpg",
         "assets/ignore/skybox/back.jpg"
     };
-    AssetManager::LoadCubeTexture(cubePaths);
+    Scene::scene.envMap = AssetManager::LoadCubeTexture(cubePaths);
 
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
     // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");

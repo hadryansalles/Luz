@@ -59,6 +59,7 @@ layout(set = 0, binding = 1) readonly buffer SceneBlock {
     float aoPower;
     ivec2 viewSize;
     int useBlueNoise;
+    int envmap;
 } sceneBuffers[];
 
 layout(set = 0, binding = 1) readonly buffer ModelBuffer {

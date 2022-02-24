@@ -48,6 +48,20 @@ void Setup() {
         lightPass.clearColors = { {0, 0, 0, 1} };
     }
     {
+        GraphicsPipelineManager::CreateDefaultDesc(envmapPass.gpoDesc);
+        envmapPass.gpoDesc.name = "Envmap";
+        envmapPass.gpoDesc.shaderStages.resize(2);
+        envmapPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        envmapPass.gpoDesc.shaderStages[0].path = "bin/envmap.vert.spv";
+        envmapPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        envmapPass.gpoDesc.shaderStages[1].path = "bin/envmap.frag.spv";
+        envmapPass.gpoDesc.attributesDesc.clear();
+        envmapPass.gpoDesc.bindingDesc = {};
+        envmapPass.gpoDesc.useDepthAttachment = false;
+        envmapPass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
+        envmapPass.clearColors = { {0, 0, 0, 1} };
+    }
+    {
         GraphicsPipelineManager::CreateDefaultDesc(opaquePass.gpoDesc);
         opaquePass.gpoDesc.name = "Opaque";
         opaquePass.gpoDesc.shaderStages.resize(2);
@@ -85,6 +99,7 @@ void Create() {
     ctx.vkCmdBeginRendering = (PFN_vkCmdBeginRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdBeginRenderingKHR");
     ctx.vkCmdEndRendering = (PFN_vkCmdEndRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR");
     RenderingPassManager::CreateRenderingPass(lightPass);
+    RenderingPassManager::CreateRenderingPass(envmapPass);
     RenderingPassManager::CreateRenderingPass(opaquePass);
     RenderingPassManager::CreateRenderingPass(presentPass);
 }
@@ -92,6 +107,7 @@ void Create() {
 void Destroy() {
     RenderingPassManager::DestroyRenderingPass(opaquePass);
     RenderingPassManager::DestroyRenderingPass(presentPass);
+    RenderingPassManager::DestroyRenderingPass(envmapPass);
     RenderingPassManager::DestroyRenderingPass(lightPass);
     RenderingPassManager::Destroy();
 }
@@ -99,6 +115,7 @@ void Destroy() {
 void ReloadShaders() {
     GraphicsPipelineManager::ReloadShaders(opaquePass.gpoDesc, opaquePass.gpo);
     GraphicsPipelineManager::ReloadShaders(presentPass.gpoDesc, presentPass.gpo);
+    GraphicsPipelineManager::ReloadShaders(envmapPass.gpoDesc, envmapPass.gpo);
     GraphicsPipelineManager::ReloadShaders(lightPass.gpoDesc, lightPass.gpo);
 }
 
@@ -145,6 +162,31 @@ void EndPass(VkCommandBuffer commandBuffer) {
     ctx.vkCmdEndRendering(commandBuffer);
 }
 
+void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants) {
+    ImageResource envmapRes = RenderingPassManager::imageAttachments[envmapPass.colorAttachments[0]];
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, envmapRes.image);
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = 1;
+    renderingInfo.renderArea.extent = SwapChain::GetExtent();
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.flags = 0;
+    renderingInfo.colorAttachmentCount = envmapPass.colorAttachInfos.size();
+    renderingInfo.pColorAttachments = envmapPass.colorAttachInfos.data();
+    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envmapPass.gpo.pipeline);
+    vkCmdPushConstants(commandBuffer, envmapPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envmapPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkCmdDraw(commandBuffer, 36, 1, 0, 0);
+    ctx.vkCmdEndRendering(commandBuffer);
+}
+
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
         ImageResource res = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
@@ -153,11 +195,15 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     ImageResource depthRes = RenderingPassManager::imageAttachments[opaquePass.depthAttachment];
     ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes.image);
 
+    ImageResource envmapRes = RenderingPassManager::imageAttachments[envmapPass.colorAttachments[0]];
+    ImageManager::BarrierColorAttachmentToRead(commandBuffer, envmapRes.image);
+
     constants.albedoRID = opaquePass.colorAttachments[0];
     constants.normalRID = opaquePass.colorAttachments[1];
     constants.materialRID = opaquePass.colorAttachments[2];
     constants.emissionRID = opaquePass.colorAttachments[3];
     constants.depthRID = opaquePass.depthAttachment;
+    constants.envmapRID = envmapPass.colorAttachments[0];
 
     ImageResource lightColorRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes.image);

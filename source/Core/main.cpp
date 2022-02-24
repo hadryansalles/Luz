@@ -273,6 +273,8 @@ private:
 
         DeferredShading::EndPass(commandBuffer);
 
+        DeferredShading::EnvmapPass(commandBuffer, constants);
+
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
