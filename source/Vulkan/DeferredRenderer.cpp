@@ -170,7 +170,7 @@ void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants) {
     VkRenderingAttachmentInfoKHR lightAttach = {};
     lightAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
     lightAttach.imageView = lightColorRes.view;
-    lightAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    lightAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
     lightAttach.resolveMode = VK_RESOLVE_MODE_NONE;
     lightAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     lightAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -221,7 +221,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     VkRenderingAttachmentInfoKHR lightAttach = {};
     lightAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
     lightAttach.imageView = lightColorRes.view;
-    lightAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    lightAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
     lightAttach.resolveMode = VK_RESOLVE_MODE_NONE;
     lightAttach.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     lightAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

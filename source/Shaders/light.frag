@@ -88,7 +88,6 @@ vec4 BlueNoiseSample(int i) {
     return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
 }
 
-
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     if(numSamples == 0) {
         return 0;
@@ -215,15 +214,29 @@ void main() {
 
             float NdotL = max(dot(N, L), 0.0);
             Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
-            vec3 reflected = reflect(-V, N);
-            Lo += (1.0-roughness*roughness)*texture(cubeTextures[scene.envmap], reflected).rgb*0.1;
         }
 
         float rayTracedAo = TraceAORays(shadowOrigin, N);
         // float rayTracedAo = 1;
+        // ambient light from envmap
         vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
         vec3 color = ambient + Lo;
         color = color / (color + vec3(1.0));
         outColor = vec4(pow(color, vec3(1.0/2.2)) + emission.rgb, 1.0);
+        {
+            vec3 specRadiance = vec3(0, 0, 0);
+            int numSamples = 16;
+            for(int i = 0; i < numSamples; i++) {
+                vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
+                vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
+                // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
+                vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+                vec3 reflected = reflect(-V, N);
+                vec3 sampled = HemisphereSample(rng);
+                vec3 dir = mix(reflected, sampled, roughness);
+                specRadiance += texture(cubeTextures[scene.envmap], dir).rgb/numSamples;
+            }
+            outColor.rgb += albedo.rgb*specRadiance*(1.0-roughness*roughness*roughness)*scene.ambientLightIntensity*50;
+        }
     }
 }
