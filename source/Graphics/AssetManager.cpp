@@ -200,7 +200,12 @@ void AssetManager::InitializeTexture(RID id) {
     TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
     if (desc.paths.size() == 1) {
-        CreateTextureResource(desc, res);
+        if (desc.isHDR == true) {
+            CreateHDRCubeTextureResource(desc, res, id);
+        }
+        else {
+            CreateTextureResource(desc, res);
+        }
     }
     else {
         CreateCubeTextureResource(desc, res);
@@ -213,7 +218,7 @@ bool AssetManager::IsModel(std::filesystem::path path) {
 
 bool AssetManager::IsTexture(std::filesystem::path path) {
     std::string extension = path.extension().string();
-    return extension == ".JPG" || extension == ".jpg" || extension == ".png" || extension == ".tga";
+    return extension == ".JPG" || extension == ".jpg" || extension == ".png" || extension == ".tga" || extension == ".hdr";
 }
 
 void AssetManager::LoadOBJ(std::filesystem::path path) {
@@ -597,6 +602,28 @@ RID AssetManager::CreateTexture(std::string name, u8* data, u32 width, u32 heigh
     desc.width = width;
     desc.height = height;
     desc.paths = { name };
+    return rid;
+}
+
+RID AssetManager::LoadHDR(std::filesystem::path path) {
+    // create texture desc
+    RID rid = NewTexture();
+    TextureDesc& desc = textureDescs[rid];
+    desc.paths = { path };
+    int texWidth, texHeight, texChannels;
+    float* pixels = stbi_loadf(path.string().c_str(), &texWidth, &texHeight, &texChannels, 4);
+    if (!pixels) {
+        LOG_ERROR("Failed to load image file {}", path.string().c_str());
+        return 0;
+    }
+    desc.height = texHeight;
+    desc.width = texWidth;
+    desc.data = pixels;
+    desc.isHDR = true;
+    if (texChannels == 3) {
+        LOG_ERROR("RGB textures may not be supported!");
+    }
+
     return rid;
 }
 

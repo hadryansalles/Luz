@@ -15,7 +15,7 @@ struct ImageResource {
 struct ImageDesc {
     VkFormat format;
     VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
-    VkSampleCountFlagBits numSamples;
+    VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT;
     VkImageUsageFlags usage;
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     VkImageAspectFlags aspect;
@@ -35,6 +35,7 @@ public:
     static void Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res);
     static void CreateCubeImage(void* data, u32 width, u32 height, u16 channels, ImageResource& res);
     static void Destroy(ImageResource& res);
+    static void Copy(VkCommandBuffer commandBuffer, ImageResource& src, ImageResource& dst, VkImageCopy region);
 
     static void InsertBarrier (
         VkCommandBuffer commandBuffer, 

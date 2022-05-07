@@ -17,6 +17,7 @@ struct GraphicsPipelineDesc {
     std::vector<VkFormat> colorFormats;
     bool useDepthAttachment = false;
     VkFormat depthFormat;
+    bool dynamicViewportScissor = false;
 };
 
 struct GraphicsPipelineResource {

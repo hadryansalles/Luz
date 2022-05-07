@@ -41,17 +41,27 @@ void Setup() {
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
 
-    std::vector<std::filesystem::path> cubePaths = { 
-        "assets/ignore/skybox/right.jpg", 
-        "assets/ignore/skybox/left.jpg", 
-        "assets/ignore/skybox/top.jpg",
-        "assets/ignore/skybox/bottom.jpg",
-        "assets/ignore/skybox/front.jpg",
-        "assets/ignore/skybox/back.jpg"
-    };
-    Scene::scene.envMap = AssetManager::LoadCubeTexture(cubePaths);
+    // std::vector<std::filesystem::path> cubePaths = { 
+    //     "assets/ignore/skybox/right.jpg", 
+    //     "assets/ignore/skybox/left.jpg", 
+    //     "assets/ignore/skybox/top.jpg",
+    //     "assets/ignore/skybox/bottom.jpg",
+    //     "assets/ignore/skybox/front.jpg",
+    //     "assets/ignore/skybox/back.jpg"
+    // };
+    // std::vector<std::filesystem::path> cubePaths = { 
+    //     "assets/ignore/skybox2/right.png", 
+    //     "assets/ignore/skybox2/left.png", 
+    //     "assets/ignore/skybox2/top.png",
+    //     "assets/ignore/skybox2/bottom.png",
+    //     "assets/ignore/skybox2/front.png",
+    //     "assets/ignore/skybox2/back.png"
+    // };
+    // Scene::scene.envMap = AssetManager::LoadCubeTexture(cubePaths);
+    // Scene::scene.envMap = AssetManager::LoadHDR("assets/ignore/hansaplatz_4k.hdr");
+    // Scene::scene.envMap = AssetManager::LoadHDR("assets/ignore/hansaplatz_4k.hdr");
 
-    // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
+    AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
     // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/SciFiHelmet.gltf");

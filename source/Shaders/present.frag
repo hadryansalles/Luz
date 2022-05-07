@@ -72,4 +72,10 @@ void main() {
         value = LinearizeDepth(value.r).xxxx;
     }
     outColor = vec4(value.rgb, 1.0);
+    if(imageType == 0) {
+        float gamma = 2.2;
+        float exposure = 3.8;
+        outColor.rgb =  outColor.rgb / (outColor.rgb + vec3(1.0));
+        outColor.rgb = vec3(1.0) - exp(-outColor.rgb*exposure);
+    }
 }

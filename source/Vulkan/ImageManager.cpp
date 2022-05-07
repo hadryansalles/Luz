@@ -21,7 +21,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     imageInfo.extent.height = desc.height;
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = desc.mipLevels;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = desc.layers;
     imageInfo.format = desc.format;
     // tiling defines how the texels lay in memory
     // optimal tiling is implementation dependent for more efficient memory access
@@ -33,6 +33,9 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.samples = desc.numSamples;
     imageInfo.flags = 0;
+    if (desc.layers > 1) {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
 
     auto result = vkCreateImage(device, &imageInfo, allocator, &res.image);
     DEBUG_VK(result, "Failed to create image!");
@@ -59,7 +62,12 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = desc.mipLevels;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.layerCount = desc.layers;
+
+    if (desc.layers > 1) {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    }
 
     result = vkCreateImageView(device, &viewInfo, allocator, &res.view);
     DEBUG_VK(result, "Failed to create image view!");
@@ -82,6 +90,31 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     }
 }
 
+void ImageManager::Copy(VkCommandBuffer commandBuffer, ImageResource& src, ImageResource& dst, VkImageCopy copy) {
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = 0;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.image = src.image;
+    vkCmdPipelineBarrier(commandBuffer, stage, stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.image = dst.image;
+    vkCmdPipelineBarrier(commandBuffer, stage, stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    vkCmdCopyImage(commandBuffer, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &copy);
+}
+
 void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
 
     DEBUG_ASSERT(desc.layers == 1 || desc.layers == 6, "Layers count not supported!");
@@ -101,7 +134,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     imageInfo.arrayLayers = desc.layers;
     imageInfo.format = desc.format;
     imageInfo.tiling = desc.tiling;
-    imageInfo.initialLayout = desc.layout;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = desc.usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.samples = desc.numSamples;
@@ -283,6 +316,23 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
 
     result = vkCreateImageView(device, &viewInfo, allocator, &res.view);
     DEBUG_VK(result, "Failed to create image view!");
+
+    if (desc.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = desc.layout;
+        barrier.image = res.image;
+        barrier.subresourceRange = viewInfo.subresourceRange;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = 0;
+
+        VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+        VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+        vkCmdPipelineBarrier(commandBuffer, stage, stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    }
 }
 
 void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 mipLevels, ImageResource& res) {

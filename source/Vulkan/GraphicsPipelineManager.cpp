@@ -179,7 +179,7 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.vertexBindingDescriptionCount = desc.attributesDesc.size() > 1 ? 1 : 0;
     vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(desc.attributesDesc.size());
     // these points to an array of structs that describe how to load the vertex data
     vertexInputInfo.pVertexBindingDescriptions = &desc.bindingDesc;
@@ -275,7 +275,19 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     pipelineInfo.pMultisampleState = &desc.multisampling;
     pipelineInfo.pDepthStencilState = &desc.depthStencil;
     pipelineInfo.pColorBlendState = &colorBlendState;
-    pipelineInfo.pDynamicState = nullptr;
+
+    std::vector<VkDynamicState> dynamicStates;
+    if (desc.dynamicViewportScissor) {
+        dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+        dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+    }
+
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.pDynamicStates = dynamicStates.data();
+    dynamicState.dynamicStateCount = dynamicStates.size();
+    pipelineInfo.pDynamicState = &dynamicState;
+
     pipelineInfo.layout = res.layout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     // pipelineInfo.renderPass = SwapChain::GetRenderPass();

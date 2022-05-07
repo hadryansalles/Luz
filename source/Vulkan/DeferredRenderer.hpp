@@ -23,9 +23,13 @@ struct LightConstants {
     int envmapRID;
 };
 
+inline RID panoramaRID;
+inline ImageResource faces[6];
+
 inline RenderingPass opaquePass;
 inline RenderingPass envmapPass;
 inline RenderingPass lightPass;
+inline RenderingPass panoramaToCubePass;
 inline RenderingPass presentPass;
 
 void Setup();
@@ -46,5 +50,7 @@ void EndPass(VkCommandBuffer commandBuffer);
 void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame);
 void EndPresentPass(VkCommandBuffer commandBuffer, int numFrame);
 void OnImgui(int numFrame);
+
+void RenderPanoramaToFace(VkCommandBuffer commandBuffer, RID panoramaRID, ImageResource face, int i);
 
 }

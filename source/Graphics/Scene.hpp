@@ -41,7 +41,7 @@ struct SceneBlock {
     float aoMax = 0.1;
     float aoPower = 1.45;
     glm::ivec2 viewSize;
-    u32 useBlueNoise = 0;
+    u32 useBlueNoise = 1;
     u32 envMap = 0;
 };
 

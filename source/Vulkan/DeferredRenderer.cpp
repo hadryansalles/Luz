@@ -30,6 +30,11 @@ struct PresentConstant {
     int depthRID;
 };
 
+struct PanoramaToCubeConstants {
+    int panoramaRID;
+    int face;
+};
+
 Context ctx;
 
 void Setup() {
@@ -44,8 +49,23 @@ void Setup() {
         lightPass.gpoDesc.attributesDesc.clear();
         lightPass.gpoDesc.bindingDesc = {};
         lightPass.gpoDesc.useDepthAttachment = false;
-        lightPass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
+        lightPass.gpoDesc.colorFormats = { VK_FORMAT_R16G16B16A16_SFLOAT };
         lightPass.clearColors = { {0, 0, 0, 1} };
+    }
+    {
+        GraphicsPipelineManager::CreateDefaultDesc(panoramaToCubePass.gpoDesc);
+        panoramaToCubePass.gpoDesc.name = "PanoramaToCubePass";
+        panoramaToCubePass.gpoDesc.shaderStages.resize(2);
+        panoramaToCubePass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        panoramaToCubePass.gpoDesc.shaderStages[0].path = "bin/panoramaToCube.vert.spv";
+        panoramaToCubePass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        panoramaToCubePass.gpoDesc.shaderStages[1].path = "bin/panoramaToCube.frag.spv";
+        panoramaToCubePass.gpoDesc.useDepthAttachment = false;
+        panoramaToCubePass.crateAttachments = false;
+        panoramaToCubePass.gpoDesc.attributesDesc.clear();
+        panoramaToCubePass.gpoDesc.bindingDesc = {};
+        panoramaToCubePass.gpoDesc.colorFormats = { VK_FORMAT_R16G16B16A16_SFLOAT };
+        panoramaToCubePass.gpoDesc.dynamicViewportScissor = true;
     }
     {
         GraphicsPipelineManager::CreateDefaultDesc(envmapPass.gpoDesc);
@@ -59,7 +79,7 @@ void Setup() {
         envmapPass.crateAttachments = false;
         envmapPass.gpoDesc.attributesDesc.clear();
         envmapPass.gpoDesc.bindingDesc = {};
-        envmapPass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
+        envmapPass.gpoDesc.colorFormats = { VK_FORMAT_R16G16B16A16_SFLOAT };
         // envmapPass.clearColors = { {0, 0, 0, 1} };
     }
     {
@@ -103,6 +123,7 @@ void Create() {
     RenderingPassManager::CreateRenderingPass(envmapPass);
     RenderingPassManager::CreateRenderingPass(opaquePass);
     RenderingPassManager::CreateRenderingPass(presentPass);
+    RenderingPassManager::CreateRenderingPass(panoramaToCubePass);
 }
 
 void Destroy() {
@@ -110,6 +131,7 @@ void Destroy() {
     RenderingPassManager::DestroyRenderingPass(presentPass);
     RenderingPassManager::DestroyRenderingPass(envmapPass);
     RenderingPassManager::DestroyRenderingPass(lightPass);
+    RenderingPassManager::DestroyRenderingPass(panoramaToCubePass);
     RenderingPassManager::Destroy();
 }
 
@@ -118,6 +140,7 @@ void ReloadShaders() {
     GraphicsPipelineManager::ReloadShaders(presentPass.gpoDesc, presentPass.gpo);
     GraphicsPipelineManager::ReloadShaders(envmapPass.gpoDesc, envmapPass.gpo);
     GraphicsPipelineManager::ReloadShaders(lightPass.gpoDesc, lightPass.gpo);
+    GraphicsPipelineManager::ReloadShaders(panoramaToCubePass.gpoDesc, panoramaToCubePass.gpo);
 }
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
@@ -243,6 +266,55 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     vkCmdPushConstants(commandBuffer, lightPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+    ctx.vkCmdEndRendering(commandBuffer);
+}
+
+void RenderPanoramaToFace(VkCommandBuffer commandBuffer, RID panoramaRID, ImageResource face, int i) {
+
+    PanoramaToCubeConstants constants;
+    constants.face = i;
+    constants.panoramaRID = panoramaRID;
+
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, face.image);
+
+    VkRenderingAttachmentInfoKHR faceAttach = {};
+    faceAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    faceAttach.imageView = face.view;
+    faceAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+    faceAttach.resolveMode = VK_RESOLVE_MODE_NONE;
+    faceAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    faceAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    faceAttach.clearValue.color = { 0, 0, 0, 0 };
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = 1;
+    renderingInfo.renderArea.extent = { face.width, face.height };
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.flags = 0;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &faceAttach;
+    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, panoramaToCubePass.gpo.pipeline);
+    VkViewport viewport{};
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.width = face.width;
+    viewport.height = face.height;
+    viewport.minDepth = 0.0f;
+    viewport.minDepth = 1.0f;
+    VkRect2D scissor{};
+    scissor = renderingInfo.renderArea;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    vkCmdPushConstants(commandBuffer, panoramaToCubePass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, panoramaToCubePass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
     ctx.vkCmdEndRendering(commandBuffer);
 }

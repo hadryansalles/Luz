@@ -10,6 +10,7 @@ struct TextureDesc {
     void* data                 = nullptr;
     uint32_t width             = 0;
     uint32_t height            = 0;
+    bool isHDR = false;
 };
 
 struct TextureResource {
@@ -19,6 +20,7 @@ struct TextureResource {
 };
 
 void CreateTextureResource(TextureDesc& desc, TextureResource& res);
+void CreateHDRCubeTextureResource(TextureDesc& desc, TextureResource& res, RID resID);
 void CreateCubeTextureResource(TextureDesc& desc, TextureResource& res);
 void DestroyTextureResource(TextureResource& res);
 void DrawTextureOnImgui(TextureResource& res);

@@ -51,7 +51,7 @@ private:
     ImDrawData* imguiDrawData = nullptr;
     bool drawUi = true;
 
-    void WaitToInit(float seconds) {
+    void WaitTime(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
         auto t1 = std::chrono::high_resolution_clock::now();
         while (std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() < seconds * 1000.0f) {

@@ -54,6 +54,10 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}   
+
 vec3 DepthToWorld(vec2 screenPos, float depth) {
     vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
     vec4 viewSpacePos = scene.inverseProj*clipSpacePos;
@@ -219,13 +223,10 @@ void main() {
         float rayTracedAo = TraceAORays(shadowOrigin, N);
         // float rayTracedAo = 1;
         // ambient light from envmap
-        vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
-        vec3 color = ambient + Lo;
-        color = color / (color + vec3(1.0));
-        outColor = vec4(pow(color, vec3(1.0/2.2)) + emission.rgb, 1.0);
+        vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb;
         {
             vec3 specRadiance = vec3(0, 0, 0);
-            int numSamples = 16;
+            int numSamples = 1;
             for(int i = 0; i < numSamples; i++) {
                 vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
                 vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
@@ -234,9 +235,19 @@ void main() {
                 vec3 reflected = reflect(-V, N);
                 vec3 sampled = HemisphereSample(rng);
                 vec3 dir = mix(reflected, sampled, roughness);
-                specRadiance += texture(cubeTextures[scene.envmap], dir).rgb/numSamples;
+                specRadiance += texture(cubeTextures[scene.envmap], dir).rgb / numSamples;
             }
-            outColor.rgb += albedo.rgb*specRadiance*(1.0-roughness*roughness*roughness)*scene.ambientLightIntensity*50;
+            vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+            vec3 kS = F;
+            vec3 kD = vec3(1.0) - kS;
+            kD *= 1.0 - metallic;
+            vec3 diffuse = specRadiance*albedo.rgb;
+            vec3 specular = F*specRadiance;
+            ambient += kD*diffuse + specular;
         }
+        ambient *= occlusion*rayTracedAo;
+        vec3 color = ambient + Lo;
+        color = color / (color + vec3(1.0));
+        outColor = vec4(color + emission.rgb, 1.0);
     }
 }

@@ -2,9 +2,11 @@
 
 #include "Texture.hpp"
 #include "Instance.hpp"
+#include "AssetManager.hpp"
 #include "PhysicalDevice.hpp"
 #include "LogicalDevice.hpp"
 #include "GraphicsPipelineManager.hpp"
+#include "DeferredRenderer.hpp"
 
 #include "imgui/imgui_impl_vulkan.h"
 
@@ -12,6 +14,85 @@ void CreateTextureResource(TextureDesc& desc, TextureResource& res) {
     u32 mipLevels = (u32)(std::floor(std::log2(std::max(desc.width, desc.height)))) + 1;
     ImageManager::Create(desc.data, desc.width, desc.height, 4, mipLevels, res.image);
     res.sampler = CreateSampler(mipLevels);
+    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
+}
+
+void CreateHDRCubeTextureResource(TextureDesc& desc, TextureResource& res, RID resID) {
+    u32 faceSize = 2048;
+    ImageResource hdriImage;
+    {
+        ImageDesc imageDesc;
+        imageDesc.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+        imageDesc.width = faceSize;
+        imageDesc.height = faceSize;
+        imageDesc.layers = 6;
+        imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageDesc.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+        imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        ImageManager::Create(imageDesc, hdriImage);
+    }
+    {
+        ImageDesc imageDesc;
+        imageDesc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        imageDesc.width = desc.width;
+        imageDesc.height = desc.height;
+        imageDesc.layers = 1;
+        imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageDesc.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+        imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageDesc.size = sizeof(float) * desc.width * desc.height * 4;
+        imageDesc.layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL_KHR;
+        BufferResource staging;
+        BufferManager::CreateStagingBuffer(staging, desc.data, imageDesc.size);
+        ImageManager::Create(imageDesc, res.image, staging);
+        BufferManager::Destroy(staging);
+    }
+    res.sampler = CreateSampler(1);
+    std::vector<RID> toUpdate({ resID });
+    AssetManager::UpdateTexturesDescriptor(toUpdate);
+    ImageResource faces[6];
+    auto cmdBuffer = LogicalDevice::BeginSingleTimeCommands();
+    for (int i = 0; i < 6; i++) {
+        ImageDesc imageDesc;
+        imageDesc.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+        imageDesc.width = faceSize;
+        imageDesc.height = faceSize;
+        imageDesc.layers = 1;
+        imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageDesc.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageDesc.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        ImageManager::Create(imageDesc, faces[i]);
+        DeferredShading::RenderPanoramaToFace(cmdBuffer, resID, faces[i], i);
+
+        VkImageCopy region{};
+        region.srcOffset = { 0, 0, 0 };
+        region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.srcSubresource.baseArrayLayer = 0;
+        region.srcSubresource.layerCount = 1;
+        region.srcSubresource.mipLevel = 0;
+        region.dstOffset = { 0, 0, 0 };
+        region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.dstSubresource.baseArrayLayer = i;
+        region.dstSubresource.layerCount = 1;
+        region.dstSubresource.mipLevel = 0;
+        region.extent = { faceSize, faceSize, 1 };
+        ImageManager::Copy(cmdBuffer, faces[i], hdriImage, region);
+    }
+    LogicalDevice::EndSingleTimeCommands(cmdBuffer);
+    ImageManager::Destroy(res.image);
+    for (int i = 0; i < 6; i++) {
+        ImageManager::Destroy(faces[i]);
+    }
+    DeferredShading::panoramaRID = resID;
+    res.image = hdriImage;
+    AssetManager::UpdateTexturesDescriptor(toUpdate);
     const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     res.imguiRID = ImGui_ImplVulkan_AddTexture(res.sampler, res.image.view, layout);
 }
