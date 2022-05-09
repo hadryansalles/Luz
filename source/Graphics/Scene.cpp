@@ -354,7 +354,12 @@ void OnImgui() {
         scene.aoNumSamples = aoActive ? aoNumSamples : 0;
     }
     if (ImGui::CollapsingHeader("Envionment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Checkbox("Enabled", &envmapActive);
+        RID envmapPayload = 0;
+        AcceptTexturePayload(envmapPayload);
+        if (envmapPayload != 0 && AssetManager::textureDescs[envmapPayload].isHDR) {
+            envmap = envmapPayload;
+        }
+        ImGui::Checkbox("Use", &envmapActive);
         ImGui::Text(AssetManager::textureDescs[envmap].paths[0].string().c_str());
     }
 }

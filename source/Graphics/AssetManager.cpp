@@ -669,6 +669,9 @@ RID AssetManager::LoadCubeTexture(std::vector<std::filesystem::path> paths) {
 }
 
 RID AssetManager::LoadTexture(std::filesystem::path path) {
+    if (path.extension().string() == ".hdr") {
+        return LoadHDR(path);
+    }
     // check if texture is already loaded
     RID rid = 0;
     path = std::filesystem::absolute(path);
