@@ -17,6 +17,49 @@ void RenderingPassManager::Destroy() {
     nextRID = 0;
 }
 
+RID RenderingPassManager::CreateColorAttachmentImage(VkFormat format) {
+    RID rid = nextRID++;
+
+    VkExtent2D extent = SwapChain::GetExtent();
+    ImageDesc desc;
+    desc.width = extent.width;
+    desc.height = extent.height;
+    desc.mipLevels = 1;
+    desc.format = format;
+    desc.tiling = VK_IMAGE_TILING_OPTIMAL;
+    desc.numSamples = SwapChain::GetNumSamples();
+    desc.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT 
+        | VK_IMAGE_USAGE_SAMPLED_BIT 
+        | VK_IMAGE_USAGE_TRANSFER_DST_BIT 
+        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    desc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    ImageManager::Create(desc, imageAttachments[rid]);
+
+    VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
+
+    VkDescriptorImageInfo imageInfo{};
+    VkWriteDescriptorSet write{};
+
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = imageAttachments[rid].view;
+    imageInfo.sampler = sampler;
+
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = bindlessDescriptorSet;
+    write.dstBinding = GraphicsPipelineManager::IMAGE_ATTACHMENT_BINDING;
+    write.dstArrayElement = rid;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.descriptorCount = 1;
+    write.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), 1, &write, 0, nullptr);
+    DEBUG_TRACE("Update descriptor sets in CreateRenderingPass!");
+
+    return rid;
+}
+
 void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
     LUZ_PROFILE_FUNC();
     GraphicsPipelineManager::CreatePipeline(pass.gpoDesc, pass.gpo);
@@ -31,7 +74,10 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
             desc.format = pass.gpoDesc.colorFormats[i];
             desc.tiling = VK_IMAGE_TILING_OPTIMAL;
             desc.numSamples = SwapChain::GetNumSamples();
-            desc.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            desc.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT 
+                | VK_IMAGE_USAGE_SAMPLED_BIT 
+                | VK_IMAGE_USAGE_TRANSFER_DST_BIT 
+                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
             desc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
             pass.colorAttachments.push_back(nextRID);

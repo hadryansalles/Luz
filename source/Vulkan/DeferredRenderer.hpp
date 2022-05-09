@@ -4,6 +4,8 @@
 
 #include "RenderingPass.hpp"
 
+struct Light;
+
 namespace DeferredShading {
 
 struct OpaqueConstants {
@@ -23,6 +25,22 @@ struct LightConstants {
     int envmapRID;
 };
 
+struct ShadowConstants {
+    int sceneBufferIndex;
+    int lightId;
+    int frameId;
+    int normalRID;
+    int depthRID;
+};
+
+struct BlurConstants {
+    int imageRID;
+    int depthRID;
+    int normalRID;
+    int steps;
+    glm::vec2 delta;
+};
+
 inline RID panoramaRID;
 inline ImageResource faces[6];
 
@@ -31,6 +49,8 @@ inline RenderingPass envmapPass;
 inline RenderingPass lightPass;
 inline RenderingPass panoramaToCubePass;
 inline RenderingPass presentPass;
+inline RenderingPass shadowPass;
+inline RenderingPass shadowBlurPass;
 
 void Setup();
 void Create();
@@ -38,6 +58,8 @@ void Destroy();
 void ReloadShaders();
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
+
+void ShadowPass(VkCommandBuffer commandBuffer, ShadowConstants constants, Light* light);
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants);
 

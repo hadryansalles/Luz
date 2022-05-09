@@ -120,12 +120,16 @@ void DestroyTextureResource(TextureResource& res) {
     res.imguiRID = nullptr;
 }
 
-void DrawTextureOnImgui(TextureResource& res) {
-    float hSpace = ImGui::GetContentRegionAvailWidth()/2.5f;
-    f32 maxSize = std::max(res.image.width, res.image.height);
-    ImVec2 size = ImVec2((f32)res.image.width/maxSize, (f32)res.image.height/maxSize);
+void DrawTextureOnImgui(ImageResource& image, ImTextureID imguiRid, float scale) {
+    float hSpace = ImGui::GetContentRegionAvailWidth() * scale;
+    f32 maxSize = std::max(image.width, image.height);
+    ImVec2 size = ImVec2((f32)image.width/maxSize, (f32)image.height/maxSize);
     size = ImVec2(size.x*hSpace, size.y * hSpace);
-    ImGui::Image(res.imguiRID, size);
+    ImGui::Image(imguiRid, size);
+}
+
+void DrawTextureOnImgui(TextureResource& res) {
+    DrawTextureOnImgui(res.image, res.imguiRID, 0.25f);
 }
 
 VkSampler CreateCubeSampler() {

@@ -273,6 +273,30 @@ private:
 
         DeferredShading::EndPass(commandBuffer);
 
+        
+        for (int i = 0; i < DeferredShading::opaquePass.colorAttachments.size(); i++) {
+            ImageResource res = RenderingPassManager::imageAttachments[DeferredShading::opaquePass.colorAttachments[i]];
+            ImageManager::BarrierColorAttachmentToRead(commandBuffer, res.image);
+        }
+        ImageResource depthRes = RenderingPassManager::imageAttachments[DeferredShading::opaquePass.depthAttachment];
+        ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes.image);
+
+        DeferredShading::ShadowConstants shadowConstants;
+        shadowConstants.sceneBufferIndex = constants.sceneBufferIndex;
+        shadowConstants.frameId = frameCount;
+        for (Light* light : Scene::lightEntities) {
+            if (light->shadows) {
+                if (light->block.shadowBufferRID == 0) {
+                    light->block.shadowBufferRID = RenderingPassManager::CreateColorAttachmentImage(VK_FORMAT_R32_SFLOAT);
+                    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    light->imguiShadowRID = ImGui_ImplVulkan_AddTexture(RenderingPassManager::sampler, 
+                        RenderingPassManager::imageAttachments[light->block.shadowBufferRID].view, layout);
+                }
+                shadowConstants.lightId = light->lightBlockId;
+                DeferredShading::ShadowPass(commandBuffer, shadowConstants, light);
+            }
+        }
+
         DeferredShading::EnvmapPass(commandBuffer, constants);
 
         DeferredShading::LightConstants lightPassConstants;
@@ -319,6 +343,9 @@ private:
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
+        }
+        for (Light* light : Scene::lightEntities) {
+            light->block.shadowBufferRID = 0;
         }
         Window::UpdateFramebufferSize();
         vkDeviceWaitIdle(device);

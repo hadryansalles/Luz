@@ -5,6 +5,7 @@
 #include "Window.hpp"
 #include "RayTracing.hpp"
 #include "SwapChain.hpp"
+#include "RenderingPass.hpp"
 
 #include <imgui/imgui_stdlib.h>
 #include <stb_image.h>
@@ -35,7 +36,7 @@ void Setup() {
     plane->transform.SetPosition(glm::vec3(0, -1, 0));
     plane->transform.SetScale(glm::vec3(10, 0.0001, 10));
     Light* defaultLight = CreateLight();
-    defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
+    defaultLight->transform.SetPosition(glm::vec3(-4, 4, 3));
     defaultLight->block.intensity = 30;
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
@@ -58,10 +59,11 @@ void Setup() {
     //     "assets/ignore/skybox2/back.png"
     // };
     // Scene::scene.envMap = AssetManager::LoadCubeTexture(cubePaths);
-    // Scene::scene.envMap = AssetManager::LoadHDR("assets/ignore/hansaplatz_4k.hdr");
+    Scene::envmap = AssetManager::LoadHDR("assets/ignore/hansaplatz_4k.hdr");
+    Scene::envmapActive = true;
     // Scene::scene.envMap = AssetManager::LoadHDR("assets/ignore/hansaplatz_4k.hdr");
 
-    AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
+    // AssetManager::LoadModels("assets/ignore/sponza_pbr/Sponza.gltf");
     // AssetManager::AsyncLoadModels("assets/ignore/helmet/FlightHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/DamagedHelmet.gltf");
     // AssetManager::LoadModels("assets/ignore/helmet/SciFiHelmet.gltf");
@@ -126,8 +128,10 @@ void UpdateResources(int numFrame) {
         if (!light->shadows) {
             scene.lights[scene.numLights].numShadowSamples = 0;
         }
+        light->lightBlockId = scene.numLights;
         scene.numLights++;
     }
+    scene.envmap = Scene::envmapActive ? Scene::envmap : 0;
     scene.camPos = camera.GetPosition();
     scene.projView = camera.GetProj() * camera.GetView();
     scene.inverseProj = glm::inverse(camera.GetProj());
@@ -196,6 +200,7 @@ Light* CreateLight(Light* copy) {
     SetCollection(entity, copy->parent);
 
     entity->block = copy->block;
+    entity->block.shadowBufferRID = 0;
     lightEntities.push_back(entity);
     return entity;
 }
@@ -348,10 +353,9 @@ void OnImgui() {
         ImGui::DragFloat("Power", &scene.aoPower, 0.001, 0.0f, 100.0f, "%.4f");
         scene.aoNumSamples = aoActive ? aoNumSamples : 0;
     }
-    {
-        bool active = scene.useBlueNoise == 1;
-        ImGui::Checkbox("Blue noise", &active);
-        scene.useBlueNoise = active ? 1 : 0;
+    if (ImGui::CollapsingHeader("Envionment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Enabled", &envmapActive);
+        ImGui::Text(AssetManager::textureDescs[envmap].paths[0].string().c_str());
     }
 }
 
@@ -454,6 +458,11 @@ void InspectLight(Light* light) {
         ImGui::DragInt("Num samples", (int*) &light->block.numShadowSamples, 1, 1, 64);
         ImGui::DragFloat("Radius", &light->block.radius, 0.01, 0.0f);
         light->block.radius = std::max(light->block.radius, 0.0f);
+        ImGui::DragInt("Blur size", &light->shadowBlurSize, 1, 0, 128);
+        light->shadowBlurSize = std::max(light->shadowBlurSize, 0);
+        if (light->block.shadowBufferRID != 0) {
+            DrawTextureOnImgui(RenderingPassManager::imageAttachments[light->block.shadowBufferRID], light->imguiShadowRID, 1.0f);
+        }
     }
 }
 

@@ -25,4 +25,6 @@ public:
     static void Destroy();
     static void CreateRenderingPass(RenderingPass& pass);
     static void DestroyRenderingPass(RenderingPass& pass);
+
+    static RID CreateColorAttachmentImage(VkFormat format);
 };

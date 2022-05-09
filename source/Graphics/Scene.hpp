@@ -24,7 +24,7 @@ struct LightBlock {
     u32 type = 0;
     u32 numShadowSamples = 1;
     float radius = 1;
-    u32 PADDING[1];
+    u32 shadowBufferRID = 0;
 };
 
 struct SceneBlock {
@@ -42,7 +42,7 @@ struct SceneBlock {
     float aoPower = 1.45;
     glm::ivec2 viewSize;
     u32 useBlueNoise = 1;
-    u32 envMap = 0;
+    u32 envmap = 0;
 };
 
 struct MaterialBlock {
@@ -97,7 +97,10 @@ struct Model : Entity {
 struct Light : Entity {
     RID id = 0;
     LightBlock block;
+    RID lightBlockId = 0;
+    ImTextureID imguiShadowRID;
     bool shadows = true;
+    int shadowBlurSize = 2;
 };
 
 struct Collection : Entity {
@@ -124,6 +127,8 @@ namespace Scene {
     inline bool renderLightGizmos = true;
     inline float lightGizmosOpacity = 1.0f;
 
+    inline RID envmap;
+    inline bool envmapActive = false;
     inline bool aoActive = true;
     inline int aoNumSamples = 1;
 

@@ -26,6 +26,7 @@ struct LightBlock {
     int type;
     int numShadowSamples;
     float radius;
+    int shadowRID;
 };
 
 struct ModelBlock {
@@ -76,3 +77,11 @@ layout(set = 0, binding = 3) uniform sampler2D imageAttachs[];
 #define BLACK_TEXTURE textures[1]
 // #define CHECKER_TEXTURE textures[2]
 #define BLUE_NOISE_TEXTURE textures[2]
+
+vec3 DepthToWorld(mat4 inverseProj, mat4 inverseView, vec2 screenPos, float depth) {
+    vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePos = inverseProj*clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    vec4 worldSpacePos = inverseView*viewSpacePos;
+    return worldSpacePos.xyz;
+}
