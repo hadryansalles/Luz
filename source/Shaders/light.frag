@@ -11,6 +11,7 @@ layout(push_constant) uniform PresentConstants {
     int emissionRID;
     int depthRID;
     int volumetricLightRID;
+    int ambientOcclusionRID;
 };
 
 #include "base.glsl"
@@ -69,14 +70,6 @@ vec2 DiskSample(vec2 rng, float radius) {
     return vec2(pointRadius*cos(pointAngle), pointRadius*sin(pointAngle));
 }
 
-vec3 HemisphereSample(vec2 rng) {
-    float r = sqrt(rng.x);
-    float theta = 6.283 * rng.y;
-    float x = r * cos(theta);
-    float y = r * sin(theta);
-    return vec3(x, y, sqrt(max(0.0, 1.0 - rng.x)));
-}
-
 vec4 BlueNoiseSample(int i) {
     vec2 blueNoiseSize = textureSize(BLUE_NOISE_TEXTURE, 0);
     ivec2 fragUV = ivec2(mod(gl_FragCoord.xy + GOLDEN_RATIO*blueNoiseSize*(frame%64 + i*vec2(5, 7)), blueNoiseSize));
@@ -124,7 +117,8 @@ void main() {
     vec4 material = texture(imageAttachs[materialRID], fragTexCoord);
     vec4 emission = texture(imageAttachs[emissionRID], fragTexCoord);
     float depth = texture(imageAttachs[depthRID], fragTexCoord).r;
-    vec3 volumetricLight = volumetricLightRID != 0 ? texture(imageAttachs[volumetricLightRID], fragTexCoord).rgb : vec3(0,0,0);
+    vec3 volumetricLight = texture(imageAttachs[volumetricLightRID], fragTexCoord).rgb;
+    float rayTracedAo = texture(imageAttachs[ambientOcclusionRID], fragTexCoord).r;
     if(depth == 1.0) {
         discard;
     } else {
@@ -175,7 +169,7 @@ void main() {
             Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
         }
 
-        float rayTracedAo = TraceAORays(shadowOrigin, N);
+        // float rayTracedAo = TraceAORays(shadowOrigin, N);
         // ambient light from envmap
         vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb;
         {
@@ -200,7 +194,7 @@ void main() {
             // ambient += kD*diffuse + specular;
         }
         ambient *= occlusion*rayTracedAo;
-        vec3 color = ambient + Lo + 0.005*volumetricLight;
+        vec3 color = ambient + Lo + volumetricLight;
         color = color / (color + vec3(1.0));
         outColor = vec4(color + emission.rgb, 1.0);
         // outColor = vec4(volumetricLight, volumetricLight, volumetricLight, 1.0);

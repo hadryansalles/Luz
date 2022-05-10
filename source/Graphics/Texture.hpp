@@ -25,5 +25,5 @@ void CreateCubeTextureResource(TextureDesc& desc, TextureResource& res);
 void DestroyTextureResource(TextureResource& res);
 void DrawTextureOnImgui(TextureResource& res);
 void DrawTextureOnImgui(ImageResource& image, ImTextureID imguiRid, float scale);
-VkSampler CreateSampler(f32 maxLod);
+VkSampler CreateSampler(f32 maxLod, bool clamp = false);
 VkSampler CreateCubeSampler();

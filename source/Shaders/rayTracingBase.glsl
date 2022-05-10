@@ -57,3 +57,33 @@ float TraceShadowRay(vec3 O, vec3 L, int numSamples, float radius) {
     }
     return numShadows/numSamples;
 }
+
+float TraceAORays(vec3 fragPos, vec3 normal) {
+    if(scene.aoNumSamples == 0) {
+        return 1;
+    }
+    float ao = 0;
+    vec3 tangent = abs(normal.z) > 0.5 ? vec3(0.0, -normal.z, normal.y) : vec3(-normal.y, normal.x, 0.0);
+    vec3 bitangent = cross(normal, tangent);
+    float tMin = scene.aoMin;
+    float tMax = scene.aoMax;
+    for(int i = 0; i < scene.aoNumSamples; i++) {
+        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * scene.aoNumSamples + i)));
+        vec2 rng = BlueNoiseSample(scene.aoNumSamples + i).rg;
+        vec3 randomVec = HemisphereSample(rng);
+        vec3 direction = tangent*randomVec.x + bitangent*randomVec.y + normal*randomVec.z;
+        // Ray Query for shadow
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, fragPos, tMin, direction, tMax);
+
+        while(rayQueryProceedEXT(rayQuery)) {}
+
+        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+            ao += rayQueryGetIntersectionTEXT(rayQuery, true)/(tMax*scene.aoNumSamples);
+        } else {
+            ao += 1.0/float(scene.aoNumSamples);
+            // ao += 1;
+        }
+    }
+    return clamp(pow(ao, scene.aoPower), 0.0, 1.0);
+}

@@ -131,7 +131,9 @@ namespace Scene {
     inline bool envmapActive = false;
     inline bool aoActive = true;
     inline bool volumetricLightActive = true;
+    inline int volumetricBlurSize = 30;
     inline int aoNumSamples = 1;
+    inline int aoBlurSize = 30;
 
     inline RID lightMeshes[3];
 

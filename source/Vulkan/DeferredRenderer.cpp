@@ -134,20 +134,20 @@ void Setup() {
         renderingPasses.push_back(&shadowPass);
     }
     {
-        GraphicsPipelineManager::CreateDefaultDesc(shadowBlurPass.gpoDesc);
-        shadowBlurPass.gpoDesc.name = "ShadowBlur";
-        shadowBlurPass.gpoDesc.shaderStages.resize(2);
-        shadowBlurPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        shadowBlurPass.gpoDesc.shaderStages[0].path = "bin/quadPass.vert.spv";
-        shadowBlurPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shadowBlurPass.gpoDesc.shaderStages[1].path = "bin/shadowBlur.frag.spv";
-        shadowBlurPass.gpoDesc.colorFormats = { VK_FORMAT_R32_SFLOAT };
-        shadowBlurPass.clearColors = { {0} };
-        shadowBlurPass.crateAttachments = true;
-        shadowBlurPass.gpoDesc.attributesDesc.clear();
-        shadowBlurPass.gpoDesc.bindingDesc = {};
-        shadowBlurPass.gpoDesc.useDepthAttachment = false;
-        renderingPasses.push_back(&shadowBlurPass);
+        GraphicsPipelineManager::CreateDefaultDesc(aoPass.gpoDesc);
+        aoPass.gpoDesc.name = "Ambient Occlusion";
+        aoPass.gpoDesc.shaderStages.resize(2);
+        aoPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        aoPass.gpoDesc.shaderStages[0].path = "bin/quadPass.vert.spv";
+        aoPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        aoPass.gpoDesc.shaderStages[1].path = "bin/ambientOcclusion.frag.spv";
+        aoPass.gpoDesc.colorFormats = { VK_FORMAT_R32_SFLOAT };
+        aoPass.clearColors = { {0, 0, 0, 1} };
+        aoPass.crateAttachments = true;
+        aoPass.gpoDesc.attributesDesc.clear();
+        aoPass.gpoDesc.bindingDesc = {};
+        aoPass.gpoDesc.useDepthAttachment = false;
+        renderingPasses.push_back(&aoPass);
     }
     {
         GraphicsPipelineManager::CreateDefaultDesc(volumetricLightPass.gpoDesc);
@@ -164,6 +164,38 @@ void Setup() {
         volumetricLightPass.gpoDesc.bindingDesc = {};
         volumetricLightPass.gpoDesc.useDepthAttachment = false;
         renderingPasses.push_back(&volumetricLightPass);
+    }
+    {
+        GraphicsPipelineManager::CreateDefaultDesc(rgbaBlurPass.gpoDesc);
+        rgbaBlurPass.gpoDesc.name = "rgbaBlur";
+        rgbaBlurPass.gpoDesc.shaderStages.resize(2);
+        rgbaBlurPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        rgbaBlurPass.gpoDesc.shaderStages[0].path = "bin/quadPass.vert.spv";
+        rgbaBlurPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        rgbaBlurPass.gpoDesc.shaderStages[1].path = "bin/rgbaBlur.frag.spv";
+        rgbaBlurPass.gpoDesc.colorFormats = { VK_FORMAT_R32G32B32A32_SFLOAT };
+        rgbaBlurPass.clearColors = { {0, 0, 0, 1} };
+        rgbaBlurPass.crateAttachments = true;
+        rgbaBlurPass.gpoDesc.attributesDesc.clear();
+        rgbaBlurPass.gpoDesc.bindingDesc = {};
+        rgbaBlurPass.gpoDesc.useDepthAttachment = false;
+        renderingPasses.push_back(&rgbaBlurPass);
+    }
+    {
+        GraphicsPipelineManager::CreateDefaultDesc(floatBlurPass.gpoDesc);
+        floatBlurPass.gpoDesc.name = "floatBlur";
+        floatBlurPass.gpoDesc.shaderStages.resize(2);
+        floatBlurPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        floatBlurPass.gpoDesc.shaderStages[0].path = "bin/quadPass.vert.spv";
+        floatBlurPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        floatBlurPass.gpoDesc.shaderStages[1].path = "bin/floatBlur.frag.spv";
+        floatBlurPass.gpoDesc.colorFormats = { VK_FORMAT_R32_SFLOAT };
+        floatBlurPass.clearColors = { {0 } };
+        floatBlurPass.crateAttachments = true;
+        floatBlurPass.gpoDesc.attributesDesc.clear();
+        floatBlurPass.gpoDesc.bindingDesc = {};
+        floatBlurPass.gpoDesc.useDepthAttachment = false;
+        renderingPasses.push_back(&floatBlurPass);
     }
 }
 
@@ -233,6 +265,191 @@ void EndPass(VkCommandBuffer commandBuffer) {
     ctx.vkCmdEndRendering(commandBuffer);
 }
 
+void Blur1Pass(VkCommandBuffer commandBuffer, RID imageRID, int blurSize) {
+    ImageResource& image = RenderingPassManager::imageAttachments[imageRID];
+
+    BlurConstants constants;
+    constants.imageRID = imageRID;
+    constants.normalRID = opaquePass.colorAttachments[1];
+    constants.depthRID = opaquePass.depthAttachment;
+    constants.delta = glm::vec2(1.0 / image.width, 0.0f);
+    constants.steps = blurSize;
+
+    ImageResource& blurRes = RenderingPassManager::imageAttachments[floatBlurPass.colorAttachments[0]];
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, blurRes.image);
+
+    {
+        VkRenderingAttachmentInfoKHR blurAttach = {};
+        blurAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        blurAttach.imageView = blurRes.view;
+        blurAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+        blurAttach.resolveMode = VK_RESOLVE_MODE_NONE;
+        blurAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        blurAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        blurAttach.clearValue.color = { 0 };
+
+        VkRenderingInfoKHR renderingInfo{};
+        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderingInfo.viewMask = 0;
+        renderingInfo.layerCount = 1;
+        renderingInfo.renderArea.extent = SwapChain::GetExtent();
+        renderingInfo.renderArea.offset = { 0, 0 };
+        renderingInfo.flags = 0;
+        renderingInfo.colorAttachmentCount = 1;
+        renderingInfo.pColorAttachments = &blurAttach;
+        renderingInfo.pDepthAttachment = nullptr;
+        renderingInfo.pStencilAttachment = nullptr;
+
+        ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, floatBlurPass.gpo.pipeline);
+        vkCmdPushConstants(commandBuffer, floatBlurPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+        auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, floatBlurPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        ctx.vkCmdEndRendering(commandBuffer);
+
+        VkImageCopy region{};
+        region.srcOffset = { 0, 0, 0 };
+        region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.srcSubresource.baseArrayLayer = 0;
+        region.srcSubresource.layerCount = 1;
+        region.srcSubresource.mipLevel = 0;
+        region.dstOffset = { 0, 0, 0 };
+        region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.dstSubresource.baseArrayLayer = 0;
+        region.dstSubresource.layerCount = 1;
+        region.dstSubresource.mipLevel = 0;
+        region.extent = { image.width, image.height, 1 };
+
+        ImageManager::BarrierColorAttachmentToRead(commandBuffer, blurRes.image);
+        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image.image);
+
+        blurAttach.imageView = image.view;
+        constants.imageRID = floatBlurPass.colorAttachments[0];
+        constants.delta = glm::vec2(0.0f, 1.0f / image.height);
+        ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, floatBlurPass.gpo.pipeline);
+        vkCmdPushConstants(commandBuffer, floatBlurPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, floatBlurPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        ctx.vkCmdEndRendering(commandBuffer);
+    }
+
+    ImageManager::BarrierColorAttachmentToRead(commandBuffer, image.image);
+}
+
+void Blur4Pass(VkCommandBuffer commandBuffer, RID imageRID, int blurSize) {
+    ImageResource& image = RenderingPassManager::imageAttachments[imageRID];
+
+    BlurConstants constants;
+    constants.imageRID = imageRID;
+    constants.normalRID = opaquePass.colorAttachments[1];
+    constants.depthRID = opaquePass.depthAttachment;
+    constants.delta = glm::vec2(1.0 / image.width, 0.0f);
+    constants.steps = blurSize;
+
+    ImageResource& blurRes = RenderingPassManager::imageAttachments[rgbaBlurPass.colorAttachments[0]];
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, blurRes.image);
+
+    {
+        VkRenderingAttachmentInfoKHR blurAttach = {};
+        blurAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        blurAttach.imageView = blurRes.view;
+        blurAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+        blurAttach.resolveMode = VK_RESOLVE_MODE_NONE;
+        blurAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        blurAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        blurAttach.clearValue.color = { 0 };
+
+        VkRenderingInfoKHR renderingInfo{};
+        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderingInfo.viewMask = 0;
+        renderingInfo.layerCount = 1;
+        renderingInfo.renderArea.extent = SwapChain::GetExtent();
+        renderingInfo.renderArea.offset = { 0, 0 };
+        renderingInfo.flags = 0;
+        renderingInfo.colorAttachmentCount = 1;
+        renderingInfo.pColorAttachments = &blurAttach;
+        renderingInfo.pDepthAttachment = nullptr;
+        renderingInfo.pStencilAttachment = nullptr;
+
+        ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rgbaBlurPass.gpo.pipeline);
+        vkCmdPushConstants(commandBuffer, rgbaBlurPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+        auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rgbaBlurPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        ctx.vkCmdEndRendering(commandBuffer);
+
+        VkImageCopy region{};
+        region.srcOffset = { 0, 0, 0 };
+        region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.srcSubresource.baseArrayLayer = 0;
+        region.srcSubresource.layerCount = 1;
+        region.srcSubresource.mipLevel = 0;
+        region.dstOffset = { 0, 0, 0 };
+        region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.dstSubresource.baseArrayLayer = 0;
+        region.dstSubresource.layerCount = 1;
+        region.dstSubresource.mipLevel = 0;
+        region.extent = { image.width, image.height, 1 };
+
+        ImageManager::BarrierColorAttachmentToRead(commandBuffer, blurRes.image);
+        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image.image);
+
+        blurAttach.imageView = image.view;
+        constants.imageRID = rgbaBlurPass.colorAttachments[0];
+        constants.delta = glm::vec2(0.0f, 1.0f / image.height);
+        ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rgbaBlurPass.gpo.pipeline);
+        vkCmdPushConstants(commandBuffer, rgbaBlurPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rgbaBlurPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        ctx.vkCmdEndRendering(commandBuffer);
+    }
+
+    ImageManager::BarrierColorAttachmentToRead(commandBuffer, image.image);
+}
+
+void AmbientOcclusionPass(VkCommandBuffer commandBuffer, LightConstants constants) {
+    ImageResource aoRes = RenderingPassManager::imageAttachments[aoPass.colorAttachments[0]];
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, aoRes.image);
+
+    constants.normalRID = opaquePass.colorAttachments[1];
+    constants.depthRID = opaquePass.depthAttachment;
+
+    VkRenderingAttachmentInfoKHR aoAttach = {};
+    aoAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    aoAttach.imageView = aoRes.view;
+    aoAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+    aoAttach.resolveMode = VK_RESOLVE_MODE_NONE;
+    aoAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    aoAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    aoAttach.clearValue.color = { 0 };
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = 1;
+    renderingInfo.renderArea.extent = SwapChain::GetExtent();
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.flags = 0;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &aoAttach;
+    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, aoPass.gpo.pipeline);
+    vkCmdPushConstants(commandBuffer, aoPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
+    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, aoPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+    ctx.vkCmdEndRendering(commandBuffer);
+
+    ImageManager::BarrierColorAttachmentToRead(commandBuffer, aoRes.image);
+}
+
 void VolumetricLightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     ImageResource volRes = RenderingPassManager::imageAttachments[volumetricLightPass.colorAttachments[0]];
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, volRes.image);
@@ -273,9 +490,7 @@ void VolumetricLightPass(VkCommandBuffer commandBuffer, LightConstants constants
 
 void ShadowPass(VkCommandBuffer commandBuffer, ShadowConstants constants, Light* light) {
     ImageResource shadowRes = RenderingPassManager::imageAttachments[light->block.shadowBufferRID];
-    ImageResource blurRes = RenderingPassManager::imageAttachments[shadowBlurPass.colorAttachments[0]];
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, shadowRes.image);
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, blurRes.image);
 
     constants.normalRID = opaquePass.colorAttachments[1];
     constants.depthRID = opaquePass.depthAttachment;
@@ -283,7 +498,7 @@ void ShadowPass(VkCommandBuffer commandBuffer, ShadowConstants constants, Light*
     {
         VkRenderingAttachmentInfoKHR shadowAttach = {};
         shadowAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-        shadowAttach.imageView = blurRes.view;
+        shadowAttach.imageView = shadowRes.view;
         shadowAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
         shadowAttach.resolveMode = VK_RESOLVE_MODE_NONE;
         shadowAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -311,72 +526,8 @@ void ShadowPass(VkCommandBuffer commandBuffer, ShadowConstants constants, Light*
         ctx.vkCmdEndRendering(commandBuffer);
     }
 
-    ImageManager::BarrierColorAttachmentToRead(commandBuffer, blurRes.image);
-
-    {
-        glm::vec2 deltaXY(1.0f / SwapChain::GetExtent().width, 1.0f / SwapChain::GetExtent().height);
-        BlurConstants blurConst;
-        blurConst.imageRID = shadowBlurPass.colorAttachments[0];
-        blurConst.normalRID = opaquePass.colorAttachments[1];
-        blurConst.depthRID = opaquePass.depthAttachment;
-        blurConst.steps = light->shadowBlurSize;
-        blurConst.delta = glm::vec2(deltaXY.x, 0.0f);
-        VkRenderingAttachmentInfoKHR blurAttach = {};
-        blurAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-        blurAttach.imageView = shadowRes.view;
-        blurAttach.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-        blurAttach.resolveMode = VK_RESOLVE_MODE_NONE;
-        blurAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        blurAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        blurAttach.clearValue.color = { 0 };
-
-        VkRenderingInfoKHR renderingInfo{};
-        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-        renderingInfo.viewMask = 0;
-        renderingInfo.layerCount = 1;
-        renderingInfo.renderArea.extent = SwapChain::GetExtent();
-        renderingInfo.renderArea.offset = { 0, 0 };
-        renderingInfo.flags = 0;
-        renderingInfo.colorAttachmentCount = 1;
-        renderingInfo.pColorAttachments = &blurAttach;
-        renderingInfo.pDepthAttachment = nullptr;
-        renderingInfo.pStencilAttachment = nullptr;
-
-        ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowBlurPass.gpo.pipeline);
-        vkCmdPushConstants(commandBuffer, shadowBlurPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(blurConst), &blurConst);
-        auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowBlurPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-        ctx.vkCmdEndRendering(commandBuffer);
-
-        VkImageCopy region{};
-        region.srcOffset = { 0, 0, 0 };
-        region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.srcSubresource.baseArrayLayer = 0;
-        region.srcSubresource.layerCount = 1;
-        region.srcSubresource.mipLevel = 0;
-        region.dstOffset = { 0, 0, 0 };
-        region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.dstSubresource.baseArrayLayer = 0;
-        region.dstSubresource.layerCount = 1;
-        region.dstSubresource.mipLevel = 0;
-        region.extent = { SwapChain::GetExtent().width, SwapChain::GetExtent().height, 1 };
-
-        ImageManager::BarrierColorAttachmentToRead(commandBuffer, shadowRes.image);
-        ImageManager::Copy(commandBuffer, shadowRes, blurRes, region);
-        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, shadowRes.image);
-
-        blurConst.delta = glm::vec2(0.0f, deltaXY.y);
-        ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
-        // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowBlurPass.gpo.pipeline);
-        vkCmdPushConstants(commandBuffer, shadowBlurPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(blurConst), &blurConst);
-        // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowBlurPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-        ctx.vkCmdEndRendering(commandBuffer);
-    }
-
     ImageManager::BarrierColorAttachmentToRead(commandBuffer, shadowRes.image);
+    Blur1Pass(commandBuffer, light->block.shadowBufferRID, light->shadowBlurSize);
 }
 
 void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants) {
@@ -423,6 +574,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     constants.emissionRID = opaquePass.colorAttachments[3];
     constants.depthRID = opaquePass.depthAttachment;
     constants.volumetricLightRID = volumetricLightPass.colorAttachments[0];
+    constants.ambientOcclusionRID = aoPass.colorAttachments[0];
 
     ImageResource lightColorRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes.image);

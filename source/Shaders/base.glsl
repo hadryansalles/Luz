@@ -91,3 +91,13 @@ float LinearizeDepth(float depth) {
     float far = 5.0;
     return (2.0*near)/(far+near - depth*(far-near));
 }
+
+vec3 HemisphereSample(vec2 rng) {
+    float r = sqrt(rng.x);
+    float theta = 6.283 * rng.y;
+    float x = r * cos(theta);
+    float y = r * sin(theta);
+    return vec3(x, y, sqrt(max(0.0, 1.0 - rng.x)));
+}
+
+

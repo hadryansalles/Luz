@@ -302,8 +302,16 @@ private:
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
         
-        DeferredShading::VolumetricLightPass(commandBuffer, lightPassConstants);
+        if (Scene::volumetricLightActive) {
+            DeferredShading::VolumetricLightPass(commandBuffer, lightPassConstants);
+        } else {
+            ImageManager::Clear(commandBuffer, RenderingPassManager::imageAttachments[DeferredShading::volumetricLightPass.colorAttachments[0]], { {0, 0, 0, 0} });
+        }
+        DeferredShading::Blur4Pass(commandBuffer, DeferredShading::volumetricLightPass.colorAttachments[0], Scene::volumetricBlurSize);
         DeferredShading::LightPass(commandBuffer, lightPassConstants);
+
+        DeferredShading::AmbientOcclusionPass(commandBuffer, lightPassConstants);
+        DeferredShading::Blur1Pass(commandBuffer, DeferredShading::aoPass.colorAttachments[0], Scene::aoBlurSize);
 
         DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
         if (drawUi) {

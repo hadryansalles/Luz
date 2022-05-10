@@ -23,6 +23,7 @@ struct LightConstants {
     int emissionRID;
     int depthRID;
     int volumetricLightRID;
+    int ambientOcclusionRID;
 };
 
 struct ShadowConstants {
@@ -47,11 +48,13 @@ inline ImageResource faces[6];
 inline RenderingPass opaquePass;
 inline RenderingPass envmapPass;
 inline RenderingPass lightPass;
+inline RenderingPass aoPass;
 inline RenderingPass panoramaToCubePass;
 inline RenderingPass presentPass;
 inline RenderingPass shadowPass;
-inline RenderingPass shadowBlurPass;
 inline RenderingPass volumetricLightPass;
+inline RenderingPass rgbaBlurPass;
+inline RenderingPass floatBlurPass;
 
 inline std::vector<RenderingPass*> renderingPasses;
 
@@ -61,6 +64,11 @@ void Destroy();
 void ReloadShaders();
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
+
+void Blur4Pass(VkCommandBuffer commandBuffer, RID imageRID, int blurSize);
+void Blur1Pass(VkCommandBuffer commandBuffer, RID imageRID, int blurSize);
+
+void AmbientOcclusionPass(VkCommandBuffer commandBuffer, LightConstants constants);
 
 void ShadowPass(VkCommandBuffer commandBuffer, ShadowConstants constants, Light* light);
 

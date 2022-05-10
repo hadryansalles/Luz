@@ -347,12 +347,18 @@ void OnImgui() {
         ImGui::DragFloat("Intensity", &scene.ambientLightIntensity, 0.01);
     }
     if (ImGui::CollapsingHeader("Ambient Occlusion", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID("ao");
         ImGui::Checkbox("Enabled", &aoActive);
         ImGui::DragInt("Samples", &aoNumSamples, 1, 1);
         ImGui::DragFloat("Min", &scene.aoMin, 0.0001, 0.0f, 1.0f, "%.8f", ImGuiSliderFlags_Logarithmic);
         ImGui::DragFloat("Max", &scene.aoMax, 0.01, 0.0f, 10.0f, "%.4f");
         ImGui::DragFloat("Power", &scene.aoPower, 0.001, 0.0f, 100.0f, "%.4f");
         scene.aoNumSamples = aoActive ? aoNumSamples : 0;
+        ImGui::DragInt("Blur size", &aoBlurSize, 1, 0, 128);
+        aoBlurSize = std::max(aoBlurSize, 0);
+        ImageResource& aoRes = RenderingPassManager::imageAttachments[DeferredShading::aoPass.colorAttachments[0]];
+        DrawTextureOnImgui(aoRes, aoRes.imguiID, 1.0);
+        ImGui::PopID();
     }
     if (ImGui::CollapsingHeader("Envionment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("envmap");
@@ -373,6 +379,8 @@ void OnImgui() {
             envmap = envmapPayload;
         }
         ImGui::Checkbox("Active", &volumetricLightActive);
+        ImGui::DragInt("Blur size", &volumetricBlurSize, 1, 0, 128);
+        volumetricBlurSize = std::max(volumetricBlurSize, 0);
         ImageResource& volRes = RenderingPassManager::imageAttachments[DeferredShading::volumetricLightPass.colorAttachments[0]];
         DrawTextureOnImgui(volRes, volRes.imguiID, 1.0);
         ImGui::PopID();

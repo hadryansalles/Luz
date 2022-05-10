@@ -7,7 +7,7 @@
 #include "imgui/imgui_impl_vulkan.h"
 
 void RenderingPassManager::Create() {
-    sampler = CreateSampler(1);
+    sampler = CreateSampler(1, true);
 }
 
 void RenderingPassManager::Destroy() {

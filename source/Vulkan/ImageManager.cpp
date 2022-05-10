@@ -115,8 +115,33 @@ void ImageManager::Copy(VkCommandBuffer commandBuffer, ImageResource& src, Image
         1, &copy);
 }
 
-void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
+void ImageManager::Clear(VkCommandBuffer commandBuffer, ImageResource& image, VkClearColorValue clear) {
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = 0;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.image = image.image;
+    vkCmdPipelineBarrier(commandBuffer, stage, stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    VkImageSubresourceRange range{};
+    range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    range.baseArrayLayer = 0;
+    range.baseMipLevel = 0;
+    range.layerCount = 1;
+    range.levelCount = 1;
+    vkCmdClearColorImage(commandBuffer, image.image, VK_IMAGE_LAYOUT_GENERAL, &clear, 1, &range);
+}
+
+void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
     DEBUG_ASSERT(desc.layers == 1 || desc.layers == 6, "Layers count not supported!");
     auto device = LogicalDevice::GetVkDevice();
     auto allocator = Instance::GetAllocator();

@@ -21,6 +21,9 @@ layout(location = 0) out vec4 outLight;
 #include "base.glsl"
 #include "rayTracingBase.glsl"
 
+#define FOG_DENSITY 0.05
+#define FOG_BRIGHNESS_CLAMP 0.2
+
 void main() {
     float depth = texture(imageAttachs[depthRID], fragTexCoord).r;
     vec3 worldSpacePos = DepthToWorld(scene.inverseProj, scene.inverseView, fragTexCoord, depth);
@@ -42,15 +45,21 @@ void main() {
             outLight.rgb += light.color*light.intensity*(1.0-hits/steps);
 
         } else {
+            float fogPercent = 0.0f;
             for(int i = 0; i < steps; i++) {
-                vec3 O = scene.camPos + viewDir*i/steps;
+                float rayPercent = float(i)/steps;
+                vec3 O = scene.camPos + viewDir*rayPercent;
                 vec3 D = light.position - O;
                 float tMin = 0.001;
                 float tMax = length(D);
                 D = normalize(D);
-                hits += (1.0 - TraceRayHitSomething(O, D, tMin, tMax))/(steps*tMax);
+                int hit = TraceRayHitSomething(O, D, tMin, tMax);
+                fogPercent = mix(fogPercent, 1-hit, 1.0f/float(i+1));
             }
-            outLight.rgb += light.color*light.intensity*hits;
+            // vec3 fogColor = mix(vec3(0,0,0), light.color*light.intensity, fogPercent);
+            vec3 fogColor = mix(vec3(0,0,0), light.color, fogPercent);
+            float absorb = exp(-depth*FOG_DENSITY);
+            outLight.rgb = clamp(1.0f -absorb, 0.0f, FOG_BRIGHNESS_CLAMP)*fogColor;
         }
     }
 }

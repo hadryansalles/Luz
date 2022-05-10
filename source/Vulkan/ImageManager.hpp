@@ -39,6 +39,7 @@ public:
     static void CreateCubeImage(void* data, u32 width, u32 height, u16 channels, ImageResource& res);
     static void Destroy(ImageResource& res);
     static void Copy(VkCommandBuffer commandBuffer, ImageResource& src, ImageResource& dst, VkImageCopy region);
+    static void Clear(VkCommandBuffer commandBuffer, ImageResource& image, VkClearColorValue clear);
 
     static void InsertBarrier (
         VkCommandBuffer commandBuffer, 
