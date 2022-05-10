@@ -18,12 +18,6 @@ layout(location = 0) in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 outColor;
 
-float LinearizeDepth(float depth) {
-    float near = 0.01;
-    float far = 5.0;
-    return (2.0*near)/(far+near - depth*(far-near));
-}
-
 void main() {
     int imageType = presentMode;
     vec2 fragCoord = fragTexCoord;

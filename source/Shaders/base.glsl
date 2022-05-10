@@ -85,3 +85,9 @@ vec3 DepthToWorld(mat4 inverseProj, mat4 inverseView, vec2 screenPos, float dept
     vec4 worldSpacePos = inverseView*viewSpacePos;
     return worldSpacePos.xyz;
 }
+
+float LinearizeDepth(float depth) {
+    float near = 0.01;
+    float far = 5.0;
+    return (2.0*near)/(far+near - depth*(far-near));
+}

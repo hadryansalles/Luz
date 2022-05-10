@@ -6,6 +6,7 @@
 #include "RayTracing.hpp"
 #include "SwapChain.hpp"
 #include "RenderingPass.hpp"
+#include "DeferredRenderer.hpp"
 
 #include <imgui/imgui_stdlib.h>
 #include <stb_image.h>
@@ -354,13 +355,27 @@ void OnImgui() {
         scene.aoNumSamples = aoActive ? aoNumSamples : 0;
     }
     if (ImGui::CollapsingHeader("Envionment Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID("envmap");
         RID envmapPayload = 0;
         AcceptTexturePayload(envmapPayload);
         if (envmapPayload != 0 && AssetManager::textureDescs[envmapPayload].isHDR) {
             envmap = envmapPayload;
         }
-        ImGui::Checkbox("Use", &envmapActive);
+        ImGui::Checkbox("Enabled", &envmapActive);
         ImGui::Text(AssetManager::textureDescs[envmap].paths[0].string().c_str());
+        ImGui::PopID();
+    }
+    if (ImGui::CollapsingHeader("Volumetric Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID("volumetric");
+        RID envmapPayload = 0;
+        AcceptTexturePayload(envmapPayload);
+        if (envmapPayload != 0 && AssetManager::textureDescs[envmapPayload].isHDR) {
+            envmap = envmapPayload;
+        }
+        ImGui::Checkbox("Active", &volumetricLightActive);
+        ImageResource& volRes = RenderingPassManager::imageAttachments[DeferredShading::volumetricLightPass.colorAttachments[0]];
+        DrawTextureOnImgui(volRes, volRes.imguiID, 1.0);
+        ImGui::PopID();
     }
 }
 

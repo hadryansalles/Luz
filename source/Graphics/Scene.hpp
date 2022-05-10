@@ -130,6 +130,7 @@ namespace Scene {
     inline RID envmap;
     inline bool envmapActive = false;
     inline bool aoActive = true;
+    inline bool volumetricLightActive = true;
     inline int aoNumSamples = 1;
 
     inline RID lightMeshes[3];

@@ -10,7 +10,7 @@ layout(push_constant) uniform PresentConstants {
     int materialRID;
     int emissionRID;
     int depthRID;
-    int envmapRID;
+    int volumetricLightRID;
 };
 
 #include "base.glsl"
@@ -124,7 +124,7 @@ void main() {
     vec4 material = texture(imageAttachs[materialRID], fragTexCoord);
     vec4 emission = texture(imageAttachs[emissionRID], fragTexCoord);
     float depth = texture(imageAttachs[depthRID], fragTexCoord).r;
-    vec4 envmap = texture(imageAttachs[envmapRID], fragTexCoord);
+    vec3 volumetricLight = volumetricLightRID != 0 ? texture(imageAttachs[volumetricLightRID], fragTexCoord).rgb : vec3(0,0,0);
     if(depth == 1.0) {
         discard;
     } else {
@@ -179,29 +179,30 @@ void main() {
         // ambient light from envmap
         vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb;
         {
-            vec3 specRadiance = vec3(0, 0, 0);
-            int numSamples = 1;
-            for(int i = 0; i < numSamples; i++) {
-                vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
-                vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
-                // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
-                vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
-                vec3 reflected = reflect(-V, N);
-                vec3 sampled = HemisphereSample(rng);
-                vec3 dir = mix(reflected, sampled, roughness);
-                specRadiance += texture(cubeTextures[scene.envmap], dir).rgb / numSamples;
-            }
-            vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
-            vec3 kS = F;
-            vec3 kD = vec3(1.0) - kS;
-            kD *= 1.0 - metallic;
-            vec3 diffuse = specRadiance*albedo.rgb;
-            vec3 specular = F*specRadiance;
-            ambient += kD*diffuse + specular;
+            // vec3 specRadiance = vec3(0, 0, 0);
+            // int numSamples = 1;
+            // for(int i = 0; i < numSamples; i++) {
+            //     vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
+            //     vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
+            //     // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
+            //     vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+            //     vec3 reflected = reflect(-V, N);
+            //     vec3 sampled = HemisphereSample(rng);
+            //     vec3 dir = mix(reflected, sampled, roughness);
+            //     specRadiance += texture(cubeTextures[scene.envmap], dir).rgb / numSamples;
+            // }
+            // vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+            // vec3 kS = F;
+            // vec3 kD = vec3(1.0) - kS;
+            // kD *= 1.0 - metallic;
+            // vec3 diffuse = specRadiance*albedo.rgb;
+            // vec3 specular = F*specRadiance;
+            // ambient += kD*diffuse + specular;
         }
         ambient *= occlusion*rayTracedAo;
-        vec3 color = ambient + Lo;
+        vec3 color = ambient + Lo + 0.005*volumetricLight;
         color = color / (color + vec3(1.0));
         outColor = vec4(color + emission.rgb, 1.0);
+        // outColor = vec4(volumetricLight, volumetricLight, volumetricLight, 1.0);
     }
 }

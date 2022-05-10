@@ -22,7 +22,7 @@ struct LightConstants {
     int materialRID;
     int emissionRID;
     int depthRID;
-    int envmapRID;
+    int volumetricLightRID;
 };
 
 struct ShadowConstants {
@@ -51,6 +51,9 @@ inline RenderingPass panoramaToCubePass;
 inline RenderingPass presentPass;
 inline RenderingPass shadowPass;
 inline RenderingPass shadowBlurPass;
+inline RenderingPass volumetricLightPass;
+
+inline std::vector<RenderingPass*> renderingPasses;
 
 void Setup();
 void Create();
@@ -61,6 +64,7 @@ void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
 
 void ShadowPass(VkCommandBuffer commandBuffer, ShadowConstants constants, Light* light);
 
+void VolumetricLightPass(VkCommandBuffer commandBuffer, LightConstants constants);
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants);
 
 void EnvmapPass(VkCommandBuffer commandBuffer, OpaqueConstants constants);

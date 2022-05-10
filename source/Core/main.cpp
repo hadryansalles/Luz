@@ -273,7 +273,6 @@ private:
 
         DeferredShading::EndPass(commandBuffer);
 
-        
         for (int i = 0; i < DeferredShading::opaquePass.colorAttachments.size(); i++) {
             ImageResource res = RenderingPassManager::imageAttachments[DeferredShading::opaquePass.colorAttachments[i]];
             ImageManager::BarrierColorAttachmentToRead(commandBuffer, res.image);
@@ -302,6 +301,8 @@ private:
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
+        
+        DeferredShading::VolumetricLightPass(commandBuffer, lightPassConstants);
         DeferredShading::LightPass(commandBuffer, lightPassConstants);
 
         DeferredShading::BeginPresentPass(commandBuffer, frameIndex);

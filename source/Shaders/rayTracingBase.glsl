@@ -13,6 +13,21 @@ vec2 DiskSample(vec2 rng, float radius) {
     return vec2(pointRadius*cos(pointAngle), pointRadius*sin(pointAngle));
 }
 
+int TraceRayHitSomething(vec3 O, vec3 D, float tMin, float tMax) {
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, O, tMin, D, tMax);
+
+    // Start traversal: return false if traversal is complete
+    while(rayQueryProceedEXT(rayQuery)) {}
+
+    // Returns type of committed (true) intersection
+    if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+        // Got an intersection == Shadow
+        return 1;
+    }
+    return 0;
+}
+
 float TraceShadowRay(vec3 O, vec3 L, int numSamples, float radius) {
 
     if(numSamples == 0) {

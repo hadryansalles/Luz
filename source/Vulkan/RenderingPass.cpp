@@ -4,6 +4,7 @@
 #include "Texture.hpp"
 #include "LogicalDevice.hpp"
 #include "SwapChain.hpp"
+#include "imgui/imgui_impl_vulkan.h"
 
 void RenderingPassManager::Create() {
     sampler = CreateSampler(1);
@@ -96,8 +97,11 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
 
         pass.colorAttachInfos.resize(pass.colorAttachments.size());
 
+        const VkImageLayout imguiLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         for (int i = 0; i < pass.colorAttachments.size(); i++) {
             RID rid = pass.colorAttachments[i];
+
+            imageAttachments[rid].imguiID = ImGui_ImplVulkan_AddTexture(sampler, imageAttachments[rid].view, imguiLayout);
 
             imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imageInfos[i].imageView = imageAttachments[rid].view;

@@ -10,6 +10,7 @@ struct ImageResource {
     VkDeviceMemory memory = VK_NULL_HANDLE;
     uint32_t width  = 0;
     uint32_t height = 0;
+    ImTextureID imguiID;
 };
 
 struct ImageDesc {
@@ -26,6 +27,8 @@ struct ImageDesc {
     uint32_t height;
     uint32_t mipLevels = 1;
     uint32_t layers = 1;
+
+    bool onImgui = false;
 };
 
 class ImageManager {
