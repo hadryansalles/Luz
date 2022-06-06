@@ -21,8 +21,8 @@ layout(location = 0) out vec4 outLight;
 #include "base.glsl"
 #include "rayTracingBase.glsl"
 
-#define FOG_DENSITY 0.05
-#define FOG_BRIGHNESS_CLAMP 0.2
+#define FOG_DENSITY 0.2
+#define FOG_BRIGHNESS_CLAMP 0.5
 
 void main() {
     float depth = texture(imageAttachs[depthRID], fragTexCoord).r;
