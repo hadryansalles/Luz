@@ -22,9 +22,9 @@ struct LightConstants {
     int depthRID;
 };
 
-inline RenderingPass opaquePass;
-inline RenderingPass lightPass;
-inline RenderingPass presentPass;
+inline RenderingPass opaquePass = {};
+inline RenderingPass lightPass = {};
+inline RenderingPass presentPass = {};
 
 void Setup();
 void Create();

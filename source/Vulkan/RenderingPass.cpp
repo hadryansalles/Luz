@@ -22,7 +22,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
     GraphicsPipelineManager::CreatePipeline(pass.gpoDesc, pass.gpo);
     VkExtent2D extent =  SwapChain::GetExtent();
 
-    if (pass.crateAttachments) {
+    if (pass.createAttachments) {
         for (int i = 0; i < pass.gpoDesc.colorFormats.size(); i++) {
             ImageDesc desc;
             desc.width = extent.width;
@@ -103,7 +103,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
             pass.depthAttachInfo = {};
             pass.depthAttachInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             pass.depthAttachInfo.imageView = imageAttachments[pass.depthAttachment].view;
-            pass.depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            pass.depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             pass.depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
             pass.depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             pass.depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

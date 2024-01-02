@@ -38,9 +38,11 @@ void Setup() {
         lightPass.gpoDesc.name = "Light";
         lightPass.gpoDesc.shaderStages.resize(2);
         lightPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        lightPass.gpoDesc.shaderStages[0].path = "bin/light.vert.spv";
+        lightPass.gpoDesc.shaderStages[0].path = "light.vert";
+        lightPass.gpoDesc.shaderStages[0].entry_point = "main";
         lightPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        lightPass.gpoDesc.shaderStages[1].path = "bin/light.frag.spv";
+        lightPass.gpoDesc.shaderStages[1].path = "light.frag";
+        lightPass.gpoDesc.shaderStages[1].entry_point = "main";
         lightPass.gpoDesc.attributesDesc.clear();
         lightPass.gpoDesc.bindingDesc = {};
         lightPass.gpoDesc.useDepthAttachment = false;
@@ -52,27 +54,30 @@ void Setup() {
         opaquePass.gpoDesc.name = "Opaque";
         opaquePass.gpoDesc.shaderStages.resize(2);
         opaquePass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        opaquePass.gpoDesc.shaderStages[0].path = "bin/opaque.vert.spv";
+        opaquePass.gpoDesc.shaderStages[0].path = "opaque.vert";
+        opaquePass.gpoDesc.shaderStages[0].entry_point = "main";
         opaquePass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        opaquePass.gpoDesc.shaderStages[1].path = "bin/opaque.frag.spv";
+        opaquePass.gpoDesc.shaderStages[1].path = "opaque.frag";
+        opaquePass.gpoDesc.shaderStages[1].entry_point = "main";
         opaquePass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R32G32B32A32_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM};
         opaquePass.clearColors = { {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1} };
         opaquePass.gpoDesc.useDepthAttachment = true;
         opaquePass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT;
+        //opaquePass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        //opaquePass.gpoDesc.stencilFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
     }
     {
         GraphicsPipelineManager::CreateDefaultDesc(presentPass.gpoDesc);
         presentPass.gpoDesc.name = "Present";
         presentPass.gpoDesc.shaderStages.resize(2);
         presentPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        presentPass.gpoDesc.shaderStages[0].path = "bin/present.vert.spv";
+        presentPass.gpoDesc.shaderStages[0].path = "present.vert";
+        presentPass.gpoDesc.shaderStages[0].entry_point = "main";
         presentPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        presentPass.gpoDesc.shaderStages[1].path = "bin/present.frag.spv";
-        // std::vector<std::vector<char>> shaderBytes = FileManager::ReadShaders({"bin/present.vert.spv", "bin/present.frag.spv"});
-        // presentPass.gpoDesc.shaderStages[0].shaderBytes = shaderBytes[0];
-        // presentPass.gpoDesc.shaderStages[1].shaderBytes = shaderBytes[1];
+        presentPass.gpoDesc.shaderStages[1].path = "present.frag";
+        presentPass.gpoDesc.shaderStages[1].entry_point = "main";
         presentPass.gpoDesc.colorFormats = { VK_FORMAT_B8G8R8A8_UNORM };
-        presentPass.crateAttachments = false;
+        presentPass.createAttachments = false;
         presentPass.gpoDesc.attributesDesc.clear();
         presentPass.gpoDesc.bindingDesc = {};
         presentPass.gpoDesc.useDepthAttachment = false;
@@ -116,6 +121,7 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
 }
 
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
+    LOG_INFO("NUM ATTACHS: {}", opaquePass.colorAttachments.size());
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
         ImageResource image = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
         ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image.image);
@@ -132,7 +138,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     renderingInfo.colorAttachmentCount = opaquePass.colorAttachInfos.size();
     renderingInfo.pColorAttachments = opaquePass.colorAttachInfos.data();
     renderingInfo.pDepthAttachment = &opaquePass.depthAttachInfo;
-    renderingInfo.pStencilAttachment = &opaquePass.depthAttachInfo;
+    renderingInfo.pStencilAttachment = nullptr;
 
     ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
 

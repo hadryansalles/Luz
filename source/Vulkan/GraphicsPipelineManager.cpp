@@ -170,9 +170,6 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.shaderStages.size());
 
     for (int i = 0; i < shaderResources.size(); i++) {
-        if (desc.shaderStages[i].shaderBytes.empty()) {
-            desc.shaderStages[i].shaderBytes = FileManager::ReadRawBytes(desc.shaderStages[i].path);
-        }
         Shader::Create(desc.shaderStages[i], shaderResources[i]);
         shaderStages[i] = shaderResources[i].stageCreateInfo;
     }
@@ -234,7 +231,7 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     pipelineRendering.colorAttachmentCount = desc.colorFormats.size();
     pipelineRendering.pColorAttachmentFormats = desc.colorFormats.data();
     pipelineRendering.depthAttachmentFormat = desc.depthFormat;
-    pipelineRendering.stencilAttachmentFormat = desc.depthFormat;
+    pipelineRendering.stencilAttachmentFormat = desc.stencilFormat;
     pipelineRendering.viewMask = 0;
 
     std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());

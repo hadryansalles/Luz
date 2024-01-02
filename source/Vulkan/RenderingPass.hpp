@@ -10,9 +10,9 @@ struct RenderingPass {
     VkClearDepthStencilValue clearDepth;
     std::vector<RID> colorAttachments;
     RID depthAttachment;
-    bool crateAttachments = true;
     std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
     VkRenderingAttachmentInfoKHR depthAttachInfo;
+    bool createAttachments = true;
 };
 
 class RenderingPassManager {

@@ -85,6 +85,11 @@ void LogicalDevice::Create() {
     dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
     dynamicRenderingFeatures.pNext = &rayQueryFeatures;
 
+    VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
+    sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+    sync2Features.synchronization2 = VK_TRUE;
+    sync2Features.pNext = &dynamicRenderingFeatures;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -92,7 +97,7 @@ void LogicalDevice::Create() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
     createInfo.pEnabledFeatures = &features;
-    createInfo.pNext = &dynamicRenderingFeatures;
+    createInfo.pNext = &sync2Features;
 
     // specify the required layers to the device 
     if (Instance::IsLayersEnabled()) {
