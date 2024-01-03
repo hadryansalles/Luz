@@ -121,7 +121,6 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
 }
 
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
-    LOG_INFO("NUM ATTACHS: {}", opaquePass.colorAttachments.size());
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
         ImageResource image = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
         ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image.image);
