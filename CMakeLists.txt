@@ -93,20 +93,6 @@ endif()
 message("GLSL VALIDATOR ${GLSL_VALIDATOR}")
 add_compile_definitions(GLSL_VALIDATOR="${GLSL_VALIDATOR}")
 
-foreach(GLSL ${GLSL_SOURCE})
-  get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${CMAKE_SOURCE_DIR}/bin/${FILE_NAME}.spv")
-#   message("[Shader] Add ${GLSL} to be processed to ${SPIRV}")
-  add_custom_command(
-    OUTPUT ${SPIRV}
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV} --target-env spirv1.4
-    DEPENDS ${GLSL})
-  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
-endforeach(GLSL)
-
-add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
-add_dependencies(${PROJECT_NAME} Shaders)
-
 # assets
 if(UNIX)
     add_custom_target(run

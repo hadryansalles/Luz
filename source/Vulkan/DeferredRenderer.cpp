@@ -63,8 +63,6 @@ void Setup() {
         opaquePass.clearColors = { {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1} };
         opaquePass.gpoDesc.useDepthAttachment = true;
         opaquePass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT;
-        //opaquePass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
-        //opaquePass.gpoDesc.stencilFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
     }
     {
         GraphicsPipelineManager::CreateDefaultDesc(presentPass.gpoDesc);

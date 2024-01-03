@@ -50,7 +50,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback (
     // here we can set a minimum severity to log the message
     // if (messageSeverity > VK_DEBUG_UTILS...)
     if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        LOG_CRITICAL("[Validation Layer] {0}", pCallbackData->pMessage);
+        LOG_ERROR("[Validation Layer] {0}", pCallbackData->pMessage);
     }
     return VK_FALSE;
 }

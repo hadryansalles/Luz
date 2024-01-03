@@ -834,7 +834,7 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     pipelineRendering.colorAttachmentCount = IM_ARRAYSIZE(formats);
     pipelineRendering.pColorAttachmentFormats = formats;
     pipelineRendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-    //pipelineRendering.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    pipelineRendering.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
     pipelineRendering.viewMask = 0;
 
     VkGraphicsPipelineCreateInfo info = {};

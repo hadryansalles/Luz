@@ -20,12 +20,3 @@ std::vector<char> FileManager::ReadRawBytes(const std::string& filename) {
 
     return buffer;
 }
-
-std::vector<std::vector<char>> FileManager::ReadShaders(std::vector<std::string> filenames) {
-    return {};
-    std::vector<std::vector<char>> shaderBytes(filenames.size());
-    for (int i = 0; i < filenames.size(); i++) {
-        shaderBytes[i] = ReadRawBytes(filenames[i]);
-    }
-    return shaderBytes;
-}
