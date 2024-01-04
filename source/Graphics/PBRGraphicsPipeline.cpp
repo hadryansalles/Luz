@@ -9,9 +9,11 @@ void PBRGraphicsPipeline::Setup() {
     desc.name = "PBR";
 
     desc.shaderStages.resize(2);
-    desc.shaderStages[0].shaderBytes = FileManager::ReadRawBytes("bin/opaque.vert.spv");
+    desc.shaderStages[0].path = "opaque.vert";
+    desc.shaderStages[0].entry_point = "main";
     desc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-    desc.shaderStages[1].shaderBytes = FileManager::ReadRawBytes("bin/opaque.frag.spv");
+    desc.shaderStages[1].path = "opaque.frag";
+    desc.shaderStages[1].entry_point = "main";
     desc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     desc.bindingDesc = MeshVertex::getBindingDescription();

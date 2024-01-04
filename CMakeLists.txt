@@ -15,11 +15,9 @@ endif()
 
 # set build-specific output directories
 foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
- 
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_SOURCE_DIR}/lib/${OUTPUTCONFIG})
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_SOURCE_DIR}/lib/${OUTPUTCONFIG})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_SOURCE_DIR}/bin/${OUTPUTCONFIG})
-  
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
 # project config
@@ -88,27 +86,12 @@ include_directories("deps/")
 
 # shaders
 if(WIN32)
-    if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
-        set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
-    else()
-        set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin32/glslangValidator.exe")
-    endif()
+    cmake_path(SET GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
 else()
-    set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/bin/glslangValidator")
+    cmake_path(SET GLSL_VALIDATOR "$ENV{VULKAN_SDK}/bin/glslangValidator")
 endif()
-
-foreach(GLSL ${GLSL_SOURCE})
-  get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${CMAKE_SOURCE_DIR}/bin/${FILE_NAME}.spv")
-  add_custom_command(
-    OUTPUT ${SPIRV}
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV} --target-env spirv1.4
-    DEPENDS ${GLSL})
-  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
-endforeach(GLSL)
-
-add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
-add_dependencies(${PROJECT_NAME} Shaders)
+message("GLSL VALIDATOR ${GLSL_VALIDATOR}")
+add_compile_definitions(GLSL_VALIDATOR="${GLSL_VALIDATOR}")
 
 # assets
 if(UNIX)

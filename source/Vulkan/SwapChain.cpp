@@ -192,6 +192,7 @@ void SwapChain::Create() {
         depthAttachmentRef.attachment = 1;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+        subpass.inputAttachmentCount = 0;
         subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
         VkAttachmentDescription colorAttachmentResolve{};

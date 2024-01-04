@@ -16,7 +16,8 @@ struct GraphicsPipelineDesc {
     VkPipelineDepthStencilStateCreateInfo          depthStencil{};
     std::vector<VkFormat> colorFormats;
     bool useDepthAttachment = false;
-    VkFormat depthFormat;
+    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+    VkFormat stencilFormat = VK_FORMAT_UNDEFINED;
 };
 
 struct GraphicsPipelineResource {
