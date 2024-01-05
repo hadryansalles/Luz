@@ -18,7 +18,6 @@
 #define GLFW_INCLUDE_VULKAN
 // glfw will include vulkan and its own definitions
 #include <GLFW/glfw3.h>
-
 #include <imgui/imgui.h>
 #include <imgui/ImGuizmo.h>
 

@@ -6,6 +6,7 @@
 #include "Texture.hpp"
 #include "RenderingPass.hpp"
 #include "AssetManager.hpp"
+#include "Texture.hpp"
 
 #include "imgui/imgui_impl_vulkan.h"
 
@@ -33,6 +34,22 @@ struct PresentConstant {
 Context ctx;
 
 void Setup() {
+    {
+        GraphicsPipelineManager::CreateDefaultDesc(shadowPass.gpoDesc);
+        shadowPass.gpoDesc.name = "ShadowMap";
+        shadowPass.gpoDesc.shaderStages.resize(2);
+        shadowPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+        shadowPass.gpoDesc.shaderStages[0].path = "shadowMap.vert";
+        shadowPass.gpoDesc.shaderStages[0].entry_point = "main";
+        shadowPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+        shadowPass.gpoDesc.shaderStages[1].path = "shadowMap.frag";
+        shadowPass.gpoDesc.shaderStages[1].entry_point = "main";
+        shadowPass.gpoDesc.colorFormats = {};
+        shadowPass.gpoDesc.useDepthAttachment = true;
+        shadowPass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT;
+        shadowPass.gpoDesc.extent = { 1024, 1024 };
+        shadowPass.createAttachments = false;
+    }
     {
         GraphicsPipelineManager::CreateDefaultDesc(lightPass.gpoDesc);
         lightPass.gpoDesc.name = "Light";
@@ -90,12 +107,14 @@ void Create() {
     RenderingPassManager::CreateRenderingPass(lightPass);
     RenderingPassManager::CreateRenderingPass(opaquePass);
     RenderingPassManager::CreateRenderingPass(presentPass);
+    RenderingPassManager::CreateRenderingPass(shadowPass);
 }
 
 void Destroy() {
     RenderingPassManager::DestroyRenderingPass(opaquePass);
     RenderingPassManager::DestroyRenderingPass(presentPass);
     RenderingPassManager::DestroyRenderingPass(lightPass);
+    RenderingPassManager::DestroyRenderingPass(shadowPass);
     RenderingPassManager::Destroy();
 }
 
@@ -103,6 +122,7 @@ void ReloadShaders() {
     GraphicsPipelineManager::ReloadShaders(opaquePass.gpoDesc, opaquePass.gpo);
     GraphicsPipelineManager::ReloadShaders(presentPass.gpoDesc, presentPass.gpo);
     GraphicsPipelineManager::ReloadShaders(lightPass.gpoDesc, lightPass.gpo);
+    GraphicsPipelineManager::ReloadShaders(shadowPass.gpoDesc, shadowPass.gpo);
 }
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
@@ -116,6 +136,37 @@ void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
 
 void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* data, u32 size) {
     vkCmdPushConstants(commandBuffer, pass.gpo.layout, VK_SHADER_STAGE_ALL, 0, size, data);
+}
+
+void BeginShadowMapPass(VkCommandBuffer commandBuffer, TextureResource& shadowMap) {
+    ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, shadowMap.image.image);
+
+    VkRenderingAttachmentInfo depthInfo = {};
+    depthInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    depthInfo.imageView = shadowMap.image.view;
+    depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depthInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+    depthInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depthInfo.clearValue.depthStencil = { 1.0f, 0 };
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = 1;
+    renderingInfo.renderArea.extent = { Scene::shadowMapSize, Scene::shadowMapSize };
+    renderingInfo.renderArea.offset = { 0, 0 };
+    renderingInfo.flags = 0;
+    renderingInfo.colorAttachmentCount = 0;
+    renderingInfo.pColorAttachments = nullptr;
+    renderingInfo.pDepthAttachment = &depthInfo;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPass.gpo.pipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
 }
 
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
@@ -146,6 +197,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
 
 void EndPass(VkCommandBuffer commandBuffer) {
     ctx.vkCmdEndRendering(commandBuffer);
+    //ImageManager::BarrierDepthAttachmentToRead(commandBuffer, RenderingPassManager::imageAttachments[shadowPass.depthAttachment].image);
 }
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {

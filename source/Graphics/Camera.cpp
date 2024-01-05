@@ -158,7 +158,7 @@ void Camera::SetControl(Camera::Control newControl) {
 }
 
 void Camera::OnImgui() {
-    float totalWidth = ImGui::GetContentRegionAvailWidth();
+    float totalWidth = ImGui::GetContentRegionAvail().x;
     auto viewDirty = false;
     auto projDirty = false;
     if (ImGui::CollapsingHeader("Camera")) {

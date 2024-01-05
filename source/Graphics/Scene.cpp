@@ -5,6 +5,8 @@
 #include "Window.hpp"
 #include "RayTracing.hpp"
 #include "SwapChain.hpp"
+#include "ImageManager.hpp"
+#include "LogicalDevice.hpp"
 
 #include <imgui/imgui_stdlib.h>
 
@@ -29,13 +31,20 @@ void Setup() {
     DeleteEntity(dirModel);
     DeleteEntity(spotModel);
 
-    Model* cube = AssetManager::LoadModel("assets/cube.glb");
-    Model* plane = CreateModel(cube);
+    Model* plane = AssetManager::LoadModel("assets/cube.glb");
+    //Model* plane = CreateModel(cube);
     plane->transform.SetPosition(glm::vec3(0, -1, 0));
     plane->transform.SetScale(glm::vec3(10, 0.0001, 10));
     Light* defaultLight = CreateLight();
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
+    defaultLight->block.type = LightType::Directional;
+    defaultLight->transform.SetRotation(glm::vec3(45, 0, 0));
+
+    Model* dragon = AssetManager::LoadModel("assets/dragon.glb");
+    dragon->transform.SetPosition(glm::vec3(0, 1.026, 0));
+    dragon->transform.SetScale(glm::vec3(0.05));
+    dragon->transform.SetRotation(glm::vec3(90, 0, 0));
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
@@ -58,6 +67,30 @@ void CreateResources() {
     BufferManager::CreateStorageBuffer(Scene::modelsBuffer, sizeof(Scene::models));
     GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer, SCENE_BUFFER_INDEX);
     GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer, MODELS_BUFFER_INDEX);
+    {
+        u32 sz = shadowMapSize;
+        u32 mipLevels = 1;
+        ImageDesc imageDesc = {};
+        imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+        imageDesc.width = shadowMapSize;
+        imageDesc.height = shadowMapSize;
+        imageDesc.mipLevels = mipLevels;
+        imageDesc.numSamples = VK_SAMPLE_COUNT_1_BIT;
+        imageDesc.format = VK_FORMAT_D32_SFLOAT;
+        imageDesc.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageDesc.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        imageDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        imageDesc.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        imageDesc.size = (u64) sz * sz;
+        imageDesc.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        for (int i = 0; i < MAX_LIGHTS; i++) {
+            ImageManager::Create(imageDesc, shadowMaps[i].image);
+            CreateSamplerAndImgui(mipLevels, shadowMaps[i]);
+            VkCommandBuffer cmd = LogicalDevice::BeginSingleTimeCommands();
+            ImageManager::BarrierDepthAttachmentToRead(cmd, shadowMaps[i].image.image);
+        }
+    }
 }
 
 void UpdateBuffers(int numFrame) {
@@ -102,7 +135,7 @@ void UpdateResources(int numFrame) {
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
-        if (!light->shadows) {
+        if (!light->shadows || light->shadowType != ShadowType::RayTraced) {
             scene.lights[scene.numLights].numShadowSamples = 0;
         }
         scene.numLights++;
@@ -118,6 +151,9 @@ void UpdateResources(int numFrame) {
 void DestroyResources() {
     BufferManager::DestroyStorageBuffer(sceneBuffer);
     BufferManager::DestroyStorageBuffer(modelsBuffer);
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        DestroyTextureResource(shadowMaps[i]);
+    }
 }
 
 Model* CreateModel() {
@@ -428,11 +464,14 @@ void InspectLight(Light* light) {
             light->block.outerAngle = glm::radians(outerAngle);
         }
     }
-    if (ImGui::CollapsingHeader("Shadows")) {
+    if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Active", &light->shadows);
         ImGui::DragInt("Num samples", (int*) &light->block.numShadowSamples, 1, 1, 64);
         ImGui::DragFloat("Radius", &light->block.radius, 0.01, 0.0f);
         light->block.radius = std::max(light->block.radius, 0.0f);
+        DrawTextureOnImgui(shadowMaps[light->id]);
+        ImGui::DragFloat3("P0", (float*) & light->p0);
+        ImGui::DragFloat3("P1", (float*) & light->p1);
     }
 }
 
@@ -456,13 +495,13 @@ void RenderTransformGizmo(Transform& transform) {
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-    if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_0)) {
         currentGizmoOperation = ImGuizmo::TRANSLATE;
     }
-    if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_2)) {
         currentGizmoOperation = ImGuizmo::ROTATE;
     }
-    if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_3)) {
         currentGizmoOperation = ImGuizmo::SCALE;
     }
     if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {

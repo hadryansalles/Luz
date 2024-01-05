@@ -273,6 +273,28 @@ private:
 
         DeferredShading::EndPass(commandBuffer);
 
+        DeferredShading::ShadowMapConstants shadowConstants;
+        for (Light* light : Scene::lightEntities) {
+            if (!light->shadows) {
+                continue;
+            }
+            DeferredShading::BeginShadowMapPass(commandBuffer, Scene::shadowMaps[light->id]);
+            shadowConstants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+            shadowConstants.sceneBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+            shadowConstants.numSamples = Scene::scene.aoNumSamples;
+            // shadowConstants.lightProj = Camera::GetProj()
+            // shadowConstants.lightProj = Scene::scene.projView;
+            shadowConstants.lightView = Scene::camera.GetView();
+            shadowConstants.lightProj = light->GetShadowViewProjection();
+            for (Model* model : Scene::modelEntities) {
+                shadowConstants.modelId = model->id;
+                DeferredShading::BindConstants(commandBuffer, DeferredShading::shadowPass, &shadowConstants, sizeof(shadowConstants));
+                DeferredShading::RenderMesh(commandBuffer, model->mesh);
+            }
+            DeferredShading::EndPass(commandBuffer);
+            ImageManager::BarrierDepthAttachmentToRead(commandBuffer, Scene::shadowMaps[light->id].image.image);
+        }
+
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
@@ -445,12 +467,10 @@ private:
         initInfo.MSAASamples = SwapChain::GetNumSamples();
         initInfo.Allocator = VK_NULL_HANDLE;
         initInfo.CheckVkResultFn = CheckVulkanResult;
-        ImGui_ImplVulkan_Init(&initInfo, SwapChain::GetRenderPass());
-        
-        auto commandBuffer = LogicalDevice::BeginSingleTimeCommands();
-        ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
-        LogicalDevice::EndSingleTimeCommands(commandBuffer);
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
+        initInfo.UseDynamicRendering = true;
+        initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        ImGui_ImplVulkan_Init(&initInfo, VK_NULL_HANDLE);
+        ImGui_ImplVulkan_CreateFontsTexture();
     }
 
     void DestroyImgui() {

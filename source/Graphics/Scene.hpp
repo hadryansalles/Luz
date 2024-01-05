@@ -5,6 +5,7 @@
 #include "Transform.hpp"
 #include "Camera.hpp"
 #include "BufferManager.hpp"
+#include "Texture.hpp"
 
 #define MAX_TEXTURES 4096
 #define MAX_MODELS 4096
@@ -82,6 +83,12 @@ enum LightType {
     Spot
 };
 
+enum class ShadowType {
+    Disabled,
+    RayTraced,
+    ShadowMap,
+};
+
 struct Model : Entity {
     RID id = 0;
     RID mesh = 0;
@@ -97,6 +104,19 @@ struct Light : Entity {
     RID id = 0;
     LightBlock block;
     bool shadows = true;
+    ShadowType shadowType = ShadowType::RayTraced;
+    glm::vec3 p0 = { -10.0, 10.0, 0.0 };
+    glm::vec3 p1 = { 10.0, -10.0, 2000.0 };
+
+    glm::mat4 GetShadowViewProjection() {
+        if (block.type == LightType::Directional) {
+            glm::mat4 view = glm::lookAt(transform.position, transform.position + transform.GetGlobalFront(), glm::vec3(.0f, 1.0f, .0f));
+            glm::mat4 proj = glm::ortho(p0.x, p1.x, p0.y, p1.y, p0.z, p1.z);
+            return proj * view;
+        } else {
+            return glm::mat4(1);
+        }
+    }
 };
 
 struct Collection : Entity {
@@ -119,6 +139,9 @@ namespace Scene {
     inline std::vector<Light*> lightEntities;
     inline Entity* selectedEntity = nullptr;
     inline Entity* copiedEntity = nullptr;
+
+    inline u32 shadowMapSize = 1024;
+    inline TextureResource shadowMaps[MAX_LIGHTS];
 
     inline bool renderLightGizmos = true;
     inline float lightGizmosOpacity = 1.0f;

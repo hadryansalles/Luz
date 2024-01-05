@@ -225,7 +225,7 @@ void Instance::Destroy() {
 
 void Instance::OnImgui() {
     if (ImGui::CollapsingHeader("Instance")) {
-        float totalWidth = ImGui::GetContentRegionAvailWidth();
+        float totalWidth = ImGui::GetContentRegionAvail().x;
         ImGui::Text("API Version");
         ImGui::SameLine(totalWidth/2);
         ImGui::PushID("apiVersion");
@@ -298,7 +298,7 @@ void Instance::OnImgui() {
             dirty = true;
         }
     }
-    if (ImGui::IsKeyPressed(GLFW_KEY_I)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_1)) {
         dirty = true;
     }
 }

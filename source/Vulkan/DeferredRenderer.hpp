@@ -4,6 +4,8 @@
 
 #include "RenderingPass.hpp"
 
+struct TextureResource;
+
 namespace DeferredShading {
 
 struct OpaqueConstants {
@@ -22,6 +24,16 @@ struct LightConstants {
     int depthRID;
 };
 
+struct ShadowMapConstants {
+    glm::mat4 lightProj;
+    glm::mat4 lightView;
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int modelId;
+    int numSamples;
+};
+
+inline RenderingPass shadowPass = {};
 inline RenderingPass opaquePass = {};
 inline RenderingPass lightPass = {};
 inline RenderingPass presentPass = {};
@@ -37,6 +49,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants);
 
 void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* data, u32 size);
 void BeginOpaquePass(VkCommandBuffer commandBuffer);
+void BeginShadowMapPass(VkCommandBuffer commandBuffer, TextureResource& res);
 void EndPass(VkCommandBuffer commandBuffer);
 
 void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame);

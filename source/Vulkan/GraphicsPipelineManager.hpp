@@ -18,6 +18,7 @@ struct GraphicsPipelineDesc {
     bool useDepthAttachment = false;
     VkFormat depthFormat = VK_FORMAT_UNDEFINED;
     VkFormat stencilFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D extent = { 0, 0 };
 };
 
 struct GraphicsPipelineResource {

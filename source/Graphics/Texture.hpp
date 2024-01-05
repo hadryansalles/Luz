@@ -20,5 +20,6 @@ struct TextureResource {
 
 void CreateTextureResource(TextureDesc& desc, TextureResource& res);
 void DestroyTextureResource(TextureResource& res);
+void CreateSamplerAndImgui(u32 mipLevels, TextureResource& res);
 void DrawTextureOnImgui(TextureResource& res);
 VkSampler CreateSampler(f32 maxLod);

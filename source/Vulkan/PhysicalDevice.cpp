@@ -99,7 +99,7 @@ void PhysicalDevice::Destroy() {
 }
 
 void PhysicalDevice::OnImgui() {
-    float totalWidth = ImGui::GetContentRegionAvailWidth();
+    float totalWidth = ImGui::GetContentRegionAvail().x;
     if (ImGui::CollapsingHeader("Physical Device")) {
         for (size_t i = 0; i < allDevices.size(); i++) {
             auto d = allDevices[i];

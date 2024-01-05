@@ -189,13 +189,16 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     // with this parameter true we can break up lines and triangles in _STRIP topology modes
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
+    if (desc.extent.width == 0 || desc.extent.height == 0) {
+        desc.extent = SwapChain::GetExtent();
+    }
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float> (SwapChain::GetExtent().width);
-    viewport.height = static_cast<float> (SwapChain::GetExtent().height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
+    viewport.width = desc.extent.width;
+    viewport.height = desc.extent.height;
+    viewport.minDepth = desc.depthStencil.minDepthBounds;
+    viewport.maxDepth = desc.depthStencil.maxDepthBounds;
 
     VkRect2D scissor{};
     scissor.offset = { 0, 0 };
@@ -213,7 +216,7 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
 
     VkPushConstantRange pushConstant{};
     pushConstant.offset = 0;
-    pushConstant.size = 128;
+    pushConstant.size = 256;
     pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -308,7 +311,7 @@ void GraphicsPipelineManager::ReloadShaders(GraphicsPipelineDesc& desc, Graphics
 
 void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_DefaultOpen;
-    const float totalWidth = ImGui::GetContentRegionAvailWidth();
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
     std::string name = desc.name + " Graphics Pipeline";
     if (ImGui::CollapsingHeader(name.c_str())) {
         // polygon mode
