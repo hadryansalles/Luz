@@ -101,8 +101,8 @@ class AssetManager {
     static void InitializeTexture(RID id);
     static void UpdateTexturesDescriptor(std::vector<RID>& rids);
 
-    static void LoadOBJ(std::filesystem::path path);
-    static void LoadGLTF(std::filesystem::path path);
+    static void LoadOBJ(std::filesystem::path path, Scene& scene);
+    static void LoadGLTF(std::filesystem::path path, Scene& scene);
 
     static bool IsOBJ(std::filesystem::path path);
     static bool IsGLTF(std::filesystem::path path);
@@ -120,7 +120,7 @@ public:
     static void Finish();
     static void OnImgui();
 
-    static void UpdateResources();
+    static void UpdateResources(Scene& scene);
 
     static bool IsModel(std::filesystem::path path);
     static bool IsTexture(std::filesystem::path path);
@@ -128,8 +128,8 @@ public:
     static RID CreateTexture(std::string name, u8* data, u32 width, u32 height);
     static RID LoadTexture(std::filesystem::path path);
 
-    static Model* LoadModel(std::filesystem::path path);
-    static void AsyncLoadModels(std::filesystem::path path);
-    static std::vector<Model*> LoadModels(std::filesystem::path path);
-    static std::vector<Model*> GetLoadedModels();
+    static Model* LoadModel(std::filesystem::path path, Scene& scene);
+    static void AsyncLoadModels(std::filesystem::path path, Scene& scene);
+    static std::vector<Model*> LoadModels(std::filesystem::path path, Scene& scene);
+    static std::vector<Model*> GetLoadedModels(Scene& scene);
 };

@@ -10,20 +10,17 @@
 
 #include <imgui/imgui_stdlib.h>
 
-namespace Scene {
-
-void AcceptMeshPayload();
 void AcceptTexturePayload(RID& textureID);
 
-void Setup() {
+void Scene::Setup() {
     LUZ_PROFILE_FUNC();
     rootCollection = new Collection();
     rootCollection->entityType = EntityType::Collection;
     rootCollection->name = "Root";
 
-    auto pointModel = AssetManager::LoadModel("assets/point.obj");
-    auto dirModel = AssetManager::LoadModel("assets/directional.obj");
-    auto spotModel = AssetManager::LoadModel("assets/spot.obj");
+    auto pointModel = AssetManager::LoadModel("assets/point.obj", *this);
+    auto dirModel = AssetManager::LoadModel("assets/directional.obj", *this);
+    auto spotModel = AssetManager::LoadModel("assets/spot.obj", *this);
     Scene::lightMeshes[0] = pointModel->mesh;
     Scene::lightMeshes[1] = dirModel->mesh;
     Scene::lightMeshes[2] = spotModel->mesh;
@@ -31,7 +28,7 @@ void Setup() {
     DeleteEntity(dirModel);
     DeleteEntity(spotModel);
 
-    Model* plane = AssetManager::LoadModel("assets/cube.glb");
+    Model* plane = AssetManager::LoadModel("assets/cube.glb", *this);
     //Model* plane = CreateModel(cube);
     plane->transform.SetPosition(glm::vec3(0, -1, 0));
     plane->transform.SetScale(glm::vec3(10, 0.0001, 10));
@@ -41,7 +38,7 @@ void Setup() {
     defaultLight->block.type = LightType::Directional;
     defaultLight->transform.SetRotation(glm::vec3(45, 0, 0));
 
-    Model* dragon = AssetManager::LoadModel("assets/dragon.glb");
+    Model* dragon = AssetManager::LoadModel("assets/vayne2.glb", *this);
     dragon->transform.SetPosition(glm::vec3(0, 1.026, 0));
     dragon->transform.SetScale(glm::vec3(0.05));
     dragon->transform.SetRotation(glm::vec3(90, 0, 0));
@@ -61,12 +58,12 @@ void Setup() {
     // AssetManager::AsyncLoadModels("assets/ignore/r3pu/r3pu.obj");
 }
 
-void CreateResources() {
+void Scene::CreateResources() {
     LUZ_PROFILE_FUNC();
-    BufferManager::CreateStorageBuffer(Scene::sceneBuffer, sizeof(Scene::scene));
-    BufferManager::CreateStorageBuffer(Scene::modelsBuffer, sizeof(Scene::models));
-    GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer, SCENE_BUFFER_INDEX);
-    GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer, MODELS_BUFFER_INDEX);
+    BufferManager::CreateStorageBuffer(sceneBuffer, sizeof(scene));
+    BufferManager::CreateStorageBuffer(modelsBuffer, sizeof(models));
+    GraphicsPipelineManager::WriteStorage(sceneBuffer, SCENE_BUFFER_INDEX);
+    GraphicsPipelineManager::WriteStorage(modelsBuffer, MODELS_BUFFER_INDEX);
     {
         u32 sz = shadowMapSize;
         u32 mipLevels = 1;
@@ -93,13 +90,13 @@ void CreateResources() {
     }
 }
 
-void UpdateBuffers(int numFrame) {
+void Scene::UpdateBuffers(int numFrame) {
     LUZ_PROFILE_FUNC();
     BufferManager::UpdateStorage(sceneBuffer, numFrame, &scene);
     BufferManager::UpdateStorage(modelsBuffer, numFrame, &models);
 }
 
-void UpdateResources(int numFrame) {
+void Scene::UpdateResources(int numFrame) {
     LUZ_PROFILE_FUNC();
     scene.numLights = 0;
     scene.viewSize = glm::vec2(SwapChain::GetExtent().width, SwapChain::GetExtent().height);
@@ -145,10 +142,10 @@ void UpdateResources(int numFrame) {
     scene.inverseProj = glm::inverse(camera.GetProj());
     scene.inverseView = glm::inverse(camera.GetView());
     UpdateBuffers(numFrame);
-    RayTracing::CreateTLAS();
+    RayTracing::CreateTLAS(modelEntities);
 }
 
-void DestroyResources() {
+void Scene::DestroyResources() {
     BufferManager::DestroyStorageBuffer(sceneBuffer);
     BufferManager::DestroyStorageBuffer(modelsBuffer);
     for (int i = 0; i < MAX_LIGHTS; i++) {
@@ -156,7 +153,7 @@ void DestroyResources() {
     }
 }
 
-Model* CreateModel() {
+Model* Scene::CreateModel() {
     Model* model = new Model();
     model->name = "Model";
     model->mesh = 0;
@@ -168,7 +165,7 @@ Model* CreateModel() {
     return model;
 }
 
-Model* CreateModel(Model* copy) {
+Model* Scene::CreateModel(Model* copy) {
     Model* entity = new Model();
 
     entity->name = copy->name;
@@ -189,7 +186,7 @@ Model* CreateModel(Model* copy) {
     return entity;
 }
 
-Light* CreateLight() {
+Light* Scene::CreateLight() {
     Light* light = new Light();
     light->name = "Light";
     light->entityType = EntityType::Light;
@@ -201,7 +198,7 @@ Light* CreateLight() {
     return light;
 }
 
-Light* CreateLight(Light* copy) {
+Light* Scene::CreateLight(Light* copy) {
     Light* entity = new Light();
 
     entity->name = copy->name;
@@ -215,7 +212,7 @@ Light* CreateLight(Light* copy) {
     return entity;
 }
 
-Collection* CreateCollection() {
+Collection* Scene::CreateCollection() {
     Collection* collection = new Collection();
     collection->entityType = EntityType::Collection;
     collection->name = "Collection";
@@ -224,7 +221,7 @@ Collection* CreateCollection() {
     return collection;
 }
 
-Collection* CreateCollection(Collection* copy) {
+Collection* Scene::CreateCollection(Collection* copy) {
     Collection* collection = new Collection();
 
     collection->name = copy->name;
@@ -240,7 +237,7 @@ Collection* CreateCollection(Collection* copy) {
     return collection;
 }
 
-Entity* CreateEntity(Entity* copy) {
+Entity* Scene::CreateEntity(Entity* copy) {
     Entity* entity = nullptr;
     if (copy->entityType == EntityType::Collection) { 
         entity = CreateCollection((Collection*)copy); 
@@ -253,13 +250,13 @@ Entity* CreateEntity(Entity* copy) {
     return entity;
 }
 
-void DeleteCollection(Collection* collection) {
+void Scene::DeleteCollection(Collection* collection) {
     while (collection->children.size()) {
         DeleteEntity(*collection->children.begin());
     }
 }
 
-void DeleteEntity(Entity* entity) {
+void Scene::DeleteEntity(Entity* entity) {
     if (selectedEntity == entity) {
         selectedEntity = nullptr;
     }
@@ -287,7 +284,7 @@ void DeleteEntity(Entity* entity) {
     delete entity;
 }
 
-void DeleteModel(Model* model) {
+void Scene::DeleteModel(Model* model) {
     if (model->parent != nullptr) {
         RemoveFromCollection(model);
     }
@@ -303,7 +300,7 @@ void DeleteModel(Model* model) {
     }
 }
 
-void RemoveFromCollection(Entity* entity) {
+void Scene::RemoveFromCollection(Entity* entity) {
     Collection* parent = entity->parent;
     auto it = std::find(parent->children.begin(), parent->children.end(), entity);
     DEBUG_ASSERT(it != parent->children.end(), "Entity isn't a children of its parent.");
@@ -312,7 +309,7 @@ void RemoveFromCollection(Entity* entity) {
     entity->transform.parent = nullptr;
 }
 
-void SetCollection(Entity* entity, Collection* collection) {
+void Scene::SetCollection(Entity* entity, Collection* collection) {
     if (entity->parent != nullptr) {
         RemoveFromCollection(entity);
     }
@@ -324,7 +321,7 @@ void SetCollection(Entity* entity, Collection* collection) {
     collection->children.push_back(entity);
 }
 
-void OnImgui() {
+void Scene::OnImgui() {
     bool controlPressed = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL);
     if (selectedEntity) {
         if(controlPressed && Window::IsKeyPressed(GLFW_KEY_C)) {
@@ -370,7 +367,7 @@ void OnImgui() {
     }
 }
 
-void OnImgui(Collection* collection, bool root) {
+void Scene::OnImgui(Collection* collection, bool root) {
     bool open = true;
     if (!root) {
         ImGui::PushID(collection);
@@ -402,7 +399,7 @@ void OnImgui(Collection* collection, bool root) {
     }
 }
 
-void InspectModel(Model* model) {
+void Scene::InspectModel(Model* model) {
     ImGui::Text("Mesh: %d", model->mesh);
     if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::TreeNode("Color")) {
@@ -442,7 +439,7 @@ void InspectModel(Model* model) {
     }
 }
 
-void InspectLight(Light* light) {
+void Scene::InspectLight(Light* light) {
     static const char* LIGHT_NAMES[] = { "Point", "Directional", "Spot" };
     if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginCombo("Type", LIGHT_NAMES[light->block.type])) {
@@ -475,7 +472,7 @@ void InspectLight(Light* light) {
     }
 }
 
-void InspectEntity(Entity* entity) {
+void Scene::InspectEntity(Entity* entity) {
     ImGui::InputText("Name", &entity->name);
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat3("Position", glm::value_ptr(entity->transform.position));
@@ -490,7 +487,7 @@ void InspectEntity(Entity* entity) {
     }
 }
 
-void RenderTransformGizmo(Transform& transform) {
+void Scene::RenderTransformGizmo(Transform& transform) {
     ImGuizmo::BeginFrame();
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
@@ -545,12 +542,12 @@ void RenderTransformGizmo(Transform& transform) {
         glm::value_ptr(transform.rotation), glm::value_ptr(transform.scale));
 }
 
-void AcceptMeshPayload() {
+void Scene::AcceptMeshPayload() {
     if (ImGui::BeginDragDropTarget()) {
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("mesh");
         if (payload) {
             std::string path((const char*)payload->Data, payload->DataSize);
-            AssetManager::AsyncLoadModels(path);
+            AssetManager::AsyncLoadModels(path, *this);
         }
     }
 }
@@ -567,6 +564,4 @@ void AcceptTexturePayload(RID& textureID) {
             textureID = *(RID*)payloadTextureID->Data;
         }
     }
-}
-
 }

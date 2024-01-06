@@ -123,41 +123,41 @@ struct Collection : Entity {
     std::vector<Entity*> children;
 };
 
-namespace Scene {
-    inline SceneBlock scene;
-    inline ModelBlock models[MAX_MODELS];
-    inline RID textures[MAX_TEXTURES];
-    inline StorageBuffer sceneBuffer;
-    inline StorageBuffer modelsBuffer;
-    inline std::vector<RID> freeTextureRIDs;
-    inline std::vector<RID> freeModelRIDs; 
+struct Scene {
+    SceneBlock scene;
+    ModelBlock models[MAX_MODELS];
+    RID textures[MAX_TEXTURES];
+    StorageBuffer sceneBuffer;
+    StorageBuffer modelsBuffer;
+    std::vector<RID> freeTextureRIDs;
+    std::vector<RID> freeModelRIDs;
 
-    inline Camera camera;
-    inline Collection* rootCollection = nullptr;
-    inline std::vector<Entity*> entities;
-    inline std::vector<Model*> modelEntities;
-    inline std::vector<Light*> lightEntities;
-    inline Entity* selectedEntity = nullptr;
-    inline Entity* copiedEntity = nullptr;
+    Camera camera;
+    Collection* rootCollection = nullptr;
+    std::vector<Entity*> entities;
+    std::vector<Model*> modelEntities;
+    std::vector<Light*> lightEntities;
+    Entity* selectedEntity = nullptr;
+    Entity* copiedEntity = nullptr;
 
-    inline u32 shadowMapSize = 1024;
-    inline TextureResource shadowMaps[MAX_LIGHTS];
+    u32 shadowMapSize = 1024;
+    TextureResource shadowMaps[MAX_LIGHTS];
 
-    inline bool renderLightGizmos = true;
-    inline float lightGizmosOpacity = 1.0f;
+    bool renderLightGizmos = true;
+    float lightGizmosOpacity = 1.0f;
 
-    inline bool aoActive = true;
-    inline int aoNumSamples = 1;
+    bool aoActive = true;
+    int aoNumSamples = 1;
 
-    inline RID lightMeshes[3];
+    RID lightMeshes[3];
 
     void Setup();
     void CreateResources();
     void UpdateResources(int numFrame);
+    void UpdateBuffers(int numFrame);
     void DestroyResources();
 
     Entity* CreateEntity(Entity* copy);
-    void DeleteEntity(Entity* entity);
 
     Model* CreateModel();
     Model* CreateModel(Model* copy);
@@ -167,6 +167,10 @@ namespace Scene {
 
     Collection* CreateCollection();
     Collection* CreateCollection(Collection* copy);
+
+    void DeleteCollection(Collection* collection);
+    void DeleteEntity(Entity* entity);
+    void DeleteModel(Model* mdoel);
 
     void RemoveFromCollection(Entity* entity);
     void SetCollection(Entity* entity, Collection* collection);
@@ -179,4 +183,8 @@ namespace Scene {
     void InspectEntity(Entity* entity);
 
     void RenderTransformGizmo(Transform& transform);
-}
+    void AcceptMeshPayload();
+
+    void Save(const std::string& filename);
+    bool Read(const std::string& filename);
+};

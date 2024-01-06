@@ -50,6 +50,7 @@ private:
     u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
     bool drawUi = true;
+    Scene scene;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -67,7 +68,7 @@ private:
         DeferredShading::Setup();
         AssetManager::Setup();
         SetupImgui();
-        Scene::Setup();
+        scene.Setup();
     }
 
     void Create() {
@@ -89,7 +90,7 @@ private:
         RayTracing::Create();
         DeferredShading::Create();
         AssetManager::Create();
-        Scene::CreateResources();
+        scene.CreateResources();
         createUniformProjection();
     }
 
@@ -118,7 +119,7 @@ private:
     void DestroyFrameResources() {
         LUZ_PROFILE_FUNC();
         PBRGraphicsPipeline::Destroy();
-        Scene::DestroyResources();
+        scene.DestroyResources();
         
         DestroyImgui();
         DeferredShading::Destroy();
@@ -131,12 +132,12 @@ private:
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
             Window::Update();
-            AssetManager::UpdateResources();
+            AssetManager::UpdateResources(scene);
             Transform* selectedTransform = nullptr;
-            if (Scene::selectedEntity != nullptr) {
-                selectedTransform = &Scene::selectedEntity->transform;
+            if (scene.selectedEntity != nullptr) {
+                selectedTransform = &scene.selectedEntity->transform;
             }
-            Scene::camera.Update(selectedTransform);
+            scene.camera.Update(selectedTransform);
             drawFrame();
             if (Window::IsKeyPressed(GLFW_KEY_F1)) {
                 drawUi = !drawUi;
@@ -178,7 +179,7 @@ private:
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = scene.camera.GetProj() * scene.camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         auto ext = SwapChain::GetExtent();
         screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
@@ -203,7 +204,7 @@ private:
                     LogicalDevice::OnImgui();
                     SwapChain::OnImgui();
                     PBRGraphicsPipeline::OnImgui();
-                    Scene::camera.OnImgui();
+                    scene.camera.OnImgui();
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Assets")) {
@@ -216,13 +217,13 @@ private:
         ImGui::End();
 
         if (ImGui::Begin("Scene")) {
-            Scene::OnImgui();
+            scene.OnImgui();
         }
         ImGui::End();
 
         if (ImGui::Begin("Inspector")) {
-            if (Scene::selectedEntity != nullptr) {
-                Scene::InspectEntity(Scene::selectedEntity);
+            if (scene.selectedEntity != nullptr) {
+                scene.InspectEntity(scene.selectedEntity);
             }
         }
         ImGui::End();
@@ -257,42 +258,42 @@ private:
         constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
         constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
 
-        for (Model* model : Scene::modelEntities) {
+        for (Model* model : scene.modelEntities) {
             constants.modelID = model->id;
             DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
             DeferredShading::RenderMesh(commandBuffer, model->mesh);
         }
 
-        if (Scene::renderLightGizmos) {
-            for (Light* light : Scene::lightEntities) {
+        if (scene.renderLightGizmos) {
+            for (Light* light : scene.lightEntities) {
                 constants.modelID = light->id;
                 DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-                DeferredShading::RenderMesh(commandBuffer, Scene::lightMeshes[light->block.type]);
+                DeferredShading::RenderMesh(commandBuffer, scene.lightMeshes[light->block.type]);
             }
         }
 
         DeferredShading::EndPass(commandBuffer);
 
         DeferredShading::ShadowMapConstants shadowConstants;
-        for (Light* light : Scene::lightEntities) {
+        for (Light* light : scene.lightEntities) {
             if (!light->shadows) {
                 continue;
             }
-            DeferredShading::BeginShadowMapPass(commandBuffer, Scene::shadowMaps[light->id]);
+            DeferredShading::BeginShadowMapPass(commandBuffer, scene.shadowMaps[light->id]);
             shadowConstants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
             shadowConstants.sceneBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
-            shadowConstants.numSamples = Scene::scene.aoNumSamples;
+            shadowConstants.numSamples = scene.scene.aoNumSamples;
             // shadowConstants.lightProj = Camera::GetProj()
-            // shadowConstants.lightProj = Scene::scene.projView;
-            shadowConstants.lightView = Scene::camera.GetView();
+            // shadowConstants.lightProj = scene.scene.projView;
+            shadowConstants.lightView = scene.camera.GetView();
             shadowConstants.lightProj = light->GetShadowViewProjection();
-            for (Model* model : Scene::modelEntities) {
+            for (Model* model : scene.modelEntities) {
                 shadowConstants.modelId = model->id;
                 DeferredShading::BindConstants(commandBuffer, DeferredShading::shadowPass, &shadowConstants, sizeof(shadowConstants));
                 DeferredShading::RenderMesh(commandBuffer, model->mesh);
             }
             DeferredShading::EndPass(commandBuffer);
-            ImageManager::BarrierDepthAttachmentToRead(commandBuffer, Scene::shadowMaps[light->id].image.image);
+            ImageManager::BarrierDepthAttachmentToRead(commandBuffer, scene.shadowMaps[light->id].image.image);
         }
 
         DeferredShading::LightConstants lightPassConstants;
@@ -346,7 +347,7 @@ private:
         PhysicalDevice::OnSurfaceUpdate();
         SwapChain::Create();
         PBRGraphicsPipeline::Create();
-        Scene::CreateResources();
+        scene.CreateResources();
         CreateImgui();
         DeferredShading::Create();
         createUniformProjection();
@@ -356,12 +357,12 @@ private:
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
         auto ext = SwapChain::GetExtent();
-        Scene::camera.SetExtent(ext.width, ext.height);
+        scene.camera.SetExtent(ext.width, ext.height);
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
         LUZ_PROFILE_FUNC();
-        Scene::UpdateResources(currentImage);
+        scene.UpdateResources(currentImage);
     }
 
     void SetupImgui() {

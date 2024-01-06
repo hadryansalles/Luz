@@ -154,7 +154,7 @@ void BeginShadowMapPass(VkCommandBuffer commandBuffer, TextureResource& shadowMa
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
     renderingInfo.viewMask = 0;
     renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = { Scene::shadowMapSize, Scene::shadowMapSize };
+    renderingInfo.renderArea.extent = { shadowMap.image.width, shadowMap.image.height };
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
     renderingInfo.colorAttachmentCount = 0;

@@ -89,7 +89,6 @@ vec4 BlueNoiseSample(int i) {
 
 
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
-    return 0;
     if(numSamples == 0) {
         return 0;
     }

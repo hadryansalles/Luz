@@ -239,7 +239,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
     LOG_INFO("Created BLAS.");
 }
 
-void CreateTLAS() {
+void CreateTLAS(const std::vector<Model*>& models) {
     LUZ_PROFILE_FUNC();
     if (!ctx.autoUpdateTLAS || !ctx.useRayTracing) {
         return;
@@ -259,7 +259,6 @@ void CreateTLAS() {
         }
     }
 
-    const std::vector<Model*>& models = Scene::modelEntities;
     std::vector<VkAccelerationStructureInstanceKHR> instances;
     instances.reserve(models.size());
     for (int i = 0; i < models.size(); i++) {

@@ -34,7 +34,7 @@ void AssetManager::Setup() {
 
 void AssetManager::Create() {
     LUZ_PROFILE_FUNC();
-    UpdateResources();
+    //UpdateResources();
 }
 
 void AssetManager::Destroy() {
@@ -87,11 +87,11 @@ RID AssetManager::NewTexture() {
     return rid;
 }
 
-void AssetManager::UpdateResources() {
+void AssetManager::UpdateResources(Scene& scene) {
     LUZ_PROFILE_FUNC();
 
     // add new loaded models to scene
-    GetLoadedModels();
+    GetLoadedModels(scene);
 
     // initialize new meshes
     meshesLock.lock();
@@ -211,7 +211,7 @@ bool AssetManager::IsTexture(std::filesystem::path path) {
     return extension == ".JPG" || extension == ".jpg" || extension == ".png" || extension == ".tga";
 }
 
-void AssetManager::LoadOBJ(std::filesystem::path path) {
+void AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -245,7 +245,7 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
 
     Collection* collection = nullptr;
     if (shapes.size() > 1) {
-        collection = Scene::CreateCollection();
+        collection = scene.CreateCollection();
         collection->name = path.stem().string();
     }
     for (size_t i = 0; i < shapes.size(); i++) {
@@ -318,7 +318,7 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
     }
 }
 
-void AssetManager::LoadGLTF(std::filesystem::path path) {
+void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
@@ -345,7 +345,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
       return;
     }
 
-    const tinygltf::Scene& scene = model.scenes[model.defaultScene];
+    const tinygltf::Scene& gltfScene = model.scenes[model.defaultScene];
     const auto getBuffer = [&](auto& accessor, auto& view) { return &model.buffers[view.buffer].data[view.byteOffset + accessor.byteOffset]; };
 
     std::vector<RID> loadedTextures(model.textures.size());
@@ -413,13 +413,13 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
 
     Collection* sceneCollection = nullptr;
     if (model.meshes.size() > 1) {
-        sceneCollection = Scene::CreateCollection();
+        sceneCollection = scene.CreateCollection();
         sceneCollection->name = path.stem().string();
     }
     for (const tinygltf::Mesh & mesh : model.meshes) {
         Collection* collection = nullptr;
         if (mesh.primitives.size() > 1) {
-            collection = Scene::CreateCollection();
+            collection = scene.CreateCollection();
             if (model.nodes.size() > 0) {
                 if (model.nodes[0].scale.size() == 3) {
                     glm::vec3 scale(model.nodes[0].scale[0], model.nodes[0].scale[1], model.nodes[0].scale[2]);
@@ -427,7 +427,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path) {
                 }
             }
             if (sceneCollection) {
-                Scene::SetCollection(collection, sceneCollection);
+                scene.SetCollection(collection, sceneCollection);
             }
             collection->name = mesh.name != "" ? mesh.name : path.stem().string();
         }
@@ -634,29 +634,29 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
     return rid;
 }
 
-Model* AssetManager::LoadModel(std::filesystem::path path) {
-    auto models = LoadModels(path);
+Model* AssetManager::LoadModel(std::filesystem::path path, Scene& scene) {
+    auto models = LoadModels(path, scene);
     ASSERT(models.size() == 1, "LoadModel loaded more than one model.");
     return models[0];
 }
 
-std::vector<Model*> AssetManager::LoadModels(std::filesystem::path path) {
+std::vector<Model*> AssetManager::LoadModels(std::filesystem::path path, Scene& scene) {
     if (loadedModels.size() != 0) {
         LOG_WARN("Sync load models with loaded models waiting to fetch...");
     }
-    if (IsOBJ(path)) { LoadOBJ(path); }
-    else if (IsGLTF(path)) { LoadGLTF(path); }
-    return GetLoadedModels();
+    if (IsOBJ(path)) { LoadOBJ(path, scene); }
+    else if (IsGLTF(path)) { LoadGLTF(path, scene); }
+    return GetLoadedModels(scene);
 }
 
-std::vector<Model*> AssetManager::GetLoadedModels() {
+std::vector<Model*> AssetManager::GetLoadedModels(Scene& scene) {
     loadedModelsLock.lock();
     std::vector<Model> models = std::move(loadedModels);
     loadedModels.clear();
     loadedModelsLock.unlock();
     std::vector<Model*> newModels(models.size());
     for (int i = 0; i < models.size(); i++) {
-        newModels[i] = Scene::CreateModel(&models[i]);
+        newModels[i] = scene.CreateModel(&models[i]);
     }
     return newModels;
 }
@@ -669,9 +669,9 @@ bool AssetManager::IsGLTF(std::filesystem::path path) {
     return path.extension() == ".gltf" || path.extension() == ".glb";
 }
 
-void AssetManager::AsyncLoadModels(std::filesystem::path path) {
-    if (IsOBJ(path)) { std::thread(LoadOBJ, path).detach(); }
-    else if (IsGLTF(path)) { std::thread(LoadGLTF, path).detach(); }
+void AssetManager::AsyncLoadModels(std::filesystem::path path, Scene& scene) {
+    if (IsOBJ(path)) { std::thread(LoadOBJ, path, scene).detach(); }
+    else if (IsGLTF(path)) { std::thread(LoadGLTF, path, scene).detach(); }
 }
 
 void DirOnImgui(std::filesystem::path path) {
