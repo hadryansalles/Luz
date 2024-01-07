@@ -90,9 +90,6 @@ RID AssetManager::NewTexture() {
 void AssetManager::UpdateResources(Scene& scene) {
     LUZ_PROFILE_FUNC();
 
-    // add new loaded models to scene
-    GetLoadedModels(scene);
-
     // initialize new meshes
     meshesLock.lock();
     std::vector<RID> toInitialize = std::move(unintializedMeshes);
@@ -211,7 +208,7 @@ bool AssetManager::IsTexture(std::filesystem::path path) {
     return extension == ".JPG" || extension == ".jpg" || extension == ".png" || extension == ".tga";
 }
 
-void AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
+Entity* AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -243,9 +240,9 @@ void AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
-    Collection* collection = nullptr;
+    Entity* collection = nullptr;
     if (shapes.size() > 1) {
-        collection = scene.CreateCollection();
+        collection = scene.CreateEntity();
         collection->name = path.stem().string();
     }
     for (size_t i = 0; i < shapes.size(); i++) {
@@ -316,9 +313,10 @@ void AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
             }
         }
     }
+    return collection;
 }
 
-void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
+Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
@@ -342,12 +340,12 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
 
     if (!ret) {
       LOG_ERROR("Failed to parse glTF");
-      return;
+      return nullptr;
     }
 
-    const tinygltf::Scene& gltfScene = model.scenes[model.defaultScene];
     const auto getBuffer = [&](auto& accessor, auto& view) { return &model.buffers[view.buffer].data[view.byteOffset + accessor.byteOffset]; };
 
+    // load textures
     std::vector<RID> loadedTextures(model.textures.size());
     for (int i = 0; i < model.textures.size(); i++) {
 
@@ -376,8 +374,8 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
         desc.path = texture.name;
     }
 
+    // load materials
     std::vector<MaterialBlock> materials(model.materials.size());
-
     for (int i = 0; i < materials.size(); i++) {
         auto& mat = model.materials[i];
         // pbr
@@ -411,26 +409,12 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
         }
     }
 
-    Collection* sceneCollection = nullptr;
-    if (model.meshes.size() > 1) {
-        sceneCollection = scene.CreateCollection();
-        sceneCollection->name = path.stem().string();
-    }
-    for (const tinygltf::Mesh & mesh : model.meshes) {
-        Collection* collection = nullptr;
-        if (mesh.primitives.size() > 1) {
-            collection = scene.CreateCollection();
-            if (model.nodes.size() > 0) {
-                if (model.nodes[0].scale.size() == 3) {
-                    glm::vec3 scale(model.nodes[0].scale[0], model.nodes[0].scale[1], model.nodes[0].scale[2]);
-                    collection->transform.SetScale(scale);
-                }
-            }
-            if (sceneCollection) {
-                scene.SetCollection(collection, sceneCollection);
-            }
-            collection->name = mesh.name != "" ? mesh.name : path.stem().string();
-        }
+    // load meshes
+    std::vector<std::vector<RID>> loadedMeshes;
+    loadedMeshes.reserve(model.meshes.size());
+    for (const tinygltf::Mesh& mesh : model.meshes) {
+        std::vector<RID>& loadedPrimitives = loadedMeshes.emplace_back();
+        loadedPrimitives.reserve(mesh.primitives.size());
         for (int i = 0; i < mesh.primitives.size(); i++) {
             const tinygltf::Primitive& primitive = mesh.primitives[i];
             MeshDesc desc{};
@@ -515,7 +499,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
                     for (u32 i = 0; i < indexCount; i++) {
                         desc.indices.push_back(bufferIndex[i]);
                     }
-                };
+                    };
                 switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
                     pushIndices((u32*)getBuffer(accessor, bufferView));
@@ -533,7 +517,7 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
 
             // calculate tangents
             if (!bufferTangents) {
-                glm::vec3* tan1 = new glm::vec3[desc.vertices.size()*2];
+                glm::vec3* tan1 = new glm::vec3[desc.vertices.size() * 2];
                 glm::vec3* tan2 = tan1 + vertexCount;
                 for (int indexID = 0; indexID < desc.indices.size(); indexID += 3) {
                     int index1 = desc.indices[indexID + 0];
@@ -566,23 +550,64 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
                 delete[] tan1;
             }
 
-            RID meshID = NewMesh();
-            Model model;
-            model.name = desc.name;
-            model.mesh = meshID;
-            model.parent = collection;
-            if (!collection) {
-                model.parent = sceneCollection;
-            }
-            if (primitive.material > -1) {
-                model.block.material = materials[primitive.material];
-            }
-            loadedModelsLock.lock();
-            loadedModels.push_back(model);
-            loadedModelsLock.unlock();
-            meshDescs[meshID] = std::move(desc);
+            RID newMesh = NewMesh();
+            loadedPrimitives.push_back(newMesh);
+            desc.materialIndex = primitive.material;
+            meshDescs[newMesh] = std::move(desc);
         }
     }
+
+    // just load the assets
+    if (model.scenes.size() == 0 || model.defaultScene == -1 || model.defaultScene >= model.scenes.size()) {
+        return nullptr;
+    }
+
+    Entity* rootEntity = scene.CreateEntity();
+    std::vector<Entity*> newEntities;
+    // create models and intermediary entities
+    for (tinygltf::Node& node : model.nodes) {
+        Entity* ent = scene.CreateEntity();
+        newEntities.push_back(ent);
+        if (node.mesh != -1) {
+            const tinygltf::Mesh& mesh = model.meshes[node.mesh];
+            for (int i = 0; i < mesh.primitives.size(); i++) {
+                Model* modelEntity = scene.CreateModel();
+                scene.SetParent(modelEntity, ent);
+                modelEntity->name = mesh.name + "_" + std::to_string(i);
+                modelEntity->mesh = loadedMeshes[node.mesh][i];
+                modelEntity->block.material = materials[meshDescs[modelEntity->mesh].materialIndex];
+            }
+        }
+        ent->name = node.name;
+        if (node.translation.size()) {
+            ent->transform.position = { node.translation[0], node.translation[1], node.translation[2] };
+        }
+        if (node.scale.size()) {
+            ent->transform.scale = { node.scale[0], node.scale[1], node.scale[2] };
+        }
+        if (node.rotation.size()) {
+            glm::quat quat = { (float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3] };
+            glm::vec3 euler = glm::eulerAngles(quat);
+            ent->transform.rotation = { euler[0], euler[1], euler[2] };
+        }
+    }
+
+    // add root entities
+    tinygltf::Scene& defaultScene = model.scenes[model.defaultScene];
+    for (int i = 0; i < defaultScene.nodes.size(); i++) {
+        i32 nodeId = defaultScene.nodes[i];
+        scene.SetParent(newEntities[nodeId], rootEntity);
+    }
+
+    // connect node hierarchy
+    for (int i = 0; i < model.nodes.size(); i++) {
+        tinygltf::Node& node = model.nodes[i];
+        for (int j = 0; j < node.children.size(); j++) {
+            scene.SetParent(newEntities[node.children[j]], newEntities[i]);
+        }
+    }
+
+    return rootEntity;
 }
 
 void AssetManager::SaveGLTF(const std::filesystem::path& path, const Scene& scene) {
@@ -597,8 +622,8 @@ void AssetManager::SaveGLTF(const std::filesystem::path& path, const Scene& scen
         p.mode = TINYGLTF_MODE_TRIANGLES;
 
         tinygltf::Buffer& vbuffer = gltf.buffers.emplace_back();
-        vbuffer.data.resize(desc.vertices.size() * sizeof(MeshDesc));
-        memcpy(vbuffer.data.data(), desc.vertices.data(), desc.vertices.size() * sizeof(MeshDesc));
+        vbuffer.data.resize(desc.vertices.size() * sizeof(MeshVertex));
+        memcpy(vbuffer.data.data(), desc.vertices.data(), desc.vertices.size() * sizeof(MeshVertex));
 
         {
             // position
@@ -615,7 +640,51 @@ void AssetManager::SaveGLTF(const std::filesystem::path& path, const Scene& scen
             accessor.bufferView = gltf.bufferViews.size() - 1;
             p.attributes["POSITION"] = gltf.accessors.size() - 1;
         }
-        // todo: normals, uvs, tangents, etc
+        {
+            // normal
+            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
+            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
+            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+            accessor.count = desc.vertices.size();
+            accessor.type = TINYGLTF_TYPE_VEC3;
+            bufferView.buffer = gltf.buffers.size() - 1;
+            bufferView.byteOffset = offsetof(MeshVertex, normal);
+            bufferView.byteStride = sizeof(MeshVertex);
+            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
+            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+            accessor.bufferView = gltf.bufferViews.size() - 1;
+            p.attributes["NORMAL"] = gltf.accessors.size() - 1;
+        }
+        {
+            // tangent
+            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
+            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
+            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+            accessor.count = desc.vertices.size();
+            accessor.type = TINYGLTF_TYPE_VEC3;
+            bufferView.buffer = gltf.buffers.size() - 1;
+            bufferView.byteOffset = offsetof(MeshVertex, tangent);
+            bufferView.byteStride = sizeof(MeshVertex);
+            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
+            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+            accessor.bufferView = gltf.bufferViews.size() - 1;
+            p.attributes["TANGENT"] = gltf.accessors.size() - 1;
+        }
+        {
+            // uvs
+            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
+            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
+            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+            accessor.count = desc.vertices.size();
+            accessor.type = TINYGLTF_TYPE_VEC2;
+            bufferView.buffer = gltf.buffers.size() - 1;
+            bufferView.byteOffset = offsetof(MeshVertex, texCoord);
+            bufferView.byteStride = sizeof(MeshVertex);
+            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
+            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+            accessor.bufferView = gltf.bufferViews.size() - 1;
+            p.attributes["TEXCOORD_0"] = gltf.accessors.size() - 1;
+        }
 
         tinygltf::Buffer& ibuffer = gltf.buffers.emplace_back();
         ibuffer.data.resize(desc.indices.size() * sizeof(u32));
@@ -710,31 +779,9 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
     return rid;
 }
 
-Model* AssetManager::LoadModel(std::filesystem::path path, Scene& scene) {
-    auto models = LoadModels(path, scene);
-    ASSERT(models.size() == 1, "LoadModel loaded more than one model.");
-    return models[0];
-}
-
-std::vector<Model*> AssetManager::LoadModels(std::filesystem::path path, Scene& scene) {
-    if (loadedModels.size() != 0) {
-        LOG_WARN("Sync load models with loaded models waiting to fetch...");
-    }
-    if (IsOBJ(path)) { LoadOBJ(path, scene); }
-    else if (IsGLTF(path)) { LoadGLTF(path, scene); }
-    return GetLoadedModels(scene);
-}
-
-std::vector<Model*> AssetManager::GetLoadedModels(Scene& scene) {
-    loadedModelsLock.lock();
-    std::vector<Model> models = std::move(loadedModels);
-    loadedModels.clear();
-    loadedModelsLock.unlock();
-    std::vector<Model*> newModels(models.size());
-    for (int i = 0; i < models.size(); i++) {
-        newModels[i] = scene.CreateModel(&models[i]);
-    }
-    return newModels;
+Entity* AssetManager::LoadModel(std::filesystem::path path, Scene& scene) {
+    if (IsOBJ(path)) { return LoadOBJ(path, scene); }
+    else if (IsGLTF(path)) { return LoadGLTF(path, scene); }
 }
 
 bool AssetManager::IsOBJ(std::filesystem::path path) {
@@ -743,11 +790,6 @@ bool AssetManager::IsOBJ(std::filesystem::path path) {
 
 bool AssetManager::IsGLTF(std::filesystem::path path) {
     return path.extension() == ".gltf" || path.extension() == ".glb";
-}
-
-void AssetManager::AsyncLoadModels(std::filesystem::path path, Scene& scene) {
-    if (IsOBJ(path)) { std::thread(LoadOBJ, path, scene).detach(); }
-    else if (IsGLTF(path)) { std::thread(LoadGLTF, path, scene).detach(); }
 }
 
 void DirOnImgui(std::filesystem::path path) {

@@ -64,17 +64,17 @@ struct ModelBlock {
 };
 
 enum class EntityType {
-    Invalid,
+    Entity,
     Model,
-    Collection,
     Light
 };
 
 struct Entity {
     std::string name = "Entity";
     Transform transform;
-    EntityType entityType = EntityType::Invalid;
-    struct Collection* parent = nullptr;
+    EntityType entityType = EntityType::Entity;
+    Entity* parent = nullptr;
+    std::vector<Entity*> children;
 };
 
 enum LightType {
@@ -119,10 +119,6 @@ struct Light : Entity {
     }
 };
 
-struct Collection : Entity {
-    std::vector<Entity*> children;
-};
-
 struct Scene {
     SceneBlock scene;
     ModelBlock models[MAX_MODELS];
@@ -133,7 +129,6 @@ struct Scene {
     std::vector<RID> freeModelRIDs;
 
     Camera camera;
-    Collection* rootCollection = nullptr;
     std::vector<Entity*> entities;
     std::vector<Model*> modelEntities;
     std::vector<Light*> lightEntities;
@@ -157,6 +152,7 @@ struct Scene {
     void UpdateBuffers(int numFrame);
     void DestroyResources();
 
+    Entity* CreateEntity();
     Entity* CreateEntity(Entity* copy);
 
     Model* CreateModel();
@@ -165,18 +161,14 @@ struct Scene {
     Light* CreateLight();
     Light* CreateLight(Light* copy);
 
-    Collection* CreateCollection();
-    Collection* CreateCollection(Collection* copy);
-
-    void DeleteCollection(Collection* collection);
     void DeleteEntity(Entity* entity);
     void DeleteModel(Model* mdoel);
 
-    void RemoveFromCollection(Entity* entity);
-    void SetCollection(Entity* entity, Collection* collection);
+    void RemoveFromParent(Entity* entity);
+    void SetParent(Entity* entity, Entity* parent);
 
     void OnImgui();
-    void OnImgui(Collection* collection, bool root = false);
+    void OnImgui(Entity* entity);
 
     void InspectModel(Model* model);
     void InspectLight(Light* light);

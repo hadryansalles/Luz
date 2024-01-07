@@ -69,6 +69,7 @@ struct MeshDesc {
     std::filesystem::path path;
     std::string name;
     glm::vec3 center = glm::vec3(0, 0, 0);
+    i32 materialIndex;
 };
 
 struct MeshResource {
@@ -101,8 +102,8 @@ class AssetManager {
     static void InitializeTexture(RID id);
     static void UpdateTexturesDescriptor(std::vector<RID>& rids);
 
-    static void LoadOBJ(std::filesystem::path path, Scene& scene);
-    static void LoadGLTF(std::filesystem::path path, Scene& scene);
+    static Entity* LoadOBJ(std::filesystem::path path, Scene& scene);
+    static Entity* LoadGLTF(std::filesystem::path path, Scene& scene);
 
     static bool IsOBJ(std::filesystem::path path);
     static bool IsGLTF(std::filesystem::path path);
@@ -129,8 +130,5 @@ public:
     static RID LoadTexture(std::filesystem::path path);
 
     static void SaveGLTF(const std::filesystem::path& path, const Scene& scene);
-    static Model* LoadModel(std::filesystem::path path, Scene& scene);
-    static void AsyncLoadModels(std::filesystem::path path, Scene& scene);
-    static std::vector<Model*> LoadModels(std::filesystem::path path, Scene& scene);
-    static std::vector<Model*> GetLoadedModels(Scene& scene);
+    static Entity* LoadModel(std::filesystem::path path, Scene& scene);
 };
