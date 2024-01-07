@@ -275,18 +275,14 @@ private:
         DeferredShading::EndPass(commandBuffer);
 
         DeferredShading::ShadowMapConstants shadowConstants;
+        shadowConstants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+        shadowConstants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
         for (Light* light : scene.lightEntities) {
-            if (!light->shadows) {
+            if (!light->shadows || light->shadowType != ShadowType::ShadowMap) {
                 continue;
             }
-            DeferredShading::BeginShadowMapPass(commandBuffer, scene.shadowMaps[light->id]);
-            shadowConstants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
-            shadowConstants.sceneBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
-            shadowConstants.numSamples = scene.scene.aoNumSamples;
-            // shadowConstants.lightProj = Camera::GetProj()
-            // shadowConstants.lightProj = scene.scene.projView;
-            shadowConstants.lightView = scene.camera.GetView();
             shadowConstants.lightProj = light->GetShadowViewProjection();
+            DeferredShading::BeginShadowMapPass(commandBuffer, scene.shadowMaps[light->id]);
             for (Model* model : scene.modelEntities) {
                 shadowConstants.modelId = model->id;
                 DeferredShading::BindConstants(commandBuffer, DeferredShading::shadowPass, &shadowConstants, sizeof(shadowConstants));

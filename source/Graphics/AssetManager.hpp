@@ -128,6 +128,7 @@ public:
     static RID CreateTexture(std::string name, u8* data, u32 width, u32 height);
     static RID LoadTexture(std::filesystem::path path);
 
+    static void SaveGLTF(const std::filesystem::path& path, const Scene& scene);
     static Model* LoadModel(std::filesystem::path path, Scene& scene);
     static void AsyncLoadModels(std::filesystem::path path, Scene& scene);
     static std::vector<Model*> LoadModels(std::filesystem::path path, Scene& scene);

@@ -585,6 +585,82 @@ void AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
     }
 }
 
+void AssetManager::SaveGLTF(const std::filesystem::path& path, const Scene& scene) {
+    tinygltf::Model gltf;
+    tinygltf::Node node;
+
+    for (int i = 0; i < nextMeshRID; i++) {
+        MeshDesc& desc = meshDescs[i];
+
+        tinygltf::Mesh& m = gltf.meshes.emplace_back();
+        tinygltf::Primitive& p = m.primitives.emplace_back();
+        p.mode = TINYGLTF_MODE_TRIANGLES;
+
+        tinygltf::Buffer& vbuffer = gltf.buffers.emplace_back();
+        vbuffer.data.resize(desc.vertices.size() * sizeof(MeshDesc));
+        memcpy(vbuffer.data.data(), desc.vertices.data(), desc.vertices.size() * sizeof(MeshDesc));
+
+        {
+            // position
+            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
+            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
+            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+            accessor.count = desc.vertices.size();
+            accessor.type = TINYGLTF_TYPE_VEC3;
+            bufferView.buffer = gltf.buffers.size() - 1;
+            bufferView.byteOffset = offsetof(MeshVertex, pos);
+            bufferView.byteStride = sizeof(MeshVertex);
+            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
+            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+            accessor.bufferView = gltf.bufferViews.size() - 1;
+            p.attributes["POSITION"] = gltf.accessors.size() - 1;
+        }
+        // todo: normals, uvs, tangents, etc
+
+        tinygltf::Buffer& ibuffer = gltf.buffers.emplace_back();
+        ibuffer.data.resize(desc.indices.size() * sizeof(u32));
+        memcpy(ibuffer.data.data(), desc.indices.data(), desc.indices.size() * sizeof(u32));
+
+        {
+            // indices
+            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
+            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
+            accessor.componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT;
+            accessor.count = desc.indices.size();
+            accessor.type = TINYGLTF_TYPE_SCALAR;
+            bufferView.buffer = gltf.buffers.size() - 1;
+            bufferView.byteStride = 0;
+            bufferView.byteOffset = 0;
+            bufferView.byteLength = desc.indices.size() * sizeof(u32);
+            bufferView.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
+            accessor.bufferView = gltf.bufferViews.size() - 1;
+            p.indices = gltf.accessors.size() - 1;
+        }
+    }
+
+    tinygltf::Scene& s = gltf.scenes.emplace_back();
+    gltf.defaultScene = 0;
+
+    for (Model* model : scene.modelEntities) {
+        tinygltf::Node& node = gltf.nodes.emplace_back();
+        node.mesh = model->mesh;
+
+        glm::vec3 pos = model->transform.position;
+        node.translation = { pos.x, pos.y, pos.z };
+
+        glm::vec3 scl = model->transform.scale;
+        node.scale = { scl.x, scl.y, scl.z };
+
+        glm::quat rot = glm::quat(model->transform.rotation);
+        node.rotation = { rot.x, rot.y, rot.z, rot.w };
+
+        s.nodes.push_back(gltf.nodes.size() - 1);
+    }
+
+    tinygltf::TinyGLTF exporter;
+    exporter.WriteGltfSceneToFile(&gltf, path.string(), true, true, true, false);
+}
+
 RID AssetManager::CreateTexture(std::string name, u8* data, u32 width, u32 height) {
     RID rid = NewTexture();
     TextureDesc& desc = textureDescs[rid];

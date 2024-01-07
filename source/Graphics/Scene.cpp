@@ -28,20 +28,20 @@ void Scene::Setup() {
     DeleteEntity(dirModel);
     DeleteEntity(spotModel);
 
-    Model* plane = AssetManager::LoadModel("assets/cube.glb", *this);
+    Model* cube = AssetManager::LoadModel("assets/cube.glb", *this);
     //Model* plane = CreateModel(cube);
-    plane->transform.SetPosition(glm::vec3(0, -1, 0));
-    plane->transform.SetScale(glm::vec3(10, 0.0001, 10));
+    //plane->transform.SetPosition(glm::vec3(0, -1, 0));
+    //plane->transform.SetScale(glm::vec3(10, 0.0001, 10));
     Light* defaultLight = CreateLight();
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
     defaultLight->block.type = LightType::Directional;
     defaultLight->transform.SetRotation(glm::vec3(45, 0, 0));
 
-    Model* dragon = AssetManager::LoadModel("assets/vayne2.glb", *this);
-    dragon->transform.SetPosition(glm::vec3(0, 1.026, 0));
-    dragon->transform.SetScale(glm::vec3(0.05));
-    dragon->transform.SetRotation(glm::vec3(90, 0, 0));
+    //Model* dragon = AssetManager::LoadModel("assets/vayne2.glb", *this);
+    //dragon->transform.SetPosition(glm::vec3(0, 1.026, 0));
+    //dragon->transform.SetScale(glm::vec3(0.05));
+    //dragon->transform.SetRotation(glm::vec3(90, 0, 0));
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
@@ -365,6 +365,12 @@ void Scene::OnImgui() {
         ImGui::Checkbox("Blue noise", &active);
         scene.useBlueNoise = active ? 1 : 0;
     }
+    static std::string filename = "assets/scene.gltf";
+    if (ImGui::Button("Save")) {
+        AssetManager::SaveGLTF(filename, *this);
+    }
+    ImGui::SameLine();
+    ImGui::InputText("Filename", &filename);
 }
 
 void Scene::OnImgui(Collection* collection, bool root) {
