@@ -16,6 +16,7 @@ using i64 = int64_t;
 using f32 = float;
 using f64 = double;
 using RID = u32;
+using UUID = u64;
 
 #define ALIGN_AS(size, alignment) ((size) % (alignment) > 0 ? (size) + (alignment) - (size) % (alignment) : (size))
 #define COUNT_OF(arr) (sizeof((arr)) / sizeof((arr)[0]))
