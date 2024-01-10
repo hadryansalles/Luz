@@ -16,6 +16,7 @@
 #include "Scene.hpp"
 #include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
+#include "AssetManager2.hpp"
 
 #include <stb_image.h>
 
@@ -42,6 +43,13 @@ public:
         // WaitToInit(4);
         Setup();
         Create();
+        AssetManager2::Instance().Import("assets/test.png");
+        AssetManager2::Instance().CreateAsset<TextureAsset>("OI");
+        AssetManager2::Instance().CreateAsset<TextureAsset>("OI2");
+        Json j;
+        AssetManager2::Instance().Serialize(j, 1);
+        LOG_INFO("SERIALIZE DUMP {}", j.dump(4));
+        return;
         MainLoop();
         Finish();
     }
