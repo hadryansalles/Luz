@@ -12,9 +12,18 @@ template<typename T>
 using Ref = std::shared_ptr<T>;
 using Json = nlohmann::json;
 
+enum class AssetType {
+    Invalid,
+    Texture,
+    Mesh,
+    Material,
+    Scene,
+};
+
 struct Asset {
     std::string name = "Unintialized";
     UUID uuid = 0;
+    AssetType type = AssetType::Invalid;
     virtual ~Asset();
     virtual void Serialize(Json& j, int dir);
 };
@@ -24,7 +33,7 @@ struct TextureAsset : Asset {
     int channels;
     int width;
     int height;
-
+    TextureAsset();
     virtual void Serialize(Json& j, int dir);
 };
 
@@ -38,6 +47,7 @@ struct MeshAsset : Asset {
     std::vector<MeshVertex> vertices;
     std::vector<u32> indices;
 
+    MeshAsset();
     virtual void Serialize(Json& j, int dir);
 };
 
@@ -52,26 +62,34 @@ struct MaterialAsset : Asset {
     Ref<TextureAsset> emissionMap;
     Ref<TextureAsset> metallicRoughnessMap;
 
+    MaterialAsset();
     virtual void Serialize(Json& j, int dir);
 };
 
+enum class NodeType {
+    Node,
+    Mesh,
+    Light,
+};
+
 struct Node {
-    UUID uuid;
-    std::string name;
+    UUID uuid = 0;
+    NodeType type = NodeType::Node;
+    std::string name = "Unintialized";
     std::vector<Ref<Node>> children;
     glm::vec3 position;
     glm::vec3 rotation;
     glm::vec3 scale;
 
-    //virtual void Serialize(Json& j, int dir);
-    //void AddChildren(Ref<Node> node);
+    virtual void Serialize(Json& j, int dir);
+    void AddChildren(Ref<Node> node);
 };
 
 struct MeshNode : Node {
     Ref<MeshAsset> mesh;
     Ref<MaterialAsset> material;
 
-    //virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Json& j, int dir);
 };
 
 struct SceneAsset : Asset {
@@ -84,6 +102,7 @@ struct SceneAsset : Asset {
         return node;
     }
 
+    SceneAsset();
     virtual void Serialize(Json& j, int dir);
 };
 

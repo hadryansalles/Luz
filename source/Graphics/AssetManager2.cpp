@@ -3,9 +3,9 @@
 #include "AssetManager2.hpp"
 
 #include <stb_image.h>
-
 #include <tiny_obj_loader.h>
 
+#include <random>
 
 void to_json(Json& j, const glm::vec3& v) {
     j = Json{v.x, v.y, v.z};
@@ -142,12 +142,30 @@ inline std::vector<u8> DecodeBase64(std::string const& input) {
 Asset::~Asset()
 {}
 
+TextureAsset::TextureAsset() {
+    type = AssetType::Texture;
+}
+
+MeshAsset::MeshAsset() {
+    type = AssetType::Mesh;
+}
+
+MaterialAsset::MaterialAsset() {
+    type = AssetType::Material;
+}
+
+SceneAsset::SceneAsset() {
+    type = AssetType::Scene;
+}
+
 void Asset::Serialize(Json& j, int dir) {
     SERIALIZE("UUID", uuid);
     SERIALIZE("name", name);
+    SERIALIZE("type", type);
 }
 
 void TextureAsset::Serialize(Json& j, int dir) {
+    Asset::Serialize(j, dir);
     std::string dataBase64 = EncodeBase64(data.data(), data.size());
     SERIALIZE("data", dataBase64);
     SERIALIZE("width", width);
@@ -159,6 +177,7 @@ void TextureAsset::Serialize(Json& j, int dir) {
 }
 
 void MeshAsset::Serialize(Json& j, int dir) {
+    Asset::Serialize(j, dir);
     std::string vertexBase64 = EncodeBase64((u8*)vertices.data(), vertices.size() * sizeof(MeshVertex));
     std::string indexBase64 = EncodeBase64((u8*)indices.data(), indices.size() * sizeof(u32));
     SERIALIZE("vertex", vertexBase64);
@@ -178,6 +197,7 @@ void MeshAsset::Serialize(Json& j, int dir) {
 }
 
 void MaterialAsset::Serialize(Json& j, int dir) {
+    Asset::Serialize(j, dir);
     glm::vec3 color = glm::vec4(1.0f);
     glm::vec3 emission = glm::vec3(1.0f);
     f32 metallic = 1;
@@ -190,12 +210,22 @@ void MaterialAsset::Serialize(Json& j, int dir) {
 }
 
 void SceneAsset::Serialize(Json& j, int dir) {
+
+}
+
+void Node::Serialize(Json& j, int dir) {
+
+}
+
+void MeshNode::Serialize(Json& j, int dir) {
+
 }
 
 void AssetManager2::Serialize(Json& j, int dir) {
     if (dir == 1) {
-        for (auto& asset_pair : assets) {
-            asset_pair.second->Serialize(j[std::to_string(asset_pair.first)], dir);
+        for (auto& assetPair : assets) {
+            Json& assetJson = j[std::to_string(assetPair.first)];
+            assetPair.second->Serialize(assetJson, dir);
         }
     }
 }
@@ -291,7 +321,11 @@ bool AssetManager2::IsScene(const std::filesystem::path& path) const {
 }
 
 UUID AssetManager2::NewUUID() {
-    return nextUUID++;
+    // todo: replace with something actually UUID
+    static std::random_device rd;
+    static std::mt19937_64 eng(rd());
+    static std::uniform_int_distribution<u64> dist(std::llround(std::pow(2,61)), std::llround(std::pow(2,62)));
+    return dist(eng);
 }
 
 AssetManager2& AssetManager2::Instance() {

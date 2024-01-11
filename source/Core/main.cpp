@@ -46,6 +46,7 @@ public:
         AssetManager2::Instance().Import("assets/test.png");
         AssetManager2::Instance().CreateAsset<TextureAsset>("OI");
         AssetManager2::Instance().CreateAsset<TextureAsset>("OI2");
+        AssetManager2::Instance().CreateAsset<MeshAsset>("mesh?");
         Json j;
         AssetManager2::Instance().Serialize(j, 1);
         LOG_INFO("SERIALIZE DUMP {}", j.dump(4));

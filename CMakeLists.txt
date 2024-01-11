@@ -48,7 +48,6 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE "source/Core/Luzpch.hpp")
 # target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -ftime-report)
 # target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -fno-inline-functions)
 
-
 # glfw
 add_subdirectory("deps/glfw")
 include_directories("deps/glfw/include")
