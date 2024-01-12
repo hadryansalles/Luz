@@ -158,76 +158,50 @@ SceneAsset::SceneAsset() {
     type = AssetType::Scene;
 }
 
-void Asset::Serialize(Json& j, int dir) {
-    SERIALIZE("UUID", uuid);
-    SERIALIZE("name", name);
-    SERIALIZE("type", type);
+void TextureAsset::Serialize(Serializer& s) {
+    s("data", data);
+    s("width", width);
+    s("height", height);
+    s("channels", channels);
 }
 
-void TextureAsset::Serialize(Json& j, int dir) {
-    Asset::Serialize(j, dir);
-    std::string dataBase64 = EncodeBase64(data.data(), data.size());
-    SERIALIZE("data", dataBase64);
-    SERIALIZE("width", width);
-    SERIALIZE("height", height);
-    SERIALIZE("channels", channels);
-    if (dir == 0) {
-        data = DecodeBase64(dataBase64);
-    }
+void MeshAsset::Serialize(Serializer& s) {
+    s("vertices", vertices);
+    s("indices", indices);
 }
 
-void MeshAsset::Serialize(Json& j, int dir) {
-    Asset::Serialize(j, dir);
-    std::string vertexBase64 = EncodeBase64((u8*)vertices.data(), vertices.size() * sizeof(MeshVertex));
-    std::string indexBase64 = EncodeBase64((u8*)indices.data(), indices.size() * sizeof(u32));
-    SERIALIZE("vertex", vertexBase64);
-    SERIALIZE("index", indexBase64);
-    int vertexCount = vertices.size();
-    int indexCount = indices.size();
-    SERIALIZE("vertexCount", vertexCount);
-    SERIALIZE("indexCount", indexCount);
-    if (dir == 0) {
-        std::vector<u8> vertexData = DecodeBase64(vertexBase64);
-        std::vector<u8> indexData = DecodeBase64(indexBase64);
-        vertices.resize(vertexCount);
-        indices.resize(vertexCount);
-        memcpy(vertices.data(), vertexData.data(), vertexData.size());
-        memcpy(indices.data(), indexData.data(), indexData.size());
-    }
+void MaterialAsset::Serialize(Serializer& s) {
+    s("color", color);
+    s("emission", emission);
+    s("metallic", metallic);
+    s("roughness", roughness);
+    s("colorMap", colorMap);
+    s("aoMap", aoMap);
+    s("emissionMap", emissionMap);
+    s("normalMap", normalMap);
+    s("metallicRoughnessMap", metallicRoughnessMap);
 }
 
-void MaterialAsset::Serialize(Json& j, int dir) {
-    Asset::Serialize(j, dir);
-    glm::vec3 color = glm::vec4(1.0f);
-    glm::vec3 emission = glm::vec3(1.0f);
-    f32 metallic = 1;
-    f32 roughness = 1;
-    AssetManager2::Instance().SerializeAsset(colorMap, j["colorMap"], dir);
-    AssetManager2::Instance().SerializeAsset(aoMap, j["aoMap"], dir);
-    AssetManager2::Instance().SerializeAsset(emissionMap, j["emissionMap"], dir);
-    AssetManager2::Instance().SerializeAsset(normalMap, j["normalMap"], dir);
-    AssetManager2::Instance().SerializeAsset(metallicRoughnessMap, j["metallicRoughnessMap"], dir);
-}
+void SceneAsset::Serialize(Serializer& s) {
 
-void SceneAsset::Serialize(Json& j, int dir) {
 
 }
 
-void Node::Serialize(Json& j, int dir) {
+void Node::Serialize(Serializer& s) {
 
 }
 
-void MeshNode::Serialize(Json& j, int dir) {
+void MeshNode::Serialize(Serializer& s) {
 
 }
 
 void AssetManager2::Serialize(Json& j, int dir) {
-    if (dir == 1) {
-        for (auto& assetPair : assets) {
-            Json& assetJson = j[std::to_string(assetPair.first)];
-            assetPair.second->Serialize(assetJson, dir);
-        }
-    }
+    // if (dir == 1) {
+    //     for (auto& assetPair : assets) {
+    //         Json& assetJson = j[std::to_string(assetPair.first)];
+    //         assetPair.second->Serialize(assetJson, dir);
+    //     }
+    // }
 }
 
 void AssetManager2::Import(const std::filesystem::path& path) {

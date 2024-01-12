@@ -12,6 +12,127 @@ template<typename T>
 using Ref = std::shared_ptr<T>;
 using Json = nlohmann::json;
 
+// todo: move to proper place
+std::string EncodeBase64(unsigned char const* input, size_t len);
+std::vector<u8> DecodeBase64(std::string const& input);
+
+struct Serializer {
+    Json& j;
+    int dir = 0;
+    inline static constexpr int LOAD = 0;
+    inline static constexpr int SAVE = 0;
+
+/*
+    "assets": [
+        {
+            "UUID": 21
+            "name": "material1"
+            "colorTexture": 23
+        }
+        {
+            "UUID": 23
+            "name": "texture"
+            "data": "aoskdjaiosjdiaosj"
+        }
+        "uasdh": {
+
+        }
+    ]
+*/
+
+    Serializer(Json& j, int dir)
+        : j(j)
+        , dir(dir)
+    {}
+
+
+    void Serialize(Ref<Asset>& asset) {
+        if (dir == LOAD) {
+            DEBUG_ASSERT(j.contains("type") && j.contains("name") && j.contains("UUID"), "Asset doens't contain required fields.");
+            AssetType type = j["type"];
+            std::string name = j["name"];
+            UUID uuid = j["uuid"];
+            asset = AssetManager2::Instance().CreateAsset(type, name, uuid);
+            Serializer s(j, dir);
+            asset->Serialize(s);
+        } else {
+            Serializer s(j, dir);
+            j["type"] = asset->type;
+            j["name"] = asset->name;
+            j["uuid"] = asset->uuid;
+            asset->Serialize(s);
+        }
+    }
+
+    // void Serialize(Ref<Node>& node) {
+    //     if (dir == LOAD) {
+    //         DEBUG_ASSERT(j.contains("type") && j.contains("name") && j.contains("UUID"), "Asset doens't contain required fields.");
+    //         NodeType type = j["type"];
+    //         std::string name = j["name"];
+    //         UUID uuid = j["uuid"];
+    //         asset = AssetManager2::Instance().CraeteNode(type, name, uuid);
+    //         Serializer s(j, dir);
+    //         asset->Serialize(s);
+    //     } else {
+    //         Serializer s(j, dir);
+    //         j["type"] = asset->type;
+    //         j["name"] = asset->name;
+    //         j["uuid"] = asset->uuid;
+    //         asset->Serialize(s);
+    //     }
+    // }
+
+    template<typename T>
+    void operator()(const std::string& field, T& value) {
+        if (dir == SAVE) {
+            j[field] = value;
+        } else if (j.contains(field)) {
+            value = j[field];
+        }
+    }
+
+    template<typename T>
+    void operator()(const std::string& field, std::vector<T>& v) {
+        if constexpr (std::is_pod_v<T>) {
+            if (dir == SAVE) {
+                j[field] = EncodeBase64(v.data(), v.size() * sizeof(T));
+            } else if (j.contains(field)) {
+                std::vector<u8> data = DecodeBase64(j[field]);
+                v.resize(data.size()/sizeof(T));
+                memcpy(v.data(), data.data(), data.size());
+            }
+        } else {
+            // T = Ref to something
+            // if (dir == SAVE) {
+            //     Json childrenArray = Json::array();
+            //     for (auto& x : v) {
+            //         Serializer childSerializer(childrenArray.emplace_back(), dir);
+            //         x->Serialize(childSerializer);
+            //     }
+            //     j[field] = childrenArray;
+            // } else if (j.contains(field)) {
+            //     // read each value
+            //     // T = Ref<Node>
+            //     v.reserve(v.size());
+            //     for (auto& value : j[field]) {
+            //         AssetType type = j["type"];
+            //         std::string name = j["name"];
+            //         UUID uuid = j["uuid"];
+            //         v.push_back(std::make_shared())
+            //     }
+            // }
+        }
+    }
+
+    void operator()(const std::string& field, Ref<Asset>& asset) {
+        if (dir == SAVE) {
+            j[field] = asset->uuid;
+        } else if (j.contains(field)) {
+            asset = AssetManager2::Instance().Get(j[field]);
+        }
+    }
+};
+
 enum class AssetType {
     Invalid,
     Texture,
@@ -25,7 +146,7 @@ struct Asset {
     UUID uuid = 0;
     AssetType type = AssetType::Invalid;
     virtual ~Asset();
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s) = 0;
 };
 
 struct TextureAsset : Asset {
@@ -34,7 +155,7 @@ struct TextureAsset : Asset {
     int width;
     int height;
     TextureAsset();
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s);
 };
 
 struct MeshAsset : Asset {
@@ -48,7 +169,7 @@ struct MeshAsset : Asset {
     std::vector<u32> indices;
 
     MeshAsset();
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s);
 };
 
 struct MaterialAsset : Asset {
@@ -63,7 +184,7 @@ struct MaterialAsset : Asset {
     Ref<TextureAsset> metallicRoughnessMap;
 
     MaterialAsset();
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s);
 };
 
 enum class NodeType {
@@ -81,7 +202,7 @@ struct Node {
     glm::vec3 rotation;
     glm::vec3 scale;
 
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s);
     void AddChildren(Ref<Node> node);
 };
 
@@ -89,8 +210,25 @@ struct MeshNode : Node {
     Ref<MeshAsset> mesh;
     Ref<MaterialAsset> material;
 
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s);
 };
+
+/*
+scene {
+    "nodes": [
+        {
+            "uuid": 1
+            "children": [
+                {
+
+                }
+            ]
+        }
+    ]
+
+    1 é pai do 2
+}
+*/
 
 struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
@@ -103,7 +241,7 @@ struct SceneAsset : Asset {
     }
 
     SceneAsset();
-    virtual void Serialize(Json& j, int dir);
+    virtual void Serialize(Serializer& s);
 };
 
 struct AssetManager2 {
@@ -119,6 +257,9 @@ struct AssetManager2 {
     Ref<T> Get(UUID uuid) {
         return std::dynamic_pointer_cast<T>(assets[uuid]);
     }
+    Ref<Asset> Get(UUID uuid) {
+        return assets[uuid];
+    }
 
     template<typename T>
     void SerializeAsset(Ref<T>& asset, Json& j, int dir) {
@@ -133,13 +274,25 @@ struct AssetManager2 {
     void OnImgui();
 
     template<typename T>
-    Ref<T> CreateAsset(const std::string& name) {
-        UUID uuid = NewUUID();
+    Ref<T> CreateAsset(const std::string& name, UUID uuid = 0) {
+        if (uuid == 0) {
+            uuid = NewUUID();
+        }
         Ref<T> a = std::make_shared<T>();
         a->name = name;
         a->uuid = uuid;
         assets[uuid] = a;
         return a;
+    }
+
+    Ref<Asset> CreateAsset(AssetType type, const std::string& name, UUID uuid = 0) {
+        switch (type) {
+            case AssetType::Texture: return CreateAsset<TextureAsset>(name, uuid);
+            case AssetType::Material: return CreateAsset<MaterialAsset>(name, uuid);
+            case AssetType::Mesh: return CreateAsset<MeshAsset>(name, uuid);
+            case AssetType::Scene: return CreateAsset<SceneAsset>(name, uuid);
+            default: DEBUG_ASSERT(false, "Invalid asset type {}.", type);
+        }
     }
 
 private:
