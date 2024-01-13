@@ -7,34 +7,7 @@
 
 #include <random>
 
-void to_json(Json& j, const glm::vec3& v) {
-    j = Json{v.x, v.y, v.z};
-}
-
-void to_json(Json& j, const glm::vec4& v) {
-    j = Json{v.x, v.y, v.z, v.w};
-}
-
-void from_json(const Json& j, glm::vec4& v) {
-    if (j.is_array() && j.size() == 4) {
-        v.x = j[0];
-        v.y = j[1];
-        v.z = j[2];
-        v.w = j[3];
-    }
-}
-
-void from_json(const Json& j, glm::vec3& v) {
-    if (j.is_array() && j.size() == 3) {
-        v.x = j[0];
-        v.y = j[1];
-        v.z = j[2];
-    }
-}
-
 #define SERIALIZE(name, var) if (dir == 0) { if (j.contains(name)) {from_json(j.at(name), var);}} else {to_json(j[name], var);}
-
-namespace {
 
 std::string const base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -137,25 +110,35 @@ inline std::vector<u8> DecodeBase64(std::string const& input) {
 
     return ret;
 }
-}
+
+Object::~Object()
+{}
 
 Asset::~Asset()
 {}
 
 TextureAsset::TextureAsset() {
-    type = AssetType::Texture;
+    type = ObjectType::TextureAsset;
 }
 
 MeshAsset::MeshAsset() {
-    type = AssetType::Mesh;
+    type = ObjectType::MeshAsset;
 }
 
 MaterialAsset::MaterialAsset() {
-    type = AssetType::Material;
+    type = ObjectType::MaterialAsset;
 }
 
 SceneAsset::SceneAsset() {
-    type = AssetType::Scene;
+    type = ObjectType::SceneAsset;
+}
+
+Node::Node() {
+    type = ObjectType::Node;
+}
+
+MeshNode::MeshNode() {
+    type = ObjectType::MeshNode;
 }
 
 void TextureAsset::Serialize(Serializer& s) {
@@ -171,28 +154,31 @@ void MeshAsset::Serialize(Serializer& s) {
 }
 
 void MaterialAsset::Serialize(Serializer& s) {
-    s("color", color);
-    s("emission", emission);
+    //s("color", color);
+    //s("emission", emission);
     s("metallic", metallic);
     s("roughness", roughness);
-    s("colorMap", colorMap);
-    s("aoMap", aoMap);
-    s("emissionMap", emissionMap);
-    s("normalMap", normalMap);
-    s("metallicRoughnessMap", metallicRoughnessMap);
+    //s("colorMap", colorMap);
+    //s("aoMap", aoMap);
+    //s("emissionMap", emissionMap);
+    //s("normalMap", normalMap);
+    //s("metallicRoughnessMap", metallicRoughnessMap);
 }
 
 void SceneAsset::Serialize(Serializer& s) {
-
-
+    s("nodes", nodes);
 }
 
 void Node::Serialize(Serializer& s) {
-
+    //s("children", children);
+    //s("position", position);
+    //s("rotation", rotation);
+    //s("scale", scale);
 }
 
 void MeshNode::Serialize(Serializer& s) {
-
+    //s("mesh", mesh);
+    //s("material", material);
 }
 
 void AssetManager2::Serialize(Json& j, int dir) {
