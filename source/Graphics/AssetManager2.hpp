@@ -12,15 +12,15 @@ template<typename T>
 using Ref = std::shared_ptr<T>;
 using Json = nlohmann::json;
 
-void to_json(Json& j, const glm::vec3& v) {
+inline void to_json(Json& j, const glm::vec3& v) {
     j = Json{v.x, v.y, v.z};
 }
 
-void to_json(Json& j, const glm::vec4& v) {
+inline void to_json(Json& j, const glm::vec4& v) {
     j = Json{v.x, v.y, v.z, v.w};
 }
 
-void from_json(const Json& j, glm::vec4& v) {
+inline void from_json(const Json& j, glm::vec4& v) {
     if (j.is_array() && j.size() == 4) {
         v.x = j[0];
         v.y = j[1];
@@ -29,14 +29,13 @@ void from_json(const Json& j, glm::vec4& v) {
     }
 }
 
-void from_json(const Json& j, glm::vec3& v) {
+inline void from_json(const Json& j, glm::vec3& v) {
     if (j.is_array() && j.size() == 3) {
         v.x = j[0];
         v.y = j[1];
         v.z = j[2];
     }
 }
-
 
 struct Serializer;
 
@@ -58,6 +57,7 @@ struct Object {
     std::string name = "Unintialized";
     UUID uuid = 0;
     ObjectType type = ObjectType::Invalid;
+
     virtual ~Object();
     virtual void Serialize(Serializer& s) = 0;
 };
@@ -69,9 +69,10 @@ struct Asset : Object {
 
 struct TextureAsset : Asset {
     std::vector<u8> data;
-    int channels;
-    int width;
-    int height;
+    int channels = 0;
+    int width = 0;
+    int height = 0;
+
     TextureAsset();
     virtual void Serialize(Serializer& s);
 };
@@ -107,9 +108,9 @@ struct MaterialAsset : Asset {
 
 struct Node : Object {
     std::vector<Ref<Node>> children;
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 rotation = glm::vec3(0.0f);
+    glm::vec3 scale = glm::vec3(1.0f);
 
     Node();
     virtual void Serialize(Serializer& s);
@@ -142,6 +143,8 @@ struct AssetManager2 {
 
     void Serialize(Json& j, int dir);
     void Import(const std::filesystem::path& path);
+    void OnImgui();
+    void Clear();
 
     bool IsTexture(const std::filesystem::path& path) const;
     bool IsScene(const std::filesystem::path& path) const;
@@ -150,6 +153,7 @@ struct AssetManager2 {
     Ref<T> Get(UUID uuid) {
         return std::dynamic_pointer_cast<T>(assets[uuid]);
     }
+
     Ref<Asset> Get(UUID uuid) {
         return assets[uuid];
     }
@@ -163,8 +167,6 @@ struct AssetManager2 {
             j = asset->uuid;
         }
     }
-
-    void OnImgui();
 
     template<typename T>
     Ref<T> CreateObject(const std::string& name, UUID uuid = 0) {
@@ -196,19 +198,12 @@ struct AssetManager2 {
         }
     }
 
-    bool IsAsset(ObjectType type) {
-        return type == ObjectType::TextureAsset || type == ObjectType::MaterialAsset || type == ObjectType::MeshAsset || type == ObjectType::MaterialAsset;
-    }
-
 private:
-    void ImportTexture(const std::filesystem::path& path);
-    void ImportScene(const std::filesystem::path& path);
-
     std::unordered_map<UUID, Ref<Asset>> assets;
 
-    UUID nextUUID = 1;
     UUID NewUUID();
-
+    void ImportTexture(const std::filesystem::path& path);
+    void ImportScene(const std::filesystem::path& path);
     void ImportSceneGLTF(const std::filesystem::path& path);
     void ImportSceneOBJ(const std::filesystem::path& path);
 };
@@ -217,7 +212,7 @@ struct Serializer {
     Json& j;
     int dir = 0;
     inline static constexpr int LOAD = 0;
-    inline static constexpr int SAVE = 0;
+    inline static constexpr int SAVE = 1;
 
     Serializer(Json& j, int dir)
         : j(j)
@@ -225,35 +220,35 @@ struct Serializer {
     {}
 
     template<typename T>
-    void Serialize(Ref<T>& asset) {
+    void Serialize(Ref<T>& object) {
         if (dir == LOAD) {
-            DEBUG_ASSERT(j.contains("type") && j.contains("name") && j.contains("UUID"), "Asset doens't contain required fields.");
+            DEBUG_ASSERT(j.contains("type") && j.contains("name") && j.contains("uuid"), "Object doens't contain required fields.");
             ObjectType type = j["type"];
             std::string name = j["name"];
             UUID uuid = j["uuid"];
-            asset = AssetManager2::Instance().Create<T>(type, name, uuid);
+            object = std::dynamic_pointer_cast<T>(AssetManager2::Instance().CreateObject(type, name, uuid));
             Serializer s(j, dir);
-            asset->Serialize(s);
+            object->Serialize(s);
         } else {
             Serializer s(j, dir);
-            j["type"] = asset->type;
-            j["name"] = asset->name;
-            j["uuid"] = asset->uuid;
-            asset->Serialize(s);
+            j["type"] = object->type;
+            j["name"] = object->name;
+            j["uuid"] = object->uuid;
+            object->Serialize(s);
         }
     }
 
     template<typename T>
     void operator()(const std::string& field, T& value) {
         if (dir == SAVE) {
-            j[field] = value;
+            to_json(j[field], value);
         } else if (j.contains(field)) {
-            value = j[field];
+            from_json(j[field], value);
         }
     }
 
     template<typename T>
-    void operator()(const std::string& field, std::vector<T>& v) {
+    void Vector(const std::string& field, std::vector<T>& v) {
         if constexpr (std::is_pod_v<T>) {
             if (dir == SAVE) {
                 j[field] = EncodeBase64((u8*)v.data(), v.size() * sizeof(T));
@@ -283,11 +278,12 @@ struct Serializer {
         }
     }
 
-    void operator()(const std::string& field, Ref<Asset>& object) {
+    template <typename T>
+    void Asset(const std::string& field, Ref<T>& object) {
         if (dir == SAVE) {
             j[field] = object->uuid;
         } else if (j.contains(field)) {
-            object = AssetManager2::Instance().Get(j[field]);
+            object = AssetManager2::Instance().Get<T>(j[field]);
         }
     }
 };

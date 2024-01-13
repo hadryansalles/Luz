@@ -50,7 +50,8 @@ public:
         Json j;
         AssetManager2::Instance().Serialize(j, 1);
         LOG_INFO("SERIALIZE DUMP {}", j.dump(4));
-        return;
+        AssetManager2::Instance().Clear();
+        AssetManager2::Instance().Serialize(j, 0);
         MainLoop();
         Finish();
     }
@@ -213,6 +214,7 @@ private:
                     LogicalDevice::OnImgui();
                     SwapChain::OnImgui();
                     PBRGraphicsPipeline::OnImgui();
+                    AssetManager2::Instance().OnImgui();
                     scene.camera.OnImgui();
                     ImGui::EndTabItem();
                 }

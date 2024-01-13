@@ -142,52 +142,73 @@ MeshNode::MeshNode() {
 }
 
 void TextureAsset::Serialize(Serializer& s) {
-    s("data", data);
+    s.Vector("data", data);
     s("width", width);
     s("height", height);
     s("channels", channels);
 }
 
 void MeshAsset::Serialize(Serializer& s) {
-    s("vertices", vertices);
-    s("indices", indices);
+    s.Vector("vertices", vertices);
+    s.Vector("indices", indices);
 }
 
 void MaterialAsset::Serialize(Serializer& s) {
-    //s("color", color);
-    //s("emission", emission);
+    s("color", color);
+    s("emission", emission);
     s("metallic", metallic);
     s("roughness", roughness);
-    //s("colorMap", colorMap);
-    //s("aoMap", aoMap);
-    //s("emissionMap", emissionMap);
-    //s("normalMap", normalMap);
-    //s("metallicRoughnessMap", metallicRoughnessMap);
+    s.Asset("colorMap", colorMap);
+    s.Asset("aoMap", aoMap);
+    s.Asset("emissionMap", emissionMap);
+    s.Asset("normalMap", normalMap);
+    s.Asset("metallicRoughnessMap", metallicRoughnessMap);
 }
 
 void SceneAsset::Serialize(Serializer& s) {
-    s("nodes", nodes);
+    s.Vector("nodes", nodes);
 }
 
 void Node::Serialize(Serializer& s) {
-    //s("children", children);
-    //s("position", position);
-    //s("rotation", rotation);
-    //s("scale", scale);
+    s.Vector("children", children);
+    s("position", position);
+    s("rotation", rotation);
+    s("scale", scale);
 }
 
 void MeshNode::Serialize(Serializer& s) {
-    //s("mesh", mesh);
-    //s("material", material);
+    s.Asset("mesh", mesh);
+    s.Asset("material", material);
 }
 
 void AssetManager2::Serialize(Json& j, int dir) {
-    // if (dir == 1) {
-    //     for (auto& assetPair : assets) {
-    //         Json& assetJson = j[std::to_string(assetPair.first)];
-    //         assetPair.second->Serialize(assetJson, dir);
-    //     }
-    // }
+     if (dir == 1) {
+         for (auto& assetPair : assets) {
+             Json assetJson;
+             Serializer s = Serializer(assetJson, dir);
+             s.Serialize(assetPair.second);
+             j.push_back(assetJson);
+         }
+     } else {
+         for (auto& assetJson : j) {
+             Ref<Asset> asset;
+             Serializer s = Serializer(assetJson, dir);
+             s.Serialize(asset);
+         }
+     }
+}
+
+void AssetManager2::Clear() {
+    assets.clear();
+}
+
+void AssetManager2::OnImgui() {
+     for (auto& assetPair : assets) {
+         auto& asset = assetPair.second;
+         if (ImGui::TreeNode(&asset->uuid, "%s #%lld", asset->name.c_str(), asset->uuid)) {
+             ImGui::TreePop();
+         }
+     }
 }
 
 void AssetManager2::Import(const std::filesystem::path& path) {
