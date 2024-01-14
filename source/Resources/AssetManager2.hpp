@@ -147,7 +147,7 @@ struct AssetManager2 {
 
     template<typename T>
     Ref<T> CreateAsset(const std::string& name, UUID uuid = 0) {
-        auto& a = CreateObject<T>(name, uuid);
+        auto a = CreateObject<T>(name, uuid);
         assets[a->uuid] = a;
         return a;
     }
