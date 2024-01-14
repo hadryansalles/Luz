@@ -160,7 +160,7 @@ struct AssetManager2 {
             case ObjectType::SceneAsset: return CreateAsset<SceneAsset>(name, uuid);
             case ObjectType::Node: return CreateObject<Node>(name, uuid);
             case ObjectType::MeshNode: return CreateObject<MeshNode>(name, uuid);
-            default: DEBUG_ASSERT(false, "Invalid object type {}.", type);
+            default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
 
