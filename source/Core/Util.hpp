@@ -7,7 +7,7 @@ std::vector<u8> DecodeBase64(std::string const& input);
 
 struct TimeScope {
     std::string title;
-    std::chrono::steady_clock::time_point start;
+    std::chrono::high_resolution_clock::time_point start;
 
     TimeScope(const std::string& title);
     ~TimeScope();
