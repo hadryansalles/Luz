@@ -17,6 +17,7 @@
 #include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
 #include "AssetManager2.hpp"
+#include "AssetIO.hpp"
 
 #include <stb_image.h>
 
@@ -43,15 +44,6 @@ public:
         // WaitToInit(4);
         Setup();
         Create();
-        AssetManager2::Instance().Import("assets/test.png");
-        AssetManager2::Instance().CreateAsset<TextureAsset>("OI");
-        AssetManager2::Instance().CreateAsset<TextureAsset>("OI2");
-        AssetManager2::Instance().CreateAsset<MeshAsset>("mesh?");
-        Json j;
-        AssetManager2::Instance().Serialize(j, 1);
-        LOG_INFO("SERIALIZE DUMP {}", j.dump(4));
-        AssetManager2::Instance().Clear();
-        AssetManager2::Instance().Serialize(j, 0);
         MainLoop();
         Finish();
     }

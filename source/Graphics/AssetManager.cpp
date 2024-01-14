@@ -5,13 +5,8 @@
 #include "LogicalDevice.hpp"
 #include "RayTracing.hpp"
 
-#define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-
-#define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#// include <stb_image.h>
+#include <stb_image.h>
 #include <tiny_gltf.h>
 
 #include <imgui/imgui_impl_vulkan.h>
@@ -215,7 +210,7 @@ Entity* AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
     std::filesystem::path parentPath = path.parent_path();
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(), parentPath.string().c_str())) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str(), parentPath.string().c_str(), true)) {
         LOG_ERROR("{} {}", warn, err);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
