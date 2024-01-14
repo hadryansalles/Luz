@@ -94,6 +94,7 @@ else()
 endif()
 message("GLSL VALIDATOR ${GLSL_VALIDATOR}")
 add_compile_definitions(GLSL_VALIDATOR="${GLSL_VALIDATOR}")
+add_compile_definitions(LUZ_ENGINE)
 
 # assets
 if(UNIX)

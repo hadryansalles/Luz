@@ -92,8 +92,25 @@ struct Node : Object {
     glm::vec3 rotation = glm::vec3(0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
 
+    glm::mat4 parentTransform;
+    glm::mat4 worldTransform;
+
     Node();
     virtual void Serialize(Serializer& s);
+
+    template<typename T>
+    void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
+        for (auto& node : children) {
+            if (node->type == type) {
+                all.emplace_back(std::dynamic_pointer_cast<T>(node));
+            }
+            node->GetAll(type, all);
+        }
+    }
+
+    glm::mat4 GetLocalTransform();
+    glm::mat4 GetWorldTransform();
+    void UpdateTransforms();
 };
 
 struct MeshNode : Node {
@@ -114,8 +131,19 @@ struct SceneAsset : Asset {
         return node;
     }
 
+    template<typename T>
+    void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
+        for (auto& node : nodes) {
+            if (node->type == type) {
+                all.emplace_back(std::dynamic_pointer_cast<T>(node));
+            }
+            node->GetAll(type, all);
+        }
+    }
+
     SceneAsset();
     virtual void Serialize(Serializer& s);
+    void UpdateTransforms();
 };
 
 struct AssetManager2 {
@@ -123,6 +151,7 @@ struct AssetManager2 {
 
     void LoadProject(const std::filesystem::path& path);
     void SaveProject(const std::filesystem::path& path);
+    Ref<SceneAsset> GetInitialScene();
     void OnImgui();
 
     template<typename T>
@@ -149,6 +178,9 @@ struct AssetManager2 {
     Ref<T> CreateAsset(const std::string& name, UUID uuid = 0) {
         auto a = CreateObject<T>(name, uuid);
         assets[a->uuid] = a;
+        if (a->type == ObjectType::SceneAsset && !initialScene) {
+            initialScene = a->uuid;
+        }
         return a;
     }
 
@@ -167,4 +199,5 @@ struct AssetManager2 {
 private:
     std::unordered_map<UUID, Ref<Asset>> assets;
     UUID NewUUID();
+    UUID initialScene;
 };

@@ -18,6 +18,7 @@
 #include "DeferredRenderer.hpp"
 #include "AssetManager2.hpp"
 #include "AssetIO.hpp"
+#include "Managers.hpp"
 
 #include <stb_image.h>
 
@@ -53,6 +54,7 @@ private:
     ImDrawData* imguiDrawData = nullptr;
     bool drawUi = true;
     Scene scene;
+    Ref<Camera> mainCamera;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -71,6 +73,7 @@ private:
         AssetManager::Setup();
         SetupImgui();
         scene.Setup();
+        mainCamera = std::make_shared<Camera>();
     }
 
     void Create() {
@@ -80,6 +83,7 @@ private:
 
     void CreateVulkan() {
         LUZ_PROFILE_FUNC();
+        Managers::assets.LoadProject("assets/project.luz");
         Window::Create();
         Instance::Create();
         PhysicalDevice::Create();
@@ -93,6 +97,9 @@ private:
         DeferredShading::Create();
         AssetManager::Create();
         scene.CreateResources();
+        Managers::gpuScene.SetScene(Managers::assets.GetInitialScene());
+        Managers::gpuScene.SetCamera(mainCamera);
+        Managers::gpuScene.CreateResources();
         createUniformProjection();
     }
 
@@ -122,6 +129,7 @@ private:
         LUZ_PROFILE_FUNC();
         PBRGraphicsPipeline::Destroy();
         scene.DestroyResources();
+        Managers::gpuScene.DestroyResources();
         
         DestroyImgui();
         DeferredShading::Destroy();
@@ -140,6 +148,7 @@ private:
                 selectedTransform = &scene.selectedEntity->transform;
             }
             scene.camera.Update(selectedTransform);
+            mainCamera->Update(selectedTransform);
             drawFrame();
             if (Window::IsKeyPressed(GLFW_KEY_F1)) {
                 drawUi = !drawUi;
@@ -347,6 +356,7 @@ private:
         SwapChain::Create();
         PBRGraphicsPipeline::Create();
         scene.CreateResources();
+        Managers::gpuScene.CreateResources();
         CreateImgui();
         DeferredShading::Create();
         createUniformProjection();
@@ -357,11 +367,13 @@ private:
         // the easiest way to fix this is fliping the scaling factor of the y axis
         auto ext = SwapChain::GetExtent();
         scene.camera.SetExtent(ext.width, ext.height);
+        mainCamera->SetExtent(ext.width, ext.height);
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
         LUZ_PROFILE_FUNC();
         scene.UpdateResources(currentImage);
+        Managers::gpuScene.UpdateResources(currentImage);
     }
 
     void SetupImgui() {

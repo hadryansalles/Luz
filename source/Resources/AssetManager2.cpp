@@ -32,6 +32,32 @@ Node::Node() {
     type = ObjectType::Node;
 }
 
+glm::mat4 Node::GetLocalTransform() {
+    glm::mat4 rotationMat = glm::toMat4(glm::quat(glm::radians(rotation)));
+    glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), position);
+    glm::mat4 scaleMat = glm::scale(scale);
+    return translationMat * scaleMat * rotationMat;
+}
+
+glm::mat4 Node::GetWorldTransform() {
+    return parentTransform * GetLocalTransform();
+}
+
+void Node::UpdateTransforms() {
+    worldTransform = GetWorldTransform();
+    for (auto& child : children) {
+        child->parentTransform = worldTransform;
+        child->UpdateTransforms();
+    }
+}
+
+void SceneAsset::UpdateTransforms() {
+    for (auto& node : nodes) {
+        node->parentTransform = glm::mat4(1);
+        node->UpdateTransforms();
+    }
+}
+
 MeshNode::MeshNode() {
     type = ObjectType::MeshNode;
 }
@@ -76,6 +102,12 @@ void MeshNode::Serialize(Serializer& s) {
     s.Asset("material", material);
 }
 
+Ref<SceneAsset> AssetManager2::GetInitialScene() {
+    if (initialScene) {
+        return Get<SceneAsset>(initialScene);
+    }
+}
+
 void AssetManager2::LoadProject(const std::filesystem::path& path) {
     Json j;
     int dir = Serializer::LOAD;
@@ -84,6 +116,9 @@ void AssetManager2::LoadProject(const std::filesystem::path& path) {
         Ref<Asset> asset;
         Serializer s = Serializer(assetJson, dir);
         s.Serialize(asset);
+    }
+    if (j.contains("initialScene")) {
+        initialScene = j["initialScene"];
     }
 }
 
@@ -105,6 +140,7 @@ void AssetManager2::SaveProject(const std::filesystem::path& path) {
         s.Serialize(asset);
         j.push_back(assetJson);
     }
+    j["initialScene"] = initialScene;
 }
 
 void AssetManager2::OnImgui() {
