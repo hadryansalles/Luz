@@ -16,6 +16,8 @@
 #include "Scene.hpp"
 #include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
+#include "AssetManager2.hpp"
+#include "AssetIO.hpp"
 
 #include <stb_image.h>
 
@@ -204,6 +206,7 @@ private:
                     LogicalDevice::OnImgui();
                     SwapChain::OnImgui();
                     PBRGraphicsPipeline::OnImgui();
+                    AssetManager2::Instance().OnImgui();
                     scene.camera.OnImgui();
                     ImGui::EndTabItem();
                 }
