@@ -6,7 +6,6 @@
 class PhysicalDevice {
 private:
     static inline std::vector<PhysicalDevice> allDevices;
-    static inline PhysicalDevice*             device             = nullptr;
     static inline int                         index              = -1;
     static inline bool                        isDirty            = true;
 
@@ -38,7 +37,6 @@ private:
     VkPhysicalDeviceFeatures         features{};
     VkSurfaceCapabilitiesKHR         capabilities{};
     VkPhysicalDeviceProperties       properties{};
-    VkPhysicalDeviceMemoryProperties memoryProperties{};
 
     std::vector<VkPresentModeKHR>        presentModes;
     std::vector<VkSurfaceFormatKHR>      surfaceFormats;
@@ -46,6 +44,8 @@ private:
     std::vector<VkQueueFamilyProperties> families;
 
 public:
+    static inline PhysicalDevice*             device             = nullptr;
+    VkPhysicalDeviceMemoryProperties memoryProperties{};
     static void Create();
     static void Destroy();
     static void OnImgui();
