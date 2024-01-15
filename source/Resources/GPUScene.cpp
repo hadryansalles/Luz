@@ -29,6 +29,26 @@ void GPUScene::CreateResources() {
 }
 
 void GPUScene::UpdateResources(int numFrame) {
+    auto& meshAssets = Managers::assets.GetAll<MeshAsset>(ObjectType::MeshAsset);
+    auto& textureAssets = Managers::assets.GetAll<TextureAsset>(ObjectType::TextureAsset);
+    for (auto& asset : meshAssets) {
+        if (meshes.find(asset->uuid) == meshes.end()) {
+            GPUMesh& mesh = meshes[asset->uuid];
+            mesh.indexCount = asset->indices.size();
+            mesh.vertexCount = asset->vertices.size();
+            BufferManager::CreateVertexBuffer(mesh.vertexBuffer, asset->vertices.data(), sizeof(MeshAsset::MeshVertex) * asset->vertices.size());
+            BufferManager::CreateIndexBuffer(mesh.indexBuffer, asset->indices.data(), sizeof(uint32_t) * asset->indices.size());
+        }
+    }
+    for (auto& asset : textureAssets) {
+        if (textures.find(asset->uuid) == textures.end()) {
+            GPUTexture& texture = textures[asset->uuid];
+            TextureResource& res = textures[id];
+            TextureDesc& desc = textureDescs[id];
+            CreateTextureResource(, res);
+        }
+    }
+
     LUZ_PROFILE_FUNC();
     sceneAsset->UpdateTransforms();
     std::vector<ModelBlock2> models(meshNodes.size());

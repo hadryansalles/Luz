@@ -10,7 +10,6 @@ struct SceneAsset;
 struct MeshNode;
 
 struct GPUMesh {
-    uint32_t rid;
     BufferResource vertexBuffer;
     BufferResource indexBuffer;
     u32 vertexCount;

@@ -92,8 +92,8 @@ struct Node : Object {
     glm::vec3 rotation = glm::vec3(0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
 
-    glm::mat4 parentTransform;
-    glm::mat4 worldTransform;
+    glm::mat4 parentTransform = glm::mat4(1.0f);
+    glm::mat4 worldTransform = glm::mat4(1.0f);
 
     Node();
     virtual void Serialize(Serializer& s);
@@ -161,6 +161,17 @@ struct AssetManager2 {
 
     Ref<Asset> Get(UUID uuid) {
         return assets[uuid];
+    }
+
+    template<typename T>
+    std::vector<Ref<T>> GetAll(ObjectType type) {
+        std::vector<Ref<T>> all;
+        for (auto& pair : assets) {
+            if (pair.second->type == type) {
+                all.emplace_back(std::dynamic_pointer_cast<T>(asset.second));
+            }
+        }
+        return all;
     }
 
     template<typename T>
