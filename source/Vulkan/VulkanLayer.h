@@ -51,7 +51,8 @@ struct Buffer {
 
 Buffer CreateBuffer(uint32_t size, Usage usage, Memory memory, const std::string& name = "");
 
-void Init(GLFWwindow* window);
+void Init(GLFWwindow* window, uint32_t width, uint32_t height);
+void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
 void* Map(Buffer buffer);
 void Unmap(Buffer buffer);
@@ -62,7 +63,7 @@ struct Context {
     VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
     std::string applicationName = "Luz";
-    std::string engineName = "Vulkan Rendering Engine";
+    std::string engineName = "Luz";
 
     uint32_t apiVersion;
     std::vector<bool> activeLayers;
@@ -113,17 +114,55 @@ struct Context {
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
+    VkSwapchainKHR swapChain = VK_NULL_HANDLE;
+    std::vector<VkImage> swapChainImages;
+    std::vector<VkImageView> swapChainViews;
+    std::vector<VkCommandBuffer> commandBuffers;
+    std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkFence> inFlightFences;
+    std::vector<VkFence> imagesInFlight;
+
+    uint32_t additionalImages = 1;
+    uint32_t framesInFlight = 2;
+    VkFormat depthFormat;
+    VkExtent2D swapChainExtent;
+    uint32_t swapChainCurrentFrame;
+    bool swapChainDirty = true;
+    int currentImageIndex = 0;
+
+    // preferred, warn if not available
+    static inline VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    static inline VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    static inline VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    static inline VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+
     void CreateInstance(GLFWwindow* window);
-    void CreatePhysicalDevice();
-    void CreateDevice();
-    void OnSurfaceUpdate();
     void DestroyInstance();
+
+    void CreatePhysicalDevice();
+
+    void CreateDevice();
     void DestroyDevice();
+
+    void CreateSurfaceFormats();
+
+    void CreateSwapChain(uint32_t width, uint32_t height);
+    void DestroySwapChain();
+
     uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
     bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+    uint32_t Acquire();
+    void SubmitAndPresent(uint32_t imageIndex);
+
+    VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
+    VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+    VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
 };
+
 // todo: move to private
 Context& ctx();
 

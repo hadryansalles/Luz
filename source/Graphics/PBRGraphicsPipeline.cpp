@@ -2,7 +2,7 @@
 
 #include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
-#include "SwapChain.hpp"
+#include "VulkanLayer.h"
 #include "AssetManager.hpp"
 
 void PBRGraphicsPipeline::Setup() {
@@ -34,7 +34,7 @@ void PBRGraphicsPipeline::Setup() {
     desc.rasterizer.depthBiasSlopeFactor = 0.0f;
 
     desc.multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    desc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
+    desc.multisampling.rasterizationSamples = vkw::ctx().numSamples;
     desc.multisampling.sampleShadingEnable = VK_FALSE;
     desc.multisampling.minSampleShading = 0.5f;
     desc.multisampling.pSampleMask = nullptr;
@@ -76,7 +76,7 @@ void PBRGraphicsPipeline::Setup() {
 }
 
 void PBRGraphicsPipeline::Create() {
-    desc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
+    desc.multisampling.rasterizationSamples = vkw::ctx().numSamples;
     GraphicsPipelineManager::CreatePipeline(desc, res);
 }
 

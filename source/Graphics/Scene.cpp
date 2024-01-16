@@ -4,7 +4,7 @@
 #include "GraphicsPipelineManager.hpp"
 #include "Window.hpp"
 #include "RayTracing.hpp"
-#include "SwapChain.hpp"
+#include "VulkanLayer.h"
 
 #include <imgui/imgui_stdlib.h>
 
@@ -69,7 +69,7 @@ void UpdateBuffers(int numFrame) {
 void UpdateResources(int numFrame) {
     LUZ_PROFILE_FUNC();
     scene.numLights = 0;
-    scene.viewSize = glm::vec2(SwapChain::GetExtent().width, SwapChain::GetExtent().height);
+    scene.viewSize = glm::vec2(vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height);
     for (int i = 0; i < modelEntities.size(); i++) {
         Model* model = modelEntities[i];
         model->id = i;

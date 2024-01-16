@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "DeferredRenderer.hpp"
-#include "SwapChain.hpp"
 #include "Texture.hpp"
 #include "RenderingPass.hpp"
 #include "AssetManager.hpp"
@@ -129,7 +128,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
     renderingInfo.viewMask = 0;
     renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = SwapChain::GetExtent();
+    renderingInfo.renderArea.extent = vkw::ctx().swapChainExtent;
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
     renderingInfo.colorAttachmentCount = opaquePass.colorAttachInfos.size();
@@ -169,7 +168,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
     renderingInfo.viewMask = 0;
     renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = SwapChain::GetExtent();
+    renderingInfo.renderArea.extent = vkw::ctx().swapChainExtent;
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
     renderingInfo.colorAttachmentCount = lightPass.colorAttachInfos.size();
@@ -200,11 +199,11 @@ void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
 
     constants.imageType = ctx.presentType;
 
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, SwapChain::GetImage(numFrame));
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, vkw::ctx().swapChainImages[numFrame]);
 
     VkRenderingAttachmentInfoKHR colorAttach{};
     colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    colorAttach.imageView = SwapChain::GetView(numFrame);
+    colorAttach.imageView = vkw::ctx().swapChainViews[numFrame];
     colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttach.resolveMode = VK_RESOLVE_MODE_NONE;
     colorAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -215,7 +214,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
     renderingInfo.viewMask = 0;
     renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = SwapChain::GetExtent();
+    renderingInfo.renderArea.extent = vkw::ctx().swapChainExtent;
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.flags = 0;
     renderingInfo.colorAttachmentCount = 1;
@@ -233,7 +232,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
 
 void EndPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
     ctx.vkCmdEndRendering(commandBuffer);
-    ImageManager::BarrierColorAttachmentToPresent(commandBuffer, SwapChain::GetImage(numFrame));
+    ImageManager::BarrierColorAttachmentToPresent(commandBuffer, vkw::ctx().swapChainImages[numFrame]);
 }
 
 void OnImgui(int numFrame) {

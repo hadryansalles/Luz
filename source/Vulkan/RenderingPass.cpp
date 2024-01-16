@@ -2,7 +2,6 @@
 #include "RenderingPass.hpp"
 #include "ImageManager.hpp"
 #include "Texture.hpp"
-#include "SwapChain.hpp"
 #include "VulkanLayer.h"
 
 void RenderingPassManager::Create() {
@@ -20,7 +19,7 @@ void RenderingPassManager::Destroy() {
 void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
     LUZ_PROFILE_FUNC();
     GraphicsPipelineManager::CreatePipeline(pass.gpoDesc, pass.gpo);
-    VkExtent2D extent =  SwapChain::GetExtent();
+    VkExtent2D extent =  vkw::ctx().swapChainExtent;
 
     if (pass.createAttachments) {
         for (int i = 0; i < pass.gpoDesc.colorFormats.size(); i++) {
@@ -30,7 +29,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
             desc.mipLevels = 1;
             desc.format = pass.gpoDesc.colorFormats[i];
             desc.tiling = VK_IMAGE_TILING_OPTIMAL;
-            desc.numSamples = SwapChain::GetNumSamples();
+            desc.numSamples = vkw::ctx().numSamples;
             desc.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
             desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
             desc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -82,7 +81,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
             desc.mipLevels = 1;
             desc.format = pass.gpoDesc.depthFormat;
             desc.tiling = VK_IMAGE_TILING_OPTIMAL;
-            desc.numSamples = SwapChain::GetNumSamples();
+            desc.numSamples = vkw::ctx().numSamples;
             desc.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
             desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
             desc.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;

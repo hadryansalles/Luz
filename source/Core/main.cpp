@@ -2,7 +2,6 @@
 
 #include "ImageManager.hpp"
 #include "Window.hpp"
-#include "SwapChain.hpp"
 #include "Camera.hpp"
 #include "Shader.hpp"
 #include "GraphicsPipelineManager.hpp"
@@ -76,11 +75,11 @@ private:
     void CreateVulkan() {
         LUZ_PROFILE_FUNC();
         Window::Create();
-        vkw::Init(Window::GetGLFWwindow());
+        vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         // Instance::Create();
         // PhysicalDevice::Create();
         //LogicalDevice::Create();
-        SwapChain::Create();
+        //SwapChain::Create();
         DEBUG_TRACE("Finish creating SwapChain.");
         GraphicsPipelineManager::Create();
         PBRGraphicsPipeline::Create();
@@ -106,9 +105,6 @@ private:
         GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
         vkw::Destroy();
-        //LogicalDevice::Destroy();
-        //PhysicalDevice::Destroy();
-        //Instance::Destroy();
         Window::Destroy();
     }
 
@@ -120,8 +116,8 @@ private:
         DestroyImgui();
         DeferredShading::Destroy();
 
-        SwapChain::Destroy();
-        LOG_INFO("Destroyed SwapChain.");
+        //SwapChain::Destroy();
+        //LOG_INFO("Destroyed SwapChain.");
     }
 
     void MainLoop() {
@@ -169,7 +165,7 @@ private:
 
     bool DirtyFrameResources() {
         bool dirty = false;
-        dirty |= SwapChain::IsDirty();
+        dirty |= vkw::ctx().swapChainDirty;
         dirty |= Window::GetFramebufferResized();
         return dirty;
     }
@@ -177,7 +173,7 @@ private:
     ImVec2 ToScreenSpace(glm::vec3 position) {
         glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
-        auto ext = SwapChain::GetExtent();
+        const auto ext = vkw::ctx().swapChainExtent;
         screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
         screenSpace.y = (screenSpace.y + 1.0) * ext.height/2.0;
         return screenSpace;
@@ -195,10 +191,6 @@ private:
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
                 if (ImGui::BeginTabItem("Configuration")) {
                     Window::OnImgui();
-                    //Instance::OnImgui();
-                    //PhysicalDevice::OnImgui();
-                    //LogicalDevice::OnImgui();
-                    SwapChain::OnImgui();
                     PBRGraphicsPipeline::OnImgui();
                     Scene::camera.OnImgui();
                     ImGui::EndTabItem();
@@ -237,7 +229,7 @@ private:
         LUZ_PROFILE_FUNC();
         auto device = vkw::ctx().device;
         auto instance = vkw::ctx().instance;
-        auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
+        auto commandBuffer = vkw::ctx().commandBuffers[frameIndex];
 
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -251,8 +243,8 @@ private:
         DeferredShading::BeginOpaquePass(commandBuffer);
 
         DeferredShading::OpaqueConstants constants;
-        constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
-        constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+        constants.sceneBufferIndex = vkw::ctx().swapChainImages.size() * SCENE_BUFFER_INDEX + frameIndex;
+        constants.modelBufferIndex = vkw::ctx().swapChainImages.size() * MODELS_BUFFER_INDEX + frameIndex;
 
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;
@@ -292,16 +284,16 @@ private:
         LUZ_PROFILE_FUNC();
         imguiDrawFrame();
 
-        auto image = SwapChain::Acquire(); 
+        auto image = vkw::ctx().Acquire();
 
-        if (SwapChain::IsDirty()) {
+        if (vkw::ctx().swapChainDirty) {
             return;
         }
 
         updateUniformBuffer(image);
         updateCommandBuffer(image);
 
-        SwapChain::SubmitAndPresent(image);
+        vkw::ctx().SubmitAndPresent(image);
 
         frameCount = (frameCount + 1) % (1 << 15);
     }
@@ -318,9 +310,8 @@ private:
         Window::UpdateFramebufferSize();
         vkDeviceWaitIdle(device);
         DestroyFrameResources();
-        vkw::ctx().OnSurfaceUpdate();
-        //PhysicalDevice::OnSurfaceUpdate();
-        SwapChain::Create();
+        vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
+        //SwapChain::Create();
         PBRGraphicsPipeline::Create();
         Scene::CreateResources();
         CreateImgui();
@@ -331,7 +322,7 @@ private:
     void createUniformProjection() {
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
-        auto ext = SwapChain::GetExtent();
+        auto ext = vkw::ctx().swapChainExtent;
         Scene::camera.SetExtent(ext.width, ext.height);
     }
 
@@ -439,18 +430,14 @@ private:
         initInfo.PipelineCache = VK_NULL_HANDLE;
         initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
         initInfo.MinImageCount = 2;
-        initInfo.ImageCount = (uint32_t)SwapChain::GetNumFrames();
-        initInfo.MSAASamples = SwapChain::GetNumSamples();
+        initInfo.ImageCount = (uint32_t)vkw::ctx().swapChainImages.size();
+        initInfo.MSAASamples = vkw::ctx().numSamples;
         initInfo.Allocator = VK_NULL_HANDLE;
         initInfo.CheckVkResultFn = CheckVulkanResult;
         initInfo.UseDynamicRendering = true;
         initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
         ImGui_ImplVulkan_Init(&initInfo, nullptr);
         ImGui_ImplVulkan_CreateFontsTexture();
-        //auto commandBuffer = vkw::ctx().BeginSingleTimeCommands();
-        //ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
-        //vkw::ctx().EndSingleTimeCommands(commandBuffer);
-        //ImGui_ImplVulkan_DestroyFontUploadObjects();
     }
 
     void DestroyImgui() {

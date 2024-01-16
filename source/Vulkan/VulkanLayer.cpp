@@ -22,16 +22,25 @@ struct BufferResource : Resource {
     }
 };
 
-void Init(GLFWwindow* window) {
+void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     ctx().CreateInstance(window);
     ctx().CreatePhysicalDevice();
     ctx().CreateDevice();
+    ctx().CreateSurfaceFormats();
+    ctx().CreateSwapChain(width, height);
     // ctx().device = vkw::ctx().device;
     // ctx().allocator = ctx().allocator;
     // ctx().memoryProperties = ctx().memoryProperties;
 }
 
+void OnSurfaceUpdate(uint32_t width, uint32_t height) {
+    ctx().DestroySwapChain();
+    ctx().CreateSurfaceFormats();
+    ctx().CreateSwapChain(width, height);
+}
+
 void Destroy() {
+    ctx().DestroySwapChain();
     ctx().DestroyDevice();
     ctx().DestroyInstance();
 }
@@ -285,6 +294,21 @@ void Context::CreateInstance(GLFWwindow* glfwWindow) {
     LOG_INFO("Created VulkanInstance.");
 }
 
+void Context::DestroyInstance() {
+    activeLayersNames.clear();
+    activeExtensionsNames.clear();
+    if (debugMessenger) {
+        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
+        DEBUG_TRACE("Destroyed debug messenger.");
+        debugMessenger = nullptr;
+    }
+    vkDestroySurfaceKHR(instance, surface, allocator);
+    DEBUG_TRACE("Destroyed surface.");
+    vkDestroyInstance(instance, allocator);
+    DEBUG_TRACE("Destroyed instance.");
+    LOG_INFO("Destroyed VulkanInstance");
+}
+
 void Context::CreatePhysicalDevice() {
     LUZ_PROFILE_FUNC();
     // get all devices with Vulkan support
@@ -355,7 +379,6 @@ void Context::CreatePhysicalDevice() {
         }
     }
 
-    OnSurfaceUpdate();
 }
 
 void Context::CreateDevice() {
@@ -481,7 +504,16 @@ void Context::CreateDevice() {
     }
 }
 
-void Context::OnSurfaceUpdate() {
+void Context::DestroyDevice() {
+    vkDestroyCommandPool(device, commandPool, vkw::ctx().allocator);
+    vkDestroyDevice(device, vkw::ctx().allocator);
+    device = VK_NULL_HANDLE;
+    commandPool = VK_NULL_HANDLE;
+    presentQueue = VK_NULL_HANDLE;
+    graphicsQueue = VK_NULL_HANDLE;
+}
+
+void Context::CreateSurfaceFormats() {
     auto surface = vkw::ctx().surface;
 
     // get capabilities
@@ -514,28 +546,246 @@ void Context::OnSurfaceUpdate() {
     }
 }
 
-void Context::DestroyInstance() {
-    activeLayersNames.clear();
-    activeExtensionsNames.clear();
-    if (debugMessenger) {
-        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
-        DEBUG_TRACE("Destroyed debug messenger.");
-        debugMessenger = nullptr;
+void Context::CreateSwapChain(uint32_t width, uint32_t height) {
+    LUZ_PROFILE_FUNC();
+
+    if (numSamples > maxSamples) {
+        numSamples = maxSamples;
     }
-    vkDestroySurfaceKHR(instance, surface, allocator);
-    DEBUG_TRACE("Destroyed surface.");
-    vkDestroyInstance(instance, allocator);
-    DEBUG_TRACE("Destroyed instance.");
-    LOG_INFO("Destroyed VulkanInstance");
+
+    // create swapchain
+    {
+        const auto& capabilities = surfaceCapabilities;
+        VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(availableSurfaceFormats);
+        colorFormat = surfaceFormat.format;
+        colorSpace = surfaceFormat.colorSpace;
+        presentMode = ChoosePresentMode(availablePresentModes);
+        swapChainExtent = ChooseExtent(capabilities, width, height);
+
+        // acquire additional images to prevent waiting for driver's internal operations
+        uint32_t imageCount = framesInFlight + additionalImages;
+        
+        if (imageCount < capabilities.minImageCount) {
+            LOG_WARN("Querying less images than the necessary!");
+            imageCount = capabilities.minImageCount;
+        }
+
+        // prevent exceeding the max image count
+        if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
+            LOG_WARN("Querying more images than supported. imageCoun set to maxImageCount.");
+            imageCount = capabilities.maxImageCount;
+        }
+
+        VkSwapchainCreateInfoKHR createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        createInfo.surface = vkw::ctx().surface;
+        createInfo.minImageCount = imageCount;
+        createInfo.imageFormat = surfaceFormat.format;
+        createInfo.imageColorSpace = surfaceFormat.colorSpace;
+        createInfo.imageExtent = swapChainExtent;
+        // amount of layers each image consist of
+        // it's 1 unless we are developing some 3D stereoscopic app
+        createInfo.imageArrayLayers = 1;
+        // if we want to render to a separate image first to perform post-processing
+        // we should change this image usage
+        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        uint32_t queueFamilyIndices[] = { vkw::ctx().graphicsFamily, vkw::ctx().presentFamily };
+
+        // if the graphics family is different thant the present family
+        // we need to handle how the images on the swap chain will be accessed by the queues
+        if (vkw::ctx().graphicsFamily != vkw::ctx().presentFamily) {
+            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            createInfo.queueFamilyIndexCount = 2;
+            createInfo.pQueueFamilyIndices = queueFamilyIndices;
+        }
+        else {
+            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            createInfo.queueFamilyIndexCount = 0;
+            createInfo.pQueueFamilyIndices = nullptr;
+        }
+
+        // here we could specify a transformation to be applied on the images of the swap chain
+        createInfo.preTransform = capabilities.currentTransform;
+
+        // here we could blend the images with other windows in the window system
+        // to ignore this blending we set OPAQUE
+        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+        createInfo.presentMode = presentMode;
+        // here we clip pixels behind our window
+        createInfo.clipped = true;
+
+        // here we specify a handle to when the swapchain become invalid
+        // possible causes are changing settings or resizing window
+        createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+        auto res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain);
+        DEBUG_VK(res, "Failed to create swap chain!");
+
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+        swapChainImages.resize(imageCount);
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+    }
+
+    // create image views
+    swapChainViews.resize(swapChainImages.size());
+    for (size_t i = 0; i < swapChainImages.size(); i++) {
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = swapChainImages[i];
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = colorFormat;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount = 1;
+
+        auto res = vkCreateImageView(device, &viewInfo, allocator, &swapChainViews[i]);
+        DEBUG_VK(res, "Failed to create SwapChain image view!");
+    }
+
+    // create command buffers 
+    {
+        commandBuffers.resize(swapChainImages.size());
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = vkw::ctx().commandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
+
+        auto res = vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data());
+        DEBUG_VK(res, "Failed to allocate command buffers!");
+    }
+
+    // synchronization objects
+    {
+        imageAvailableSemaphores.resize(framesInFlight);
+        renderFinishedSemaphores.resize(framesInFlight);
+        inFlightFences.resize(framesInFlight);
+        imagesInFlight.resize(swapChainImages.size(), VK_NULL_HANDLE);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    
+        for (size_t i = 0; i < framesInFlight; i++) {
+            auto res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
+            DEBUG_VK(res, "Failed to create semaphore!");
+            res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]);
+            DEBUG_VK(res, "Failed to create semaphore!");
+            res = vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]);
+            DEBUG_VK(res, "Failed to create fence!");
+        }
+    }
+
+    LOG_INFO("Create Swapchain");
+    swapChainCurrentFrame = 0;
+    swapChainDirty = false;
+
 }
 
-void Context::DestroyDevice() {
-    vkDestroyCommandPool(device, commandPool, vkw::ctx().allocator);
-    vkDestroyDevice(device, vkw::ctx().allocator);
-    device = VK_NULL_HANDLE;
-    commandPool = VK_NULL_HANDLE;
-    presentQueue = VK_NULL_HANDLE;
-    graphicsQueue = VK_NULL_HANDLE;
+void Context::DestroySwapChain() {
+    for (size_t i = 0; i < swapChainImages.size(); i++) {
+        vkDestroyImageView(device, swapChainViews[i], allocator);
+    }
+
+    for (size_t i = 0; i < framesInFlight; i++) {
+        vkDestroySemaphore(device, imageAvailableSemaphores[i], allocator);
+        vkDestroySemaphore(device, renderFinishedSemaphores[i], allocator);
+        vkDestroyFence(device, inFlightFences[i], allocator);
+    }
+
+    vkFreeCommandBuffers(device, vkw::ctx().commandPool, (uint32_t)commandBuffers.size(), commandBuffers.data());
+    vkDestroySwapchainKHR(device, swapChain, allocator);
+
+    imageAvailableSemaphores.clear();
+    renderFinishedSemaphores.clear();
+    inFlightFences.clear();
+    imagesInFlight.clear();
+    commandBuffers.clear();
+    swapChainViews.clear();
+    swapChainImages.clear();
+    swapChain = VK_NULL_HANDLE;
+}
+
+uint32_t Context::Acquire() {
+    LUZ_PROFILE_FUNC();
+
+    vkWaitForFences(device, 1, &inFlightFences[swapChainCurrentFrame], VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex;
+    auto res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[swapChainCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+        swapChainDirty = true;
+    }
+    else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+        DEBUG_VK(res, "Failed to acquire swap chain image!");
+    }
+
+    currentImageIndex = imageIndex;
+    return imageIndex;
+}
+
+void Context::SubmitAndPresent(uint32_t imageIndex) {
+    LUZ_PROFILE_FUNC();
+
+    // check if a previous frame is using this image
+    if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+        vkWaitForFences(device, 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+    }
+
+    // mark the image as now being in use by this frame
+    imagesInFlight[imageIndex] = inFlightFences[swapChainCurrentFrame];
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[swapChainCurrentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &(commandBuffers[imageIndex]);
+
+    VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[swapChainCurrentFrame] };
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    vkResetFences(device, 1, &inFlightFences[swapChainCurrentFrame]);
+
+    auto res = vkQueueSubmit(vkw::ctx().graphicsQueue, 1, &submitInfo, inFlightFences[swapChainCurrentFrame]);
+    DEBUG_VK(res, "Failed to submit draw command buffer!");
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = { swapChain };
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pResults = nullptr;
+
+    res = vkQueuePresentKHR(vkw::ctx().presentQueue, &presentInfo);
+
+    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+        swapChainDirty = true;
+        return;
+    } 
+    else if (res != VK_SUCCESS) {
+        DEBUG_VK(res, "Failed to present swap chain image!");
+    }
+
+    swapChainCurrentFrame = (swapChainCurrentFrame + 1) % framesInFlight;
 }
 
 uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
@@ -597,6 +847,48 @@ void Context::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
     DEBUG_VK(res, "Failed to wait idle command buffer");
 
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+VkSurfaceFormatKHR Context::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
+    for (const auto& availableFormat : formats) {
+        if (availableFormat.format == colorFormat
+            && availableFormat.colorSpace == colorSpace) {
+            return availableFormat;
+        }
+    }
+    LOG_WARN("Preferred surface format not available!");
+    return formats[0];
+}
+
+VkPresentModeKHR Context::ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) {
+    for (const auto& mode : presentModes) {
+        if (mode == presentMode) {
+            return mode;
+        }
+    }
+    LOG_WARN("Preferred present mode not available!");
+    // FIFO is guaranteed to be available
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height) {
+    if (capabilities.currentExtent.width != UINT32_MAX) {
+        return capabilities.currentExtent;
+    }
+    else {
+        VkExtent2D actualExtent = { width, height };
+
+        actualExtent.width = std::max (
+            capabilities.minImageExtent.width,
+            std::min(capabilities.maxImageExtent.width, actualExtent.width)
+        );
+        actualExtent.height = std::max (
+            capabilities.minImageExtent.height,
+            std::min(capabilities.maxImageExtent.height, actualExtent.height)
+        );
+
+        return actualExtent;
+    }
 }
 
 Context& ctx() {

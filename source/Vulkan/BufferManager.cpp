@@ -5,7 +5,6 @@
 //#include "PhysicalDevice.hpp"
 //#include "Instance.hpp"
 #include "VulkanLayer.h"
-#include "SwapChain.hpp"
 
 void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
     auto device = vkw::ctx().device;
@@ -103,7 +102,7 @@ void BufferManager::CreateVertexBuffer(BufferResource& res, void* data, VkDevice
 
 void BufferManager::CreateStorageBuffer(StorageBuffer& buffer, VkDeviceSize size) {
     buffer.dataSize = size;
-    u64 numFrames = SwapChain::GetNumFrames();
+    u64 numFrames = vkw::ctx().swapChainImages.size();
     BufferDesc bufferDesc;
     VkDeviceSize minOffset = vkw::ctx().physicalProperties.limits.minStorageBufferOffsetAlignment;
     VkDeviceSize sizeRemain = size % minOffset;

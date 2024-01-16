@@ -7,7 +7,6 @@
 #include "ImageManager.hpp"
 #include "BufferManager.hpp"
 #include "FileManager.hpp"
-#include "SwapChain.hpp"
 #include "Texture.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "VulkanLayer.h"

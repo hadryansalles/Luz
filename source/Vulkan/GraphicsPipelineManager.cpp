@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "GraphicsPipelineManager.hpp"
-#include "SwapChain.hpp"
 #include "VulkanUtils.hpp"
 #include "AssetManager.hpp"
 #include "FileManager.hpp"
@@ -10,7 +9,7 @@
 void GraphicsPipelineManager::Create() {
     auto device = vkw::ctx().device;
     auto allocator = vkw::ctx().allocator;
-    auto numFrames = SwapChain::GetNumFrames();
+    auto numFrames = vkw::ctx().swapChainImages.size();
 
     VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
     VkDescriptorPoolCreateInfo imguiPoolInfo{};
@@ -143,7 +142,7 @@ void GraphicsPipelineManager::CreateDefaultDesc(GraphicsPipelineDesc& desc) {
     desc.rasterizer.depthBiasSlopeFactor = 0.0f;
 
     desc.multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    desc.multisampling.rasterizationSamples = SwapChain::GetNumSamples();
+    desc.multisampling.rasterizationSamples = vkw::ctx().numSamples;
     desc.multisampling.sampleShadingEnable = VK_FALSE;
     desc.multisampling.minSampleShading = 0.5f;
     desc.multisampling.pSampleMask = nullptr;
@@ -190,14 +189,14 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float> (SwapChain::GetExtent().width);
-    viewport.height = static_cast<float> (SwapChain::GetExtent().height);
+    viewport.width = static_cast<float> (vkw::ctx().swapChainExtent.width);
+    viewport.height = static_cast<float> (vkw::ctx().swapChainExtent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkRect2D scissor{};
     scissor.offset = { 0, 0 };
-    scissor.extent = SwapChain::GetExtent();
+    scissor.extent = vkw::ctx().swapChainExtent;
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -404,7 +403,7 @@ void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipeli
 }
 
 void GraphicsPipelineManager::WriteStorage(StorageBuffer& uniform, int index) {
-    int numFrames = SwapChain::GetNumFrames();
+    int numFrames = vkw::ctx().swapChainImages.size();
     std::vector<VkDescriptorBufferInfo> bufferInfos(numFrames);
     std::vector<VkWriteDescriptorSet> writes(numFrames);
     for (int i = 0; i < numFrames; i++) {
