@@ -1,17 +1,15 @@
 #include "Luzpch.hpp"
 
 #include "GraphicsPipelineManager.hpp"
-#include "PhysicalDevice.hpp"
-#include "LogicalDevice.hpp"
 #include "SwapChain.hpp"
-#include "Instance.hpp"
 #include "VulkanUtils.hpp"
 #include "AssetManager.hpp"
 #include "FileManager.hpp"
+#include "VulkanLayer.h"
 
 void GraphicsPipelineManager::Create() {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
     auto numFrames = SwapChain::GetNumFrames();
 
     VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
@@ -27,10 +25,10 @@ void GraphicsPipelineManager::Create() {
 
     // create bindless resources
     {
-        const u32 MAX_UNIFORMS = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorUniformBuffers-10;
-        const u32 MAX_STORAGE = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorStorageBuffers;
+        const u32 MAX_UNIFORMS = vkw::ctx().physicalProperties.limits.maxPerStageDescriptorUniformBuffers-10;
+        const u32 MAX_STORAGE = vkw::ctx().physicalProperties.limits.maxPerStageDescriptorStorageBuffers;
         const u32 MAX_ATTACHIMAGES = 32;
-        const u32 MAX_SAMPLEDIMAGES = PhysicalDevice::GetProperties().limits.maxPerStageDescriptorSampledImages-MAX_ATTACHIMAGES;
+        const u32 MAX_SAMPLEDIMAGES = vkw::ctx().physicalProperties.limits.maxPerStageDescriptorSampledImages-MAX_ATTACHIMAGES;
 
         // create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
@@ -114,12 +112,12 @@ void GraphicsPipelineManager::Create() {
 }
 
 void GraphicsPipelineManager::Destroy() {
-    vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), imguiDescriptorPool, Instance::GetAllocator());
+    vkDestroyDescriptorPool(vkw::ctx().device, imguiDescriptorPool, vkw::ctx().allocator);
 
     // bindless resources
     {
-        vkDestroyDescriptorPool(LogicalDevice::GetVkDevice(), bindlessDescriptorPool, Instance::GetAllocator());
-        vkDestroyDescriptorSetLayout(LogicalDevice::GetVkDevice(), bindlessDescriptorLayout, Instance::GetAllocator());
+        vkDestroyDescriptorPool(vkw::ctx().device, bindlessDescriptorPool, vkw::ctx().allocator);
+        vkDestroyDescriptorSetLayout(vkw::ctx().device, bindlessDescriptorLayout, vkw::ctx().allocator);
         bindlessDescriptorSet = VK_NULL_HANDLE;
         bindlessDescriptorPool = VK_NULL_HANDLE;
         bindlessDescriptorLayout = VK_NULL_HANDLE;
@@ -163,8 +161,8 @@ void GraphicsPipelineManager::CreateDefaultDesc(GraphicsPipelineDesc& desc) {
 }
 
 void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
 
     std::vector<ShaderResource> shaderResources(desc.shaderStages.size());
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.shaderStages.size());
@@ -294,8 +292,8 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
 }
 
 void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
-    vkDestroyPipeline(LogicalDevice::GetVkDevice(), res.pipeline, Instance::GetAllocator());
-    vkDestroyPipelineLayout(LogicalDevice::GetVkDevice(), res.layout, Instance::GetAllocator());
+    vkDestroyPipeline(vkw::ctx().device, res.pipeline, vkw::ctx().allocator);
+    vkDestroyPipelineLayout(vkw::ctx().device, res.layout, vkw::ctx().allocator);
 }
 
 void GraphicsPipelineManager::ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
@@ -313,7 +311,7 @@ void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipeli
     if (ImGui::CollapsingHeader(name.c_str())) {
         // polygon mode
         {
-            if (PhysicalDevice::GetFeatures().fillModeNonSolid) {
+            if (vkw::ctx().physicalFeatures.fillModeNonSolid) {
                 ImGui::Text("Polygon Mode");
                 ImGui::SameLine(totalWidth*3.0/5.0f);
                 ImGui::SetNextItemWidth(totalWidth*2.0/5.0f);
@@ -336,7 +334,7 @@ void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipeli
         }
         // line width
         {
-            if (PhysicalDevice::GetFeatures().wideLines) {
+            if (vkw::ctx().physicalFeatures.wideLines) {
                 ImGui::Text("Line width");
                 ImGui::SameLine(totalWidth * 3.0 / 5.0f);
                 ImGui::SetNextItemWidth(totalWidth * 2.0 / 5.0f);
@@ -370,7 +368,7 @@ void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipeli
         }
         // sample shading
         {
-            if (PhysicalDevice::GetFeatures().sampleRateShading) {
+            if (vkw::ctx().physicalFeatures.sampleRateShading) {
                 ImGui::Text("Sample Shading");
                 ImGui::SameLine(totalWidth*3.0f/5.0f);
                 ImGui::PushID("sampleShading");
@@ -392,7 +390,7 @@ void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipeli
         }
         // depth clamp
         {
-            if (PhysicalDevice::GetFeatures().depthClamp) {
+            if (vkw::ctx().physicalFeatures.depthClamp) {
                 ImGui::Text("Depth Clamp");
                 ImGui::SameLine(totalWidth * 3.0f / 5.0f);
                 ImGui::PushID("depthClamp");
@@ -422,6 +420,6 @@ void GraphicsPipelineManager::WriteStorage(StorageBuffer& uniform, int index) {
         writes[i].descriptorCount = 1;
         writes[i].pBufferInfo = &bufferInfos[i];
     }
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), numFrames, writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(vkw::ctx().device, numFrames, writes.data(), 0, nullptr);
     DEBUG_TRACE("Update descriptor sets in WriteStorage!");
 }

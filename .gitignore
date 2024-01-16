@@ -8,3 +8,5 @@ assets/ignore/
 *.ini
 .vs
 .vscode
+assets/*
+*.ngfx-proj

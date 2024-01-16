@@ -7,8 +7,8 @@
 #include "SwapChain.hpp"
 
 void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -26,7 +26,7 @@ void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = PhysicalDevice::FindMemoryType(memReq.memoryTypeBits, desc.properties);
+    allocInfo.memoryTypeIndex = vkw::ctx().FindMemoryType(memReq.memoryTypeBits, desc.properties);
 
     result = vkAllocateMemory(device, &allocInfo, allocator, &res.memory);
     DEBUG_VK(result, "Failed to allocate buffer memory!");
@@ -35,12 +35,12 @@ void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
 }
 
 void BufferManager::Destroy(BufferResource& res) {
-    vkDestroyBuffer(LogicalDevice::GetVkDevice(), res.buffer, Instance::GetAllocator());
-    vkFreeMemory(LogicalDevice::GetVkDevice(), res.memory, Instance::GetAllocator());
+    vkDestroyBuffer(vkw::ctx().device, res.buffer, vkw::ctx().allocator);
+    vkFreeMemory(vkw::ctx().device, res.memory, vkw::ctx().allocator);
 }
 
 void BufferManager::Copy(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
-    auto commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+    auto commandBuffer = vkw::ctx().BeginSingleTimeCommands();
 
     VkBufferCopy copyRegion{};
     copyRegion.srcOffset = 0;
@@ -48,21 +48,21 @@ void BufferManager::Copy(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     copyRegion.size = size;
     vkCmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
 
-    LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    vkw::ctx().EndSingleTimeCommands(commandBuffer);
 }
 
 void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize size) {
     void* dst;
-    vkMapMemory(LogicalDevice::GetVkDevice(), res.memory, 0, size, 0, &dst);
+    vkMapMemory(vkw::ctx().device, res.memory, 0, size, 0, &dst);
     memcpy(dst, data, size);
-    vkUnmapMemory(LogicalDevice::GetVkDevice(), res.memory);
+    vkUnmapMemory(vkw::ctx().device, res.memory);
 }
 
 void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize offset, VkDeviceSize size) {
     void* dst;
-    vkMapMemory(LogicalDevice::GetVkDevice(), res.memory, offset, size, 0, &dst);
+    vkMapMemory(vkw::ctx().device, res.memory, offset, size, 0, &dst);
     memcpy(dst, data, size);
-    vkUnmapMemory(LogicalDevice::GetVkDevice(), res.memory);
+    vkUnmapMemory(vkw::ctx().device, res.memory);
 }
 
 void BufferManager::CreateStaged(const BufferDesc& desc, BufferResource& res, void* data) {
@@ -100,40 +100,11 @@ void BufferManager::CreateVertexBuffer(BufferResource& res, void* data, VkDevice
     BufferManager::CreateStaged(desc, res, data);
 }
 
-void BufferManager::CreateUniformBuffer(UniformBuffer& uniform, VkDeviceSize size) {
-    uniform.dataSize = size;
-    u64 numFrames = SwapChain::GetNumFrames();
-    BufferDesc bufferDesc;
-    VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minUniformBufferOffsetAlignment;
-    uniform.sectionSize = ALIGN_AS(size, minOffset);
-    bufferDesc.size = uniform.sectionSize * numFrames;
-    bufferDesc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    bufferDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    BufferManager::Create(bufferDesc, uniform.resource);
-    SetDirtyUniform(uniform);
-}
-
-void BufferManager::DestroyUniformBuffer(UniformBuffer& uniform) {
-    Destroy(uniform.resource);
-}
-
-void BufferManager::SetDirtyUniform(UniformBuffer& uniform) {
-    uniform.dirty = std::vector<bool>(SwapChain::GetNumFrames(), true);
-}
-
-void BufferManager::UpdateUniformIfDirty(UniformBuffer& uniform, int numFrame, void* data) {
-    DEBUG_ASSERT(numFrame < uniform.dirty.size(), "Invalid frame number!");
-    if(uniform.dirty[numFrame]) {
-        BufferManager::Update(uniform.resource, data, numFrame * uniform.sectionSize, uniform.dataSize);
-        uniform.dirty[numFrame] = false;
-    }
-}
-
 void BufferManager::CreateStorageBuffer(StorageBuffer& buffer, VkDeviceSize size) {
     buffer.dataSize = size;
     u64 numFrames = SwapChain::GetNumFrames();
     BufferDesc bufferDesc;
-    VkDeviceSize minOffset = PhysicalDevice::GetProperties().limits.minStorageBufferOffsetAlignment;
+    VkDeviceSize minOffset = vkw::ctx().physicalProperties.limits.minStorageBufferOffsetAlignment;
     VkDeviceSize sizeRemain = size % minOffset;
     buffer.sectionSize = size;
     if (sizeRemain > 0) {
@@ -157,5 +128,5 @@ VkDeviceAddress BufferManager::GetAddress(BufferResource& res) {
     VkBufferDeviceAddressInfo info{};
     info.buffer = res.buffer;
     info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    return vkGetBufferDeviceAddress(LogicalDevice::GetVkDevice(), &info);
+    return vkGetBufferDeviceAddress(vkw::ctx().device, &info);
 }

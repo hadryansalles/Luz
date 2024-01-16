@@ -40,11 +40,6 @@ public:
     static void CreateIndexBuffer(BufferResource& res, void* data, VkDeviceSize size);
     static void CreateVertexBuffer(BufferResource& res, void* data, VkDeviceSize size);
 
-    static void CreateUniformBuffer(UniformBuffer& uniform, VkDeviceSize dataSize);
-    static void DestroyUniformBuffer(UniformBuffer& uniform);
-    static void SetDirtyUniform(UniformBuffer& uniform);
-    static void UpdateUniformIfDirty(UniformBuffer& uniform, int numFrame, void* data);
-
     static void CreateStorageBuffer(StorageBuffer& uniform, VkDeviceSize dataSize);
     static void DestroyStorageBuffer(StorageBuffer& uniform);
     static void UpdateStorage(StorageBuffer& uniform, int numFrame, void* data);

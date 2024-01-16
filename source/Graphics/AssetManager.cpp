@@ -145,7 +145,7 @@ void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
         writes[i].descriptorCount = 1;
         writes[i].pImageInfo = &imageInfos[i];
     }
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(vkw::ctx().device, count, writes.data(), 0, nullptr);
     DEBUG_TRACE("Update descriptor sets in UpdateTexturesDescriptor!");
 }
 

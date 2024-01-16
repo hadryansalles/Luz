@@ -1,15 +1,13 @@
 #include "Luzpch.hpp"
 
 #include "ImageManager.hpp"
-#include "LogicalDevice.hpp"
-#include "PhysicalDevice.hpp"
-#include "Instance.hpp"
+#include "VulkanLayer.h"
 
 #include <vulkan/vulkan.hpp>
 
 void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
 
     res.width = desc.width;
     res.height = desc.height;
@@ -43,7 +41,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = PhysicalDevice::FindMemoryType(memReq.memoryTypeBits, desc.properties);
+    allocInfo.memoryTypeIndex = vkw::ctx().FindMemoryType(memReq.memoryTypeBits, desc.properties);
 
     result = vkAllocateMemory(device, &allocInfo, allocator, &res.memory);
     DEBUG_VK(result, "Failed to allocate image memory!");
@@ -76,15 +74,15 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
 
         VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
-        VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+        VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
         vkCmdPipelineBarrier(commandBuffer, stage, stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-        LogicalDevice::EndSingleTimeCommands(commandBuffer);
+        vkw::ctx().EndSingleTimeCommands(commandBuffer);
     }
 }
 
 void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
 
     res.width = desc.width;
     res.height = desc.height;
@@ -114,14 +112,14 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = PhysicalDevice::FindMemoryType(memReq.memoryTypeBits, desc.properties);
+    allocInfo.memoryTypeIndex = vkw::ctx().FindMemoryType(memReq.memoryTypeBits, desc.properties);
 
     result = vkAllocateMemory(device, &allocInfo, allocator, &res.memory);
     DEBUG_VK(result, "Failed to allocate image memory!");
 
     vkBindImageMemory(device, res.image, res.memory, 0);
 
-    VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+    VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -145,9 +143,9 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
     vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-    LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    vkw::ctx().EndSingleTimeCommands(commandBuffer);
 
-    commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+    commandBuffer = vkw::ctx().BeginSingleTimeCommands();
 
     VkBufferImageCopy region{};
     region.bufferOffset = 0;
@@ -163,15 +161,15 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     region.imageExtent = { desc.width, desc.height, 1 };
 
     vkCmdCopyBufferToImage(commandBuffer, buffer.buffer, res.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    vkw::ctx().EndSingleTimeCommands(commandBuffer);
 
     VkFormatProperties formatProperties;
-    vkGetPhysicalDeviceFormatProperties(PhysicalDevice::GetVkPhysicalDevice(), desc.format, &formatProperties);
+    vkGetPhysicalDeviceFormatProperties(vkw::ctx().physicalDevice, desc.format, &formatProperties);
     if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
         LOG_ERROR("texture image format does not support linear blitting!");
     }
 
-    commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+    commandBuffer = vkw::ctx().BeginSingleTimeCommands();
     
     barrier.subresourceRange.levelCount = 1;
 
@@ -230,7 +228,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
         0, nullptr, 0, nullptr, 1, &barrier);
 
-    LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    vkw::ctx().EndSingleTimeCommands(commandBuffer);
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -270,8 +268,8 @@ void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 m
 }
 
 void ImageManager::Destroy(ImageResource& res) {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
 
     DEBUG_ASSERT(res.image  != VK_NULL_HANDLE, "Null image at VulkanImage::Destroy");
     DEBUG_ASSERT(res.view   != VK_NULL_HANDLE, "Null view at VulkanImage::Destroy");

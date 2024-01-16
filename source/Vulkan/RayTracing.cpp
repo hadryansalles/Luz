@@ -83,7 +83,7 @@ RayTracingContext ctx;
 
 void CreateBLAS(std::vector<RID>& meshes) {
     LUZ_PROFILE_FUNC();
-    VkDevice device = LogicalDevice::GetVkDevice();
+    VkDevice device = vkw::ctx().device;
 
     std::vector<BLASInput> blasInputs;
     blasInputs.reserve(meshes.size());
@@ -190,7 +190,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
         batchSize += buildAs[idx].sizeInfo.accelerationStructureSize;
         // Over the limit or last BLAS element
         if (batchSize >= batchLimit || idx == nbBlas - 1) {
-            VkCommandBuffer cmdBuf = LogicalDevice::BeginSingleTimeCommands();
+            VkCommandBuffer cmdBuf = vkw::ctx().BeginSingleTimeCommands();
             {
                 for(const auto& idx : indices)
                 {
@@ -223,7 +223,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
                                      VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &barrier, 0, nullptr, 0, nullptr);
                 }
             }
-            LogicalDevice::EndSingleTimeCommands(cmdBuf);
+            vkw::ctx().EndSingleTimeCommands(cmdBuf);
             // Reset
             batchSize = 0;
             indices.clear();
@@ -244,7 +244,7 @@ void CreateTLAS() {
     if (!ctx.autoUpdateTLAS || !ctx.useRayTracing) {
         return;
     }
-    auto device = LogicalDevice::GetVkDevice();
+    auto device = vkw::ctx().device;
     bool update = ctx.TLAS.accel != VK_NULL_HANDLE;
 
     if (ctx.recreateTLAS) {
@@ -305,7 +305,7 @@ void CreateTLAS() {
     BufferResource instancesBuffer;
     BufferManager::CreateStaged(instancesBufferDesc, instancesBuffer, instances.data());
 
-    VkCommandBuffer commandBuffer = LogicalDevice::BeginSingleTimeCommands();
+    VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
     
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -407,14 +407,14 @@ void CreateTLAS() {
         ctx.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildInfo, &pBuildOffsetInfo);
     }
 
-    LogicalDevice::EndSingleTimeCommands(commandBuffer);
+    vkw::ctx().EndSingleTimeCommands(commandBuffer);
     BufferManager::Destroy(scratchBuffer);
     BufferManager::Destroy(instancesBuffer);
 }
 
 void Create() {
     LUZ_PROFILE_FUNC();
-    VkDevice device = LogicalDevice::GetVkDevice();
+    VkDevice device = vkw::ctx().device;
     ctx.vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
     ctx.vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
     ctx.vkGetBufferDeviceAddressKHR = (PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetBufferDeviceAddressKHR");
@@ -427,7 +427,7 @@ void Create() {
 }
 
 void Destroy() {
-    VkDevice device = LogicalDevice::GetVkDevice();
+    VkDevice device = vkw::ctx().device;
     for (int i = 0; i < ctx.BLAS.size(); i++) {
         ctx.vkDestroyAccelerationStructureKHR(device, ctx.BLAS[i].accel, nullptr);
         BufferManager::Destroy(ctx.BLAS[i].buffer);

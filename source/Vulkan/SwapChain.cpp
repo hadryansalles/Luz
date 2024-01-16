@@ -1,30 +1,28 @@
 #include "Luzpch.hpp"
 
 #include "SwapChain.hpp"
-#include "LogicalDevice.hpp"
-#include "PhysicalDevice.hpp"
 #include "Window.hpp"
-#include "Instance.hpp"
 #include "VulkanUtils.hpp"
 #include "Profiler.hpp"
+#include "VulkanLayer.h"
 
 void SwapChain::Create() {
     LUZ_PROFILE_FUNC();
-    auto device = LogicalDevice::GetVkDevice();
-    auto instance = Instance::GetVkInstance();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto instance = vkw::ctx().instance;
+    auto allocator = vkw::ctx().allocator;
 
-    if (numSamples > PhysicalDevice::GetMaxSamples()) {
-        numSamples = PhysicalDevice::GetMaxSamples();
+    if (numSamples > vkw::ctx().maxSamples) {
+        numSamples = vkw::ctx().maxSamples;
     }
 
     // create swapchain
     {
-        const auto& capabilities = PhysicalDevice::GetCapabilities();
-        VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(PhysicalDevice::GetSurfaceFormats());
+        const auto& capabilities = vkw::ctx().surfaceCapabilities;
+        VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(vkw::ctx().availableSurfaceFormats);
         colorFormat = surfaceFormat.format;
         colorSpace = surfaceFormat.colorSpace;
-        presentMode = ChoosePresentMode(PhysicalDevice::GetPresentModes());
+        presentMode = ChoosePresentMode(vkw::ctx().availablePresentModes);
         extent = ChooseExtent(capabilities);
 
         framesInFlight = newFramesInFlight;
@@ -46,7 +44,7 @@ void SwapChain::Create() {
 
         VkSwapchainCreateInfoKHR createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = Instance::GetVkSurface();
+        createInfo.surface = vkw::ctx().surface;
         createInfo.minImageCount = imageCount;
         createInfo.imageFormat = surfaceFormat.format;
         createInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -58,11 +56,11 @@ void SwapChain::Create() {
         // we should change this image usage
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        uint32_t queueFamilyIndices[] = { PhysicalDevice::GetGraphicsFamily(), PhysicalDevice::GetPresentFamily() };
+        uint32_t queueFamilyIndices[] = { vkw::ctx().graphicsFamily, vkw::ctx().presentFamily };
 
         // if the graphics family is different thant the present family
         // we need to handle how the images on the swap chain will be accessed by the queues
-        if (PhysicalDevice::GetGraphicsFamily() != PhysicalDevice::GetPresentFamily()) {
+        if (vkw::ctx().graphicsFamily != vkw::ctx().presentFamily) {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             createInfo.queueFamilyIndexCount = 2;
             createInfo.pQueueFamilyIndices = queueFamilyIndices;
@@ -122,7 +120,7 @@ void SwapChain::Create() {
         auto depthFeature = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
         bool validFormat = false;
         for (auto candidate : candidates) {
-            if (PhysicalDevice::SupportFormat(candidate, optimalTiling, depthFeature)) {
+            if (vkw::ctx().SupportFormat(candidate, optimalTiling, depthFeature)) {
                 depthFormat = candidate;
                 validFormat = true;
                 break;
@@ -272,7 +270,7 @@ void SwapChain::Create() {
 
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = LogicalDevice::GetCommandPool();
+        allocInfo.commandPool = vkw::ctx().commandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
 
@@ -310,8 +308,8 @@ void SwapChain::Create() {
 }
 
 void SwapChain::Destroy() {
-    auto device = LogicalDevice::GetVkDevice();
-    auto allocator = Instance::GetAllocator();
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
 
     ImageManager::Destroy(colorRes);
     ImageManager::Destroy(depthRes);
@@ -327,7 +325,7 @@ void SwapChain::Destroy() {
         vkDestroyFence(device, inFlightFences[i], allocator);
     }
 
-    vkFreeCommandBuffers(device, LogicalDevice::GetCommandPool(), (uint32_t)commandBuffers.size(), commandBuffers.data());
+    vkFreeCommandBuffers(device, vkw::ctx().commandPool, (uint32_t)commandBuffers.size(), commandBuffers.data());
     vkDestroyRenderPass(device, renderPass, allocator);
     vkDestroySwapchainKHR(device, swapChain, allocator);
 
@@ -346,7 +344,7 @@ void SwapChain::Destroy() {
 uint32_t SwapChain::Acquire() {
     LUZ_PROFILE_FUNC();
 
-    auto device = LogicalDevice::GetVkDevice();
+    auto device = vkw::ctx().device;
 
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -367,7 +365,7 @@ uint32_t SwapChain::Acquire() {
 void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
     LUZ_PROFILE_FUNC();
 
-    auto device = LogicalDevice::GetVkDevice();
+    auto device = vkw::ctx().device;
 
     // check if a previous frame is using this image
     if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
@@ -394,7 +392,7 @@ void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
 
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-    auto res = vkQueueSubmit(LogicalDevice::GetGraphicsQueue(), 1, &submitInfo, inFlightFences[currentFrame]);
+    auto res = vkQueueSubmit(vkw::ctx().graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]);
     DEBUG_VK(res, "Failed to submit draw command buffer!");
 
     VkPresentInfoKHR presentInfo{};
@@ -408,7 +406,7 @@ void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr;
 
-    res = vkQueuePresentKHR(LogicalDevice::GetPresentQueue(), &presentInfo);
+    res = vkQueuePresentKHR(vkw::ctx().presentQueue, &presentInfo);
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
         dirty = true;
@@ -423,7 +421,7 @@ void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
 
 void SwapChain::OnImgui() {
     const float totalWidth = ImGui::GetContentRegionAvailWidth();
-    const auto cap = PhysicalDevice::GetCapabilities();
+    const auto cap = vkw::ctx().surfaceCapabilities;
     if (ImGui::CollapsingHeader("SwapChain")) {
         // Frames in Flight
         {
@@ -475,7 +473,7 @@ void SwapChain::OnImgui() {
             ImGui::SetNextItemWidth(totalWidth*2.0/5.0f);
             ImGui::PushID("presentMode");
             if (ImGui::BeginCombo("", LUZ_VkPresentModeKHRStr(presentMode))) {
-                for (auto mode : PhysicalDevice::GetPresentModes()) {
+                for (auto mode : vkw::ctx().availablePresentModes) {
                     bool selected = mode == presentMode;
                     if (ImGui::Selectable(LUZ_VkPresentModeKHRStr(mode), selected) && !selected) {
                         presentMode = mode;
@@ -496,7 +494,7 @@ void SwapChain::OnImgui() {
             ImGui::SetNextItemWidth(totalWidth*2.0/5.0f);
             ImGui::PushID("samplesCombo");
             if (ImGui::BeginCombo("", LUZ_VkSampleCountFlagBitsStr(numSamples))) {
-                for (size_t i = 1; i <= PhysicalDevice::GetMaxSamples(); i *= 2) {
+                for (size_t i = 1; i <= vkw::ctx().maxSamples; i *= 2) {
                     VkSampleCountFlagBits curSamples = (VkSampleCountFlagBits)i;
                     bool selected = curSamples == numSamples;
                     if (ImGui::Selectable(LUZ_VkSampleCountFlagBitsStr(curSamples), selected) && !selected) {
@@ -514,7 +512,7 @@ void SwapChain::OnImgui() {
         // Surface Format
         {
             if (ImGui::TreeNode("Surface Format")) {
-                auto surfaceFormats = PhysicalDevice::GetSurfaceFormats();
+                auto surfaceFormats = vkw::ctx().availableSurfaceFormats;
                 for (size_t i = 0; i < surfaceFormats.size(); i++) {
                     const char* formatName = LUZ_VkFormatStr(surfaceFormats[i].format);
                     const char* spaceName = LUZ_VkColorSpaceKHRStr(surfaceFormats[i].colorSpace);
