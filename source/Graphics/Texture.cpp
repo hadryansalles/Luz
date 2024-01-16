@@ -22,7 +22,7 @@ void DestroyTextureResource(TextureResource& res) {
 }
 
 void DrawTextureOnImgui(TextureResource& res) {
-    float hSpace = ImGui::GetContentRegionAvailWidth()/2.5f;
+    float hSpace = ImGui::GetContentRegionAvail().x/2.5f;
     f32 maxSize = std::max(res.image.width, res.image.height);
     ImVec2 size = ImVec2((f32)res.image.width/maxSize, (f32)res.image.height/maxSize);
     size = ImVec2(size.x*hSpace, size.y * hSpace);

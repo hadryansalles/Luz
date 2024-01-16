@@ -2,16 +2,15 @@
 #include "RayTracing.hpp"
 
 #include "Shader.hpp"
-#include "LogicalDevice.hpp"
 #include "Scene.hpp"
 #include "AssetManager.hpp"
 #include "ImageManager.hpp"
 #include "BufferManager.hpp"
 #include "FileManager.hpp"
 #include "SwapChain.hpp"
-#include "PhysicalDevice.hpp"
 #include "Texture.hpp"
 #include "GraphicsPipelineManager.hpp"
+#include "VulkanLayer.h"
 
 #include <imgui/imgui_impl_vulkan.h>
 #include <imgui/imgui.h>

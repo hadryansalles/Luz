@@ -1,9 +1,10 @@
 #include "Luzpch.hpp"
 
 #include "BufferManager.hpp"
-#include "LogicalDevice.hpp"
-#include "PhysicalDevice.hpp"
-#include "Instance.hpp"
+//#include "LogicalDevice.hpp"
+//#include "PhysicalDevice.hpp"
+//#include "Instance.hpp"
+#include "VulkanLayer.h"
 #include "SwapChain.hpp"
 
 void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {

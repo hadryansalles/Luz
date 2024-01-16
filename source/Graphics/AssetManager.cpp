@@ -2,7 +2,8 @@
 
 #include "AssetManager.hpp"
 #include "GraphicsPipelineManager.hpp"
-#include "LogicalDevice.hpp"
+//#include "LogicalDevice.hpp"
+#include "VulkanLayer.h"
 #include "RayTracing.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -708,8 +709,8 @@ void DirOnImgui(std::filesystem::path path) {
 }
 
 void AssetManager::OnImgui() {
-    const float totalWidth = ImGui::GetContentRegionAvailWidth();
-    const float leftSpacing = ImGui::GetContentRegionAvailWidth()*1.0f/3.0f;
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
+    const float leftSpacing = ImGui::GetContentRegionAvail().x*1.0f/3.0f;
     if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) { 
         DirOnImgui(std::filesystem::path("assets"));
     }

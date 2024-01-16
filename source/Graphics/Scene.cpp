@@ -456,13 +456,13 @@ void RenderTransformGizmo(Transform& transform) {
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
-    if (ImGui::IsKeyPressed(GLFW_KEY_1)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_1)) {
         currentGizmoOperation = ImGuizmo::TRANSLATE;
     }
-    if (ImGui::IsKeyPressed(GLFW_KEY_2)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_2)) {
         currentGizmoOperation = ImGuizmo::ROTATE;
     }
-    if (ImGui::IsKeyPressed(GLFW_KEY_3)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_3)) {
         currentGizmoOperation = ImGuizmo::SCALE;
     }
     if (ImGui::RadioButton("Translate", currentGizmoOperation == ImGuizmo::TRANSLATE)) {

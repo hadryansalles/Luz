@@ -443,12 +443,14 @@ private:
         initInfo.MSAASamples = SwapChain::GetNumSamples();
         initInfo.Allocator = VK_NULL_HANDLE;
         initInfo.CheckVkResultFn = CheckVulkanResult;
-        ImGui_ImplVulkan_Init(&initInfo, SwapChain::GetRenderPass());
-        
-        auto commandBuffer = vkw::ctx().BeginSingleTimeCommands();
-        ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
-        vkw::ctx().EndSingleTimeCommands(commandBuffer);
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
+        initInfo.UseDynamicRendering = true;
+        initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        ImGui_ImplVulkan_Init(&initInfo, nullptr);
+        ImGui_ImplVulkan_CreateFontsTexture();
+        //auto commandBuffer = vkw::ctx().BeginSingleTimeCommands();
+        //ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+        //vkw::ctx().EndSingleTimeCommands(commandBuffer);
+        //ImGui_ImplVulkan_DestroyFontUploadObjects();
     }
 
     void DestroyImgui() {

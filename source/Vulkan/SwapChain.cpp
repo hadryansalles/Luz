@@ -420,7 +420,7 @@ void SwapChain::SubmitAndPresent(uint32_t imageIndex) {
 }
 
 void SwapChain::OnImgui() {
-    const float totalWidth = ImGui::GetContentRegionAvailWidth();
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
     const auto cap = vkw::ctx().surfaceCapabilities;
     if (ImGui::CollapsingHeader("SwapChain")) {
         // Frames in Flight

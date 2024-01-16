@@ -306,7 +306,7 @@ void GraphicsPipelineManager::ReloadShaders(GraphicsPipelineDesc& desc, Graphics
 
 void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_DefaultOpen;
-    const float totalWidth = ImGui::GetContentRegionAvailWidth();
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
     std::string name = desc.name + " Graphics Pipeline";
     if (ImGui::CollapsingHeader(name.c_str())) {
         // polygon mode

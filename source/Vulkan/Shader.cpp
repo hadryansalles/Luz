@@ -1,8 +1,9 @@
 #include "Luzpch.hpp"
 
 #include "Shader.hpp"
-#include "Instance.hpp"
-#include "LogicalDevice.hpp"
+//#include "Instance.hpp"
+//#include "LogicalDevice.hpp"
+#include "VulkanLayer.h"
 #include "FileManager.hpp"
 
 #include <spirv_reflect.h>
