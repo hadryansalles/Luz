@@ -296,18 +296,14 @@ void CreateTLAS() {
     DEBUG_ASSERT(ctx.TLAS.accel == VK_NULL_HANDLE || update, "TLAS already created!");
     u32 countInstance = (u32)instances.size();
 
-    BufferDesc instancesBufferDesc;
-    instancesBufferDesc.size = sizeof(VkAccelerationStructureInstanceKHR) * instances.size();
-    instancesBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    instancesBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    BufferResource2 instancesBuffer;
-    BufferManager::CreateStaged(instancesBufferDesc, instancesBuffer, instances.data());
+    vkw::Buffer instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), vkw::Usage::AccelerationStructureBuildInputReadOnly, vkw::Memory::GPU);
+    vkw::CopyFromCPU(instancesBuffer, instances.data(), instancesBuffer.size);
 
     VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
 
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    bufferInfo.buffer = instancesBuffer.buffer;
+    bufferInfo.buffer = instancesBuffer.GetBuffer();
     VkDeviceAddress instancesBufferAddr = ctx.vkGetBufferDeviceAddressKHR(device, &bufferInfo);
 
     VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
@@ -315,7 +311,7 @@ void CreateTLAS() {
     barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
         0, 1, &barrier, 0, nullptr, 0, nullptr);
-    BufferResource2 scratchBuffer;
+    vkw::Buffer scratchBuffer;
 
     // command create TLAS
     {
@@ -381,15 +377,16 @@ void CreateTLAS() {
             DEBUG_TRACE("Update descriptor sets in CreateTLAS!");
         }
 
-        BufferDesc scratchDesc;
-        scratchDesc.size = sizeInfo.buildScratchSize;
-        scratchDesc.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        scratchDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        BufferManager::Create(scratchDesc, scratchBuffer);
+        //BufferDesc scratchDesc;
+        //scratchDesc.size = sizeInfo.buildScratchSize;
+        //scratchDesc.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        //scratchDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        scratchBuffer = vkw::CreateBuffer(sizeInfo.buildScratchSize, vkw::Usage::Address | vkw::Usage::Storage, vkw::Memory::GPU);
+        //BufferManager::Create(scratchDesc, scratchBuffer);
 
         VkBufferDeviceAddressInfo scratchInfo{};
         scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        scratchInfo.buffer = scratchBuffer.buffer;
+        scratchInfo.buffer = scratchBuffer.GetBuffer();
         VkDeviceAddress scratchAddress = ctx.vkGetBufferDeviceAddressKHR(device, &scratchInfo);
 
         // Update build information
@@ -406,8 +403,8 @@ void CreateTLAS() {
     }
 
     vkw::ctx().EndSingleTimeCommands(commandBuffer);
-    BufferManager::Destroy(scratchBuffer);
-    BufferManager::Destroy(instancesBuffer);
+    scratchBuffer = {};
+    instancesBuffer = {};
 }
 
 void Create() {

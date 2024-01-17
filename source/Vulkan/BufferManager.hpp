@@ -31,8 +31,6 @@ public:
     static void Update(BufferResource2& res, void* data, VkDeviceSize offet, VkDeviceSize size);
 
     static void CreateStagingBuffer(BufferResource2& res, void* data, VkDeviceSize size);
-    static void CreateIndexBuffer(BufferResource2& res, void* data, VkDeviceSize size);
-    static void CreateVertexBuffer(BufferResource2& res, void* data, VkDeviceSize size);
 
     static void CreateStorageBuffer(StorageBuffer& uniform, VkDeviceSize dataSize);
     static void DestroyStorageBuffer(StorageBuffer& uniform);

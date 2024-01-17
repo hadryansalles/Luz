@@ -157,26 +157,20 @@ void AssetManager::InitializeMesh(RID rid) {
     MeshDesc& desc = meshDescs[rid];
     res.vertexCount = desc.vertices.size();
     res.indexCount = desc.indices.size();
-    //BufferResource2 vertexBuff;
-    //BufferResource2 indexBuff;
-    //BufferManager::CreateVertexBuffer(vertexBuff, desc.vertices.data(), sizeof(desc.vertices[0]) * desc.vertices.size());
-    //BufferManager::CreateIndexBuffer(indexBuff, desc.indices.data(), sizeof(desc.indices[0]) * desc.indices.size());
     res.vertexBuffer = vkw::CreateBuffer(
         sizeof(MeshVertex) * desc.vertices.size(),
-        vkw::Usage::TransferDst | vkw::Usage::Vertex | vkw::Usage::ShaderDeviceAdress | vkw::Usage::AccelerationStructureBuildInputReadOnly,
+        vkw::Usage::Vertex | vkw::Usage::AccelerationStructureBuildInputReadOnly,
         vkw::Memory::GPU,
         ("VertexBuffer" + std::to_string(rid))
     );
     res.indexBuffer = vkw::CreateBuffer(
         sizeof(uint32_t) * desc.indices.size(),
-        vkw::Usage::TransferDst | vkw::Usage::Index | vkw::Usage::ShaderDeviceAdress | vkw::Usage::AccelerationStructureBuildInputReadOnly,
+        vkw::Usage::Index | vkw::Usage::AccelerationStructureBuildInputReadOnly,
         vkw::Memory::GPU,
         ("IndexBuffer" + std::to_string(rid))
     );
-    //res.vertexBuffer.SetBuffer(vertexBuff.buffer, vertexBuff.memory);
-    //res.indexBuffer.SetBuffer(indexBuff.buffer, indexBuff.memory);
-    res.vertexBuffer.CopyFromCPU(desc.vertices.data(), res.vertexBuffer.size, 0);
-    res.indexBuffer.CopyFromCPU(desc.indices.data(), res.indexBuffer.size, 1);
+    vkw::CopyFromCPU(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
+    vkw::CopyFromCPU(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
 }
 
 void AssetManager::RecenterMesh(RID rid) {

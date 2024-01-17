@@ -19,7 +19,6 @@ struct BufferResource : Resource {
     VkDeviceMemory memory;
 
     virtual ~BufferResource() {
-        DEBUG_TRACE("[VulkanLayer] Destroying buffer {}", name.c_str());
         vkDestroyBuffer(ctx().device, buffer, ctx().allocator);
         vkFreeMemory(ctx().device, memory, ctx().allocator);
     }
@@ -49,6 +48,20 @@ void Destroy() {
 }
 
 Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name) {
+
+    if (usage & Usage::Vertex) {
+        usage |= Usage::TransferDst;
+    }
+
+    if (usage & Usage::Index) {
+        usage |= Usage::TransferDst;
+    }
+
+    if (usage & Usage::AccelerationStructureBuildInputReadOnly) {
+        usage |= Usage::Address;
+        usage |= Usage::TransferDst;
+    }
+
     std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -88,46 +101,25 @@ void Buffer::SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory) {
     resource->memory = vkMemory;
 }
 
-void Buffer::CopyFromCPU(void* data, uint32_t size, uint32_t dstOffset) {
+void CopyFromCPU(Buffer& buffer, void* data, uint32_t size, uint32_t dstOffset) {
     if (size > _ctx.stagingBufferSize) {
-        LOG_ERROR("Traying to copy data to Buffer {} greater than staging buffer size", resource->name);
+        LOG_ERROR("Traying to copy data to Buffer {} greater than staging buffer size", buffer.resource->name);
         return;
     }
-    //void* dst;
-    //vkMapMemory(_ctx.device, _ctx.stagingBuffer.resource->memory, 0, size, 0, &dst);
-    //memcpy(dst, data, size);
-    //vkUnmapMemory(vkw::ctx().device, _ctx.stagingBuffer.resource->memory);
-    //BufferResource2 staging;
-    //BufferManager::CreateStaged({
-    //    .size = size,
-    //    .usage = Usage::TransferSrc,
-    //    .properties = Memory::CPU,
-    //}, staging, data);
-    //res.buffer = _ctx.stagingBuffer.resource->buffer;
-    //res.memory = _ctx.stagingBuffer.resource->memory;
-    //BufferManager::Update(staging, data, size);
-    //BufferManager::Copy(_ctx.stagingBuffer.resource->buffer, resource->buffer, size);
-    //auto cmdBuffer = vkw::ctx().BeginSingleTimeCommands();
-    //VkBufferCopy copyRegion{};
-    //copyRegion.srcOffset = 0;
-    //copyRegion.dstOffset = dstOffset;
-    //copyRegion.size = size;
-    //vkCmdCopyBuffer(cmdBuffer, _ctx.stagingBuffer.resource->buffer, resource->buffer, 1, &copyRegion);
-    //vkw::ctx().EndSingleTimeCommands(cmdBuffer);
-    BufferResource2 buff;
-    if (dstOffset == 0) {
-        BufferManager::CreateVertexBuffer(buff, data, size);
-    }
-    else {
-        BufferManager::CreateIndexBuffer(buff, data, size);
-    }
-    //BufferResource2 staging;
-    //BufferManager::CreateStagingBuffer(staging, data, size);
-    //BufferManager::Copy(staging.buffer, resource->buffer, size);
-    //BufferManager::Destroy(staging);
-    resource->buffer = buff.buffer;
-    resource->memory = buff.memory;
-    //SetBuffer(buff.buffer, buff.memory);
+    // map staging buffer to CPU memory to copy data
+    void* dst;
+    vkMapMemory(_ctx.device, _ctx.stagingBuffer.resource->memory, 0, size, 0, &dst);
+    memcpy(dst, data, size);
+    vkUnmapMemory(vkw::ctx().device, _ctx.stagingBuffer.resource->memory);
+
+    // copy staging buffer to dest buffer
+    auto cmdBuffer = vkw::ctx().BeginSingleTimeCommands();
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = dstOffset;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(cmdBuffer, _ctx.stagingBuffer.resource->buffer, buffer.resource->buffer, 1, &copyRegion);
+    vkw::ctx().EndSingleTimeCommands(cmdBuffer);
 }
 
 uint32_t Buffer::StorageID() {

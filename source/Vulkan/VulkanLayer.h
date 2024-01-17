@@ -26,7 +26,7 @@ enum Usage {
     Index = 0x00000040,
     Vertex = 0x00000080,
     Indirect = 0x00000100,
-    ShaderDeviceAdress = 0x00020000,
+    Address = 0x00020000,
     VideoDecodeSrc = 0x00002000,
     VideoDecodeDst = 0x00004000,
     TransformFeedback = 0x00000800,
@@ -53,10 +53,10 @@ struct Buffer {
     uint32_t StorageID();
     VkBuffer GetBuffer();
     void SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory);
-    void CopyFromCPU(void* data, uint32_t size, uint32_t dstOffset = 0);
 };
 
 Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name = "");
+void CopyFromCPU(Buffer& buffer, void* data, uint32_t size, uint32_t dstOffset = 0);
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void OnSurfaceUpdate(uint32_t width, uint32_t height);

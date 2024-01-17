@@ -65,16 +65,6 @@ void BufferManager::Update(BufferResource2& res, void* data, VkDeviceSize offset
     vkUnmapMemory(vkw::ctx().device, res.memory);
 }
 
-void BufferManager::CreateStaged(const BufferDesc& desc, BufferResource2& res, void* data) {
-    static int i = 0;
-    i++;
-    BufferResource2 staging;
-    BufferManager::Create(desc, res);
-    CreateStagingBuffer(staging, data, desc.size);
-    BufferManager::Copy(staging.buffer, res.buffer, desc.size);
-    BufferManager::Destroy(staging);
-}
-
 void BufferManager::CreateStagingBuffer(BufferResource2& res, void* data, VkDeviceSize size) {
     BufferDesc stagingDesc;
     stagingDesc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -82,22 +72,6 @@ void BufferManager::CreateStagingBuffer(BufferResource2& res, void* data, VkDevi
     stagingDesc.size = size;
     BufferManager::Create(stagingDesc, res);
     BufferManager::Update(res, data, size);
-}
-
-void BufferManager::CreateIndexBuffer(BufferResource2& res, void* data, VkDeviceSize size) {
-    BufferDesc desc;
-    desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    desc.size = size;
-    BufferManager::CreateStaged(desc, res, data);
-}
-
-void BufferManager::CreateVertexBuffer(BufferResource2& res, void* data, VkDeviceSize size) {
-    BufferDesc desc;
-    desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    desc.size = size;
-    BufferManager::CreateStaged(desc, res, data);
 }
 
 void BufferManager::CreateStorageBuffer(StorageBuffer& buffer, VkDeviceSize size) {
