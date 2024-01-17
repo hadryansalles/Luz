@@ -106,10 +106,10 @@ void ReloadShaders() {
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
     MeshResource& mesh = AssetManager::meshes[meshId];
-    VkBuffer vertexBuffers[] = { mesh.vertexBuffer.buffer };
+    VkBuffer vertexBuffers[] = { mesh.vertexBuffer.GetBuffer()};
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
 }
 

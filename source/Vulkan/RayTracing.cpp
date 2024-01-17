@@ -24,7 +24,7 @@ struct BLASInput {
 
 struct AccelerationStructure {
     VkAccelerationStructureKHR accel = VK_NULL_HANDLE;
-    BufferResource buffer;
+    BufferResource2 buffer;
 };
 
 struct BuildAccelerationStructure {
@@ -92,12 +92,12 @@ void CreateBLAS(std::vector<RID>& meshes) {
         // BLAS builder requires raw device addresses.
         VkBufferDeviceAddressInfo vertexBufferInfo{};
         vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        vertexBufferInfo.buffer = mesh.vertexBuffer.buffer;
+        vertexBufferInfo.buffer = mesh.vertexBuffer.GetBuffer();
         vertexBufferInfo.pNext = nullptr;
         VkDeviceAddress vertexAddress = ctx.vkGetBufferDeviceAddressKHR(device, &vertexBufferInfo);
         VkBufferDeviceAddressInfo indexBufferInfo{};
         indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        indexBufferInfo.buffer = mesh.indexBuffer.buffer;
+        indexBufferInfo.buffer = mesh.indexBuffer.GetBuffer();
         VkDeviceAddress indexAddress = ctx.vkGetBufferDeviceAddressKHR(device, &indexBufferInfo);
 
         u32 maxPrimitiveCount = mesh.indexCount / 3;
@@ -169,7 +169,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
         maxScratchSize = std::max(maxScratchSize, buildAs[idx].sizeInfo.buildScratchSize);
     }
 
-    BufferResource scratchBuffer;
+    BufferResource2 scratchBuffer;
     BufferDesc scratchBufferDesc;
     scratchBufferDesc.size = maxScratchSize;
     scratchBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -300,22 +300,22 @@ void CreateTLAS() {
     instancesBufferDesc.size = sizeof(VkAccelerationStructureInstanceKHR) * instances.size();
     instancesBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     instancesBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    BufferResource instancesBuffer;
+    BufferResource2 instancesBuffer;
     BufferManager::CreateStaged(instancesBufferDesc, instancesBuffer, instances.data());
 
     VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
-    
+
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     bufferInfo.buffer = instancesBuffer.buffer;
     VkDeviceAddress instancesBufferAddr = ctx.vkGetBufferDeviceAddressKHR(device, &bufferInfo);
 
-    VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                         0, 1, &barrier, 0, nullptr, 0, nullptr);
-    BufferResource scratchBuffer;
+        0, 1, &barrier, 0, nullptr, 0, nullptr);
+    BufferResource2 scratchBuffer;
 
     // command create TLAS
     {
@@ -393,12 +393,12 @@ void CreateTLAS() {
         VkDeviceAddress scratchAddress = ctx.vkGetBufferDeviceAddressKHR(device, &scratchInfo);
 
         // Update build information
-        buildInfo.srcAccelerationStructure  = ctx.TLAS.accel;
-        buildInfo.dstAccelerationStructure  = ctx.TLAS.accel;
+        buildInfo.srcAccelerationStructure = ctx.TLAS.accel;
+        buildInfo.dstAccelerationStructure = ctx.TLAS.accel;
         buildInfo.scratchData.deviceAddress = scratchAddress;
 
         // Build Offsets info: n instances
-        VkAccelerationStructureBuildRangeInfoKHR        buildOffsetInfo{countInstance, 0, 0, 0};
+        VkAccelerationStructureBuildRangeInfoKHR        buildOffsetInfo{ countInstance, 0, 0, 0 };
         const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
 
         // Build the TLAS

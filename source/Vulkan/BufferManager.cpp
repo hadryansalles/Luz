@@ -6,7 +6,7 @@
 //#include "Instance.hpp"
 #include "VulkanLayer.h"
 
-void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
+void BufferManager::Create(const BufferDesc& desc, BufferResource2& res) {
     auto device = vkw::ctx().device;
     auto allocator = vkw::ctx().allocator;
 
@@ -34,7 +34,7 @@ void BufferManager::Create(const BufferDesc& desc, BufferResource& res) {
     vkBindBufferMemory(device, res.buffer, res.memory, 0);
 }
 
-void BufferManager::Destroy(BufferResource& res) {
+void BufferManager::Destroy(BufferResource2& res) {
     vkDestroyBuffer(vkw::ctx().device, res.buffer, vkw::ctx().allocator);
     vkFreeMemory(vkw::ctx().device, res.memory, vkw::ctx().allocator);
 }
@@ -51,31 +51,31 @@ void BufferManager::Copy(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     vkw::ctx().EndSingleTimeCommands(commandBuffer);
 }
 
-void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize size) {
+void BufferManager::Update(BufferResource2& res, void* data, VkDeviceSize size) {
     void* dst;
     vkMapMemory(vkw::ctx().device, res.memory, 0, size, 0, &dst);
     memcpy(dst, data, size);
     vkUnmapMemory(vkw::ctx().device, res.memory);
 }
 
-void BufferManager::Update(BufferResource& res, void* data, VkDeviceSize offset, VkDeviceSize size) {
+void BufferManager::Update(BufferResource2& res, void* data, VkDeviceSize offset, VkDeviceSize size) {
     void* dst;
     vkMapMemory(vkw::ctx().device, res.memory, offset, size, 0, &dst);
     memcpy(dst, data, size);
     vkUnmapMemory(vkw::ctx().device, res.memory);
 }
 
-void BufferManager::CreateStaged(const BufferDesc& desc, BufferResource& res, void* data) {
+void BufferManager::CreateStaged(const BufferDesc& desc, BufferResource2& res, void* data) {
     static int i = 0;
     i++;
-    BufferResource staging;
+    BufferResource2 staging;
     BufferManager::Create(desc, res);
     CreateStagingBuffer(staging, data, desc.size);
     BufferManager::Copy(staging.buffer, res.buffer, desc.size);
     BufferManager::Destroy(staging);
 }
 
-void BufferManager::CreateStagingBuffer(BufferResource& res, void* data, VkDeviceSize size) {
+void BufferManager::CreateStagingBuffer(BufferResource2& res, void* data, VkDeviceSize size) {
     BufferDesc stagingDesc;
     stagingDesc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     stagingDesc.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -84,7 +84,7 @@ void BufferManager::CreateStagingBuffer(BufferResource& res, void* data, VkDevic
     BufferManager::Update(res, data, size);
 }
 
-void BufferManager::CreateIndexBuffer(BufferResource& res, void* data, VkDeviceSize size) {
+void BufferManager::CreateIndexBuffer(BufferResource2& res, void* data, VkDeviceSize size) {
     BufferDesc desc;
     desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -92,7 +92,7 @@ void BufferManager::CreateIndexBuffer(BufferResource& res, void* data, VkDeviceS
     BufferManager::CreateStaged(desc, res, data);
 }
 
-void BufferManager::CreateVertexBuffer(BufferResource& res, void* data, VkDeviceSize size) {
+void BufferManager::CreateVertexBuffer(BufferResource2& res, void* data, VkDeviceSize size) {
     BufferDesc desc;
     desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     desc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -124,7 +124,7 @@ void BufferManager::UpdateStorage(StorageBuffer& buffer, int numFrame, void* dat
     BufferManager::Update(buffer.resource, data, numFrame * buffer.sectionSize, buffer.dataSize);
 }
 
-VkDeviceAddress BufferManager::GetAddress(BufferResource& res) {
+VkDeviceAddress BufferManager::GetAddress(BufferResource2& res) {
     VkBufferDeviceAddressInfo info{};
     info.buffer = res.buffer;
     info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;

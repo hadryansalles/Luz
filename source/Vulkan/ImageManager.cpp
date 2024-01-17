@@ -80,7 +80,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     }
 }
 
-void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource& buffer) {
+void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource2& buffer) {
     auto device = vkw::ctx().device;
     auto allocator = vkw::ctx().allocator;
 
@@ -261,7 +261,7 @@ void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 m
     imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     imageDesc.size = (u64) width * height * channels;
 
-    BufferResource staging;
+    BufferResource2 staging;
     BufferManager::CreateStagingBuffer(staging, data, imageDesc.size);
     Create(imageDesc, res, staging);
     BufferManager::Destroy(staging);

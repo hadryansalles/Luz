@@ -8,10 +8,13 @@ struct GLFWwindow;
 
 namespace vkw {
 
-enum class Memory {
+using Flags = uint32_t;
+
+enum Memory {
     GPU = 0x00000001,
     CPU = 0x00000002 | 0x00000004,
 };
+using MemoryFlags = Flags;
 
 enum Usage {
     TransferSrc = 0x00000001,
@@ -38,24 +41,26 @@ enum Usage {
     MicromapBuildInputReadOnly = 0x00800000,
     MicromapStorage = 0x01000000,
 };
+using UsageFlags = Flags;
 
 struct BufferResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
-    const uint32_t size;
-    const Usage usage;
-    const Memory memory;
-    uint32_t RID();
+    uint32_t size;
+    UsageFlags usage;
+    MemoryFlags memory;
+    uint32_t StorageID();
+    VkBuffer GetBuffer();
+    void SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory);
+    void CopyFromCPU(void* data, uint32_t size, uint32_t dstOffset = 0);
 };
 
-Buffer CreateBuffer(uint32_t size, Usage usage, Memory memory, const std::string& name = "");
+Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name = "");
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
-void* Map(Buffer buffer);
-void Unmap(Buffer buffer);
 
 struct Context {
     VkInstance instance = VK_NULL_HANDLE;
@@ -136,6 +141,9 @@ struct Context {
     static inline VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     static inline VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     static inline VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+
+    Buffer stagingBuffer;
+    const uint32_t stagingBufferSize = 64 * 1024 * 1024;
 
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();

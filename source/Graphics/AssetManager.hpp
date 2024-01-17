@@ -5,6 +5,7 @@
 
 #include "Texture.hpp"
 #include "Scene.hpp"
+#include "VulkanLayer.h"
 
 struct MeshVertex {
     glm::vec3 pos;
@@ -72,8 +73,8 @@ struct MeshDesc {
 };
 
 struct MeshResource {
-    BufferResource vertexBuffer;
-    BufferResource indexBuffer;
+    vkw::Buffer vertexBuffer;
+    vkw::Buffer indexBuffer;
     u32 vertexCount;
     u32 indexCount;
 };
