@@ -23,7 +23,6 @@ struct StorageBuffer {
 class BufferManager {
 public:
     static void Create(const BufferDesc& desc, BufferResource2& res);
-    static void CreateStaged(const BufferDesc& desc, BufferResource2& res, void* data);
     static void Destroy(BufferResource2& res);
 
     static void Copy(VkBuffer src, VkBuffer dst, VkDeviceSize size);

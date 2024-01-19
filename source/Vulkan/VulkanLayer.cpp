@@ -101,7 +101,55 @@ void Buffer::SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory) {
     resource->memory = vkMemory;
 }
 
+void CmdCopy(Buffer& dest, void* data, uint32_t size, uint32_t dstOfsset) {
+    _ctx.CmdCopy(dest, data, size, dstOfsset);
+}
+
+void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
+    _ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+}
+
+void BeginCommandBuffer(Queue queue) {
+    Context::InternalQueue& iqueue = _ctx.queues[queue];
+    vkResetCommandPool(_ctx.device, iqueue.commands[_ctx.currentImageIndex].pool, 0);
+    iqueue.commands[_ctx.currentImageIndex].stagingOffset = 0;
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    _ctx.currentQueue = queue;
+    vkBeginCommandBuffer(_ctx.queues[queue].commands[_ctx.currentImageIndex].buffer, &beginInfo);
+}
+
+uint64_t EndCommandBuffer(Queue queue) {
+    VkCommandBuffer cmdBuffer = _ctx.queues[queue].commands[_ctx.currentImageIndex].buffer;
+    vkEndCommandBuffer(cmdBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmdBuffer;
+
+    auto res = vkQueueSubmit(_ctx.queues[queue].queue, 1, &submitInfo, VK_NULL_HANDLE);
+    DEBUG_VK(res, "Failed to submit command buffer");
+    return 0;
+}
+
+void WaitQueue(Queue queue) {
+    // todo: wait on fence
+    auto res = vkQueueWaitIdle(_ctx.queues[queue].queue);
+    DEBUG_VK(res, "Failed to wait idle command buffer");
+}
+
+//void CmdBeginPresent(/*swapchain*/);
+//void CmdEndPresent();
+
 void CopyFromCPU(Buffer& buffer, void* data, uint32_t size, uint32_t dstOffset) {
+    BeginCommandBuffer(Queue::Transfer);
+    CmdCopy(buffer, data, size, dstOffset);
+    EndCommandBuffer(Queue::Transfer);
+    WaitQueue(Queue::Transfer);
+    return;
+
     if (size > _ctx.stagingBufferSize) {
         LOG_ERROR("Traying to copy data to Buffer {} greater than staging buffer size", buffer.resource->name);
         return;
@@ -373,20 +421,35 @@ void Context::CreatePhysicalDevice() {
         availableFamilies.resize(familyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
 
+        int computeFamily = -1;
+        int transferFamily = -1;
+
         // select the family for each type of queue that we want
-        uint32_t i = 0;
-        for (const auto& family : availableFamilies) {
-            if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                graphicsFamily = i;
+        for (int i = 0; i < familyCount; i++) {
+            auto& family = availableFamilies[i];
+            if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
+                VkBool32 present = false;
+                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+                if (present) {
+                    graphicsFamily = i;
+                }
+                continue;
             }
 
-            VkBool32 present = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
-            if (present) {
-                presentFamily = i;
+            if (family.queueFlags & VK_QUEUE_COMPUTE_BIT && computeFamily == -1) {
+                computeFamily = i;
+                continue;
             }
-            i++;
+
+            if (family.queueFlags & VK_QUEUE_TRANSFER_BIT && transferFamily == -1) {
+                transferFamily = i;
+                continue;
+            }
         }
+
+        queues[Queue::Graphics].family = graphicsFamily;
+        queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
+        queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
 
         // get max number of samples
         vkGetPhysicalDeviceProperties(device, &physicalProperties);
@@ -412,7 +475,6 @@ void Context::CreatePhysicalDevice() {
         // check if all required queues are supported
         bool suitable = required.empty();
         suitable &= graphicsFamily != -1;
-        suitable &= presentFamily != -1;
 
         if (suitable) {
             physicalDevice = device;
@@ -424,9 +486,9 @@ void Context::CreatePhysicalDevice() {
 
 void Context::CreateDevice() {
     LUZ_PROFILE_FUNC();
-    std::set<uint32_t> uniqueFamilies = {
-        uint32_t(presentFamily),
-        uint32_t(graphicsFamily) 
+    std::set<uint32_t> uniqueFamilies;
+    for (int q = 0; q < Queue::Count; q++) {
+        uniqueFamilies.emplace(queues[q].family);
     };
 
     // priority for each type of queue
@@ -530,8 +592,10 @@ void Context::CreateDevice() {
     auto res = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
     DEBUG_VK(res, "Failed to create logical device!");
 
-    vkGetDeviceQueue(device, graphicsFamily, 0, &graphicsQueue);
-    vkGetDeviceQueue(device, presentFamily, 0, &presentQueue);
+    for (int q = 0; q < Queue::Count; q++) {
+        vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
+    }
+    graphicsQueue = queues[Queue::Graphics].queue;
 
     // command pool
     {
@@ -539,21 +603,51 @@ void Context::CreateDevice() {
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.queueFamilyIndex = vkw::ctx().graphicsFamily;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-
         res = vkCreateCommandPool(device, &poolInfo, allocator, &commandPool);
         DEBUG_VK(res, "Failed to create command pool!");
+
+        poolInfo.flags = 0;
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = 1;
+
+        for (int q = 0; q < Queue::Count; q++) {
+            InternalQueue& queue = queues[q];
+            poolInfo.queueFamilyIndex = queue.family;
+            queue.commands.resize(framesInFlight);
+            for (int i = 0; i < framesInFlight; i++) {
+                res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
+                DEBUG_VK(res, "Failed to create command pool!");
+
+                allocInfo.commandPool = queue.commands[i].pool;
+                res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
+                DEBUG_VK(res, "Failed to allocate command buffer!");
+
+                queue.commands[i].staging = CreateBuffer(stagingBufferSize, Usage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
+                vkMapMemory(device, queue.commands[i].staging.resource->memory, 0, stagingBufferSize, 0, (void**)&queue.commands[i].stagingCpu);
+            }
+        }
     }
-    
+
+    // 1 por frame in flight por queue family
     stagingBuffer = CreateBuffer(stagingBufferSize, Usage::TransferSrc, Memory::CPU, "Staging Buffer");
 }
 
 void Context::DestroyDevice() {
     stagingBuffer = {};
+    for (int q = 0; q < Queue::Count; q++) {
+        for (int i = 0; i < framesInFlight; i++) {
+            vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
+            queues[q].commands[i].staging = {};
+            queues[q].commands[i].stagingCpu = nullptr;
+        }
+    }
     vkDestroyCommandPool(device, commandPool, vkw::ctx().allocator);
     vkDestroyDevice(device, vkw::ctx().allocator);
     device = VK_NULL_HANDLE;
     commandPool = VK_NULL_HANDLE;
-    presentQueue = VK_NULL_HANDLE;
     graphicsQueue = VK_NULL_HANDLE;
 }
 
@@ -634,20 +728,8 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         // we should change this image usage
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        uint32_t queueFamilyIndices[] = { vkw::ctx().graphicsFamily, vkw::ctx().presentFamily };
-
-        // if the graphics family is different thant the present family
-        // we need to handle how the images on the swap chain will be accessed by the queues
-        if (vkw::ctx().graphicsFamily != vkw::ctx().presentFamily) {
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        }
-        else {
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            createInfo.queueFamilyIndexCount = 0;
-            createInfo.pQueueFamilyIndices = nullptr;
-        }
+        // don't support different graphics and present family
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         // here we could specify a transformation to be applied on the images of the swap chain
         createInfo.preTransform = capabilities.currentTransform;
@@ -819,7 +901,7 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr;
 
-    res = vkQueuePresentKHR(vkw::ctx().presentQueue, &presentInfo);
+    res = vkQueuePresentKHR(vkw::ctx().graphicsQueue, &presentInfo);
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
         swapChainDirty = true;
@@ -937,6 +1019,27 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 
 Context& ctx() {
     return _ctx;
+}
+
+void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
+    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    if (stagingBufferSize - cmd.stagingOffset < size) {
+        LOG_ERROR("not enough size in staging buffer to copy");
+        // todo: allocate additional buffer
+        return;
+    }
+    memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
+    CmdCopy(dst, cmd.staging, size, dstOfsset, cmd.stagingOffset);
+    cmd.stagingOffset += size;
+}
+
+void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
+    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = srcOffset;
+    copyRegion.dstOffset = dstOffset;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
 }
 
 }

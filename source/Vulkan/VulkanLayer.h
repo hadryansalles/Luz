@@ -44,25 +44,45 @@ enum Usage {
 using UsageFlags = Flags;
 
 struct BufferResource;
+struct CommandBufferResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
     uint32_t size;
     UsageFlags usage;
     MemoryFlags memory;
+
+// -------------------------------------- delete
     uint32_t StorageID();
     VkBuffer GetBuffer();
     void SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory);
 };
 
+enum Queue {
+    Graphics = 0,
+    Compute = 1,
+    Transfer = 2,
+    Count = 3,
+};
+
 Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name = "");
 void CopyFromCPU(Buffer& buffer, void* data, uint32_t size, uint32_t dstOffset = 0);
+
+void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
+void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+
+void BeginCommandBuffer(Queue queue);
+uint64_t EndCommandBuffer(Queue queue);
+void WaitQueue(Queue queue);
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
 
 struct Context {
+    void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
+    void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
@@ -97,9 +117,6 @@ struct Context {
         VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,
     };
 
-    int presentFamily = -1;
-    int graphicsFamily = -1;
-
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
     VkSampleCountFlags sampleCounts;
@@ -114,9 +131,28 @@ struct Context {
     std::vector<VkQueueFamilyProperties> availableFamilies;
 
     VkDevice device = VK_NULL_HANDLE;
-    VkQueue presentQueue = VK_NULL_HANDLE;
+
+    struct CommandResources {
+        u8* stagingCpu = nullptr;
+        uint32_t stagingOffset = 0;
+        Buffer staging;
+        VkCommandPool pool = VK_NULL_HANDLE;
+        VkCommandBuffer buffer = VK_NULL_HANDLE;
+    };
+    struct InternalQueue {
+        VkQueue queue = VK_NULL_HANDLE;
+        int family = -1;
+        std::vector<CommandResources> commands;
+    };
+    InternalQueue queues[Queue::Count];
+    Queue currentQueue = Queue::Graphics;
+    const uint32_t stagingBufferSize = 64 * 1024 * 1024;
+
+    // TODO: remove after finishing queue refactoring
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     VkCommandPool commandPool = VK_NULL_HANDLE;
+    int graphicsFamily = -1;
+
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
     VkSwapchainKHR swapChain = VK_NULL_HANDLE;
@@ -128,8 +164,8 @@ struct Context {
     std::vector<VkFence> inFlightFences;
     std::vector<VkFence> imagesInFlight;
 
-    uint32_t additionalImages = 1;
-    uint32_t framesInFlight = 2;
+    uint32_t additionalImages = 0;
+    uint32_t framesInFlight = 3;
     VkFormat depthFormat;
     VkExtent2D swapChainExtent;
     uint32_t swapChainCurrentFrame;
@@ -143,7 +179,7 @@ struct Context {
     static inline VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
     Buffer stagingBuffer;
-    const uint32_t stagingBufferSize = 64 * 1024 * 1024;
+    uint32_t stagingBufferOffset = 0;
 
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();
