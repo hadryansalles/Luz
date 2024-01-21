@@ -107,8 +107,10 @@ namespace Scene {
     inline SceneBlock scene;
     inline ModelBlock models[MAX_MODELS];
     inline RID textures[MAX_TEXTURES];
-    inline StorageBuffer sceneBuffer;
-    inline StorageBuffer modelsBuffer;
+    inline StorageBuffer sceneBuffer2;
+    inline StorageBuffer modelsBuffer2;
+    inline vkw::Buffer sceneBuffer;
+    inline vkw::Buffer modelsBuffer;
     inline std::vector<RID> freeTextureRIDs;
     inline std::vector<RID> freeModelRIDs; 
 

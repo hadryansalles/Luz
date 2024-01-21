@@ -80,7 +80,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res) {
     }
 }
 
-void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResource2& buffer) {
+void ImageManager::Create(const ImageDesc& desc, ImageResource& res, vkw::Buffer& buffer) {
     auto device = vkw::ctx().device;
     auto allocator = vkw::ctx().allocator;
 
@@ -160,7 +160,7 @@ void ImageManager::Create(const ImageDesc& desc, ImageResource& res, BufferResou
     region.imageOffset = { 0, 0, 0 };
     region.imageExtent = { desc.width, desc.height, 1 };
 
-    vkCmdCopyBufferToImage(commandBuffer, buffer.buffer, res.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(commandBuffer, buffer.GetBuffer(), res.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     vkw::ctx().EndSingleTimeCommands(commandBuffer);
 
     VkFormatProperties formatProperties;
@@ -261,10 +261,13 @@ void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 m
     imageDesc.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     imageDesc.size = (u64) width * height * channels;
 
-    BufferResource2 staging;
-    BufferManager::CreateStagingBuffer(staging, data, imageDesc.size);
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::Buffer staging = vkw::CreateBuffer(imageDesc.size, vkw::Usage::TransferSrc | vkw::Usage::TransferDst, vkw::Memory::GPU);
+    vkw::CmdCopy(staging, data, imageDesc.size);
+    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Transfer);
     Create(imageDesc, res, staging);
-    BufferManager::Destroy(staging);
+    staging = {};
 }
 
 void ImageManager::Destroy(ImageResource& res) {

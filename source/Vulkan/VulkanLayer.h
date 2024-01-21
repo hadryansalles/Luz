@@ -32,8 +32,8 @@ enum Usage {
     TransformFeedback = 0x00000800,
     TransformFeedbackCounter = 0x00001000,
     ConditionalRendering = 0x00000200,
-    AccelerationStructureBuildInputReadOnly = 0x00080000,
-    AccelerationStructureStorage = 0x00100000,
+    AccelerationStructureInput = 0x00080000,
+    AccelerationStructure = 0x00100000,
     ShaderBindingTable = 0x00000400,
     SamplerDescriptor = 0x00200000,
     ResourceDescriptor = 0x00400000,
@@ -51,6 +51,7 @@ struct Buffer {
     uint32_t size;
     UsageFlags usage;
     MemoryFlags memory;
+    uint32_t rid;
 
 // -------------------------------------- delete
     uint32_t StorageID();
@@ -65,7 +66,7 @@ enum Queue {
     Count = 3,
 };
 
-Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name = "");
+Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -170,6 +171,8 @@ struct Context {
     uint32_t swapChainCurrentFrame;
     bool swapChainDirty = true;
     int currentImageIndex = 0;
+
+    uint32_t nextBufferRID = 32;
 
     // preferred, warn if not available
     static inline VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;

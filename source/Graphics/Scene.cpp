@@ -56,16 +56,23 @@ void Setup() {
 
 void CreateResources() {
     LUZ_PROFILE_FUNC();
-    BufferManager::CreateStorageBuffer(Scene::sceneBuffer, sizeof(Scene::scene));
-    BufferManager::CreateStorageBuffer(Scene::modelsBuffer, sizeof(Scene::models));
-    GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer, SCENE_BUFFER_INDEX);
-    GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer, MODELS_BUFFER_INDEX);
+    sceneBuffer = vkw::CreateBuffer(sizeof(Scene::scene), vkw::Usage::Storage | vkw::Usage::TransferDst);
+    modelsBuffer = vkw::CreateBuffer(sizeof(Scene::models), vkw::Usage::Storage | vkw::Usage::TransferDst);
+    BufferManager::CreateStorageBuffer(Scene::sceneBuffer2, sizeof(Scene::scene));
+    BufferManager::CreateStorageBuffer(Scene::modelsBuffer2, sizeof(Scene::models));
+    GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer2, SCENE_BUFFER_INDEX);
+    GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer2, MODELS_BUFFER_INDEX);
 }
 
 void UpdateBuffers(int numFrame) {
     LUZ_PROFILE_FUNC();
-    BufferManager::UpdateStorage(sceneBuffer, numFrame, &scene);
-    BufferManager::UpdateStorage(modelsBuffer, numFrame, &models);
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
+    vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
+    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Transfer);
+    BufferManager::UpdateStorage(sceneBuffer2, numFrame, &scene);
+    BufferManager::UpdateStorage(modelsBuffer2, numFrame, &models);
 }
 
 void UpdateResources(int numFrame) {
@@ -118,8 +125,10 @@ void UpdateResources(int numFrame) {
 }
 
 void DestroyResources() {
-    BufferManager::DestroyStorageBuffer(sceneBuffer);
-    BufferManager::DestroyStorageBuffer(modelsBuffer);
+    BufferManager::DestroyStorageBuffer(sceneBuffer2);
+    BufferManager::DestroyStorageBuffer(modelsBuffer2);
+    sceneBuffer = {};
+    modelsBuffer = {};
 }
 
 Model* CreateModel() {

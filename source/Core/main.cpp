@@ -243,8 +243,12 @@ private:
         DeferredShading::BeginOpaquePass(commandBuffer);
 
         DeferredShading::OpaqueConstants constants;
-        constants.sceneBufferIndex = vkw::ctx().swapChainImages.size() * SCENE_BUFFER_INDEX + frameIndex;
-        constants.modelBufferIndex = vkw::ctx().swapChainImages.size() * MODELS_BUFFER_INDEX + frameIndex;
+        // constants.sceneBufferIndex = vkw::ctx().swapChainImages.size() * SCENE_BUFFER_INDEX + frameIndex;
+        // constants.modelBufferIndex = vkw::ctx().swapChainImages.size() * MODELS_BUFFER_INDEX + frameIndex;
+        // constants.sceneBufferIndex = vkw::ctx().swapChainImages.size() * SCENE_BUFFER_INDEX + frameIndex;
+        // constants.modelBufferIndex = vkw::ctx().swapChainImages.size() * MODELS_BUFFER_INDEX + frameIndex;
+        constants.sceneBufferIndex = Scene::sceneBuffer.rid;
+        constants.modelBufferIndex = Scene::modelsBuffer.rid;
 
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;

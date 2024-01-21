@@ -2,13 +2,14 @@
 
 #include "VulkanLayer.h"
 #include "BufferManager.hpp"
+#include "GraphicsPipelineManager.hpp"
+#include "common.h"
 
 namespace vkw {
 
 static Context _ctx;
 
 struct Resource {
-    uint32_t rid;
     std::string name;
     virtual ~Resource()
     {};
@@ -19,8 +20,8 @@ struct BufferResource : Resource {
     VkDeviceMemory memory;
 
     virtual ~BufferResource() {
-        vkDestroyBuffer(ctx().device, buffer, ctx().allocator);
-        vkFreeMemory(ctx().device, memory, ctx().allocator);
+        vkDestroyBuffer(_ctx.device, buffer, ctx().allocator);
+        vkFreeMemory(_ctx.device, memory, ctx().allocator);
     }
 };
 
@@ -30,9 +31,6 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     ctx().CreateDevice();
     ctx().CreateSurfaceFormats();
     ctx().CreateSwapChain(width, height);
-    // ctx().device = vkw::ctx().device;
-    // ctx().allocator = ctx().allocator;
-    // ctx().memoryProperties = ctx().memoryProperties;
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
@@ -48,7 +46,6 @@ void Destroy() {
 }
 
 Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name) {
-
     if (usage & Usage::Vertex) {
         usage |= Usage::TransferDst;
     }
@@ -57,7 +54,12 @@ Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const s
         usage |= Usage::TransferDst;
     }
 
-    if (usage & Usage::AccelerationStructureBuildInputReadOnly) {
+    if (usage & Usage::Storage) {
+        usage |= Usage::Address;
+        size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
+    }
+
+    if (usage & Usage::AccelerationStructureInput) {
         usage |= Usage::Address;
         usage |= Usage::TransferDst;
     }
@@ -67,31 +69,47 @@ Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const s
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
     bufferInfo.usage = (VkBufferUsageFlagBits)usage;
-    // only from the graphics queue
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    auto result = vkCreateBuffer(ctx().device, &bufferInfo, ctx().allocator, &res->buffer);
+    auto result = vkCreateBuffer(_ctx.device, &bufferInfo, _ctx.allocator, &res->buffer);
     DEBUG_VK(result, "Failed to create buffer!");
 
     VkMemoryRequirements memReq;
-    vkGetBufferMemoryRequirements(ctx().device, res->buffer, &memReq);
+    vkGetBufferMemoryRequirements(_ctx.device, res->buffer, &memReq);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = ctx().FindMemoryType(memReq.memoryTypeBits, (VkMemoryPropertyFlags)memory);
+    allocInfo.memoryTypeIndex = _ctx.FindMemoryType(memReq.memoryTypeBits, (VkMemoryPropertyFlags)memory);
 
-    result = vkAllocateMemory(ctx().device, &allocInfo, ctx().allocator, &res->memory);
+    result = vkAllocateMemory(_ctx.device, &allocInfo, _ctx.allocator, &res->memory);
     DEBUG_VK(result, "Failed to allocate buffer memory!");
 
-    vkBindBufferMemory(ctx().device, res->buffer, res->memory, 0);
+    vkBindBufferMemory(_ctx.device, res->buffer, res->memory, 0);
     res->name = name;
+
+    if (usage & Usage::Storage) {
+        VkDescriptorBufferInfo descriptorInfo = {};
+        VkWriteDescriptorSet write = {};
+        descriptorInfo.buffer = res->buffer;
+        descriptorInfo.offset = 0;
+        descriptorInfo.range = size;
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        write.dstBinding = LUZ_BUFFER_BINDING;
+        write.dstArrayElement = _ctx.nextBufferRID;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
 
     return {
         .resource = res,
         .size = size,
         .usage = usage,
         .memory = memory,
+        .rid = _ctx.nextBufferRID++,
     };
 }
 

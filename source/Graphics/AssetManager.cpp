@@ -43,8 +43,6 @@ void AssetManager::Destroy() {
     for (RID i = 0; i < nextMeshRID; i++) {
         meshes[i].vertexBuffer = {};
         meshes[i].indexBuffer = {};
-        //BufferManager::Destroy(meshes[i].vertexBuffer);
-        //BufferManager::Destroy(meshes[i].indexBuffer);
         unintializedMeshes.push_back(i);
     }
     meshesLock.unlock();
@@ -159,13 +157,13 @@ void AssetManager::InitializeMesh(RID rid) {
     res.indexCount = desc.indices.size();
     res.vertexBuffer = vkw::CreateBuffer(
         sizeof(MeshVertex) * desc.vertices.size(),
-        vkw::Usage::Vertex | vkw::Usage::AccelerationStructureBuildInputReadOnly,
+        vkw::Usage::Vertex | vkw::Usage::AccelerationStructureInput,
         vkw::Memory::GPU,
         ("VertexBuffer" + std::to_string(rid))
     );
     res.indexBuffer = vkw::CreateBuffer(
         sizeof(uint32_t) * desc.indices.size(),
-        vkw::Usage::Index | vkw::Usage::AccelerationStructureBuildInputReadOnly,
+        vkw::Usage::Index | vkw::Usage::AccelerationStructureInput,
         vkw::Memory::GPU,
         ("IndexBuffer" + std::to_string(rid))
     );
@@ -174,8 +172,6 @@ void AssetManager::InitializeMesh(RID rid) {
     vkw::CmdCopy(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
     vkw::EndCommandBuffer(vkw::Queue::Transfer);
     vkw::WaitQueue(vkw::Queue::Transfer);
-    // vkw::CopyFromCPU(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
-    // vkw::CopyFromCPU(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
 }
 
 void AssetManager::RecenterMesh(RID rid) {

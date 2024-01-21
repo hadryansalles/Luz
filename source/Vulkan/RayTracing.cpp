@@ -24,7 +24,7 @@ struct BLASInput {
 
 struct AccelerationStructure {
     VkAccelerationStructureKHR accel = VK_NULL_HANDLE;
-    BufferResource2 buffer;
+    vkw::Buffer buffer;
 };
 
 struct BuildAccelerationStructure {
@@ -169,15 +169,10 @@ void CreateBLAS(std::vector<RID>& meshes) {
         maxScratchSize = std::max(maxScratchSize, buildAs[idx].sizeInfo.buildScratchSize);
     }
 
-    BufferResource2 scratchBuffer;
-    BufferDesc scratchBufferDesc;
-    scratchBufferDesc.size = maxScratchSize;
-    scratchBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    scratchBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    BufferManager::Create(scratchBufferDesc, scratchBuffer);
+    vkw::Buffer scratchBuffer = vkw::CreateBuffer(maxScratchSize, vkw::Usage::Storage, vkw::Memory::GPU);
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    bufferInfo.buffer = scratchBuffer.buffer;
+    bufferInfo.buffer = scratchBuffer.GetBuffer();
     VkDeviceAddress scratchAddress = ctx.vkGetBufferDeviceAddressKHR(device, &bufferInfo);
 
     std::vector<uint32_t> indices; // Indices of the BLAS to create
@@ -193,16 +188,12 @@ void CreateBLAS(std::vector<RID>& meshes) {
                 for(const auto& idx : indices)
                 {
                     // Actual allocation of buffer and acceleration structure.
-                    BufferDesc asBufferDesc;
-                    asBufferDesc.size = buildAs[idx].sizeInfo.accelerationStructureSize;
-                    asBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-                    asBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-                    BufferManager::Create(asBufferDesc, buildAs[idx].as.buffer);
+                    buildAs[idx].as.buffer = vkw::CreateBuffer(buildAs[idx].sizeInfo.accelerationStructureSize, vkw::Usage::AccelerationStructure, vkw::Memory::GPU);
 
                     VkAccelerationStructureCreateInfoKHR createInfo{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
                     createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
                     createInfo.size = buildAs[idx].sizeInfo.accelerationStructureSize; // Will be used to allocate memory.
-                    createInfo.buffer = buildAs[idx].as.buffer.buffer;
+                    createInfo.buffer = buildAs[idx].as.buffer.GetBuffer();
                     ctx.vkCreateAccelerationStructureKHR(device, &createInfo, nullptr, &buildAs[idx].as.accel);
 
                     // BuildInfo #2 part
@@ -232,7 +223,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
     for(auto& b : buildAs) {
         ctx.BLAS.emplace_back(b.as);
     }
-    BufferManager::Destroy(scratchBuffer);
+    scratchBuffer = {};
 
     LOG_INFO("Created BLAS.");
 }
@@ -253,7 +244,7 @@ void CreateTLAS() {
             update = false;
             ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
             ctx.TLAS.accel = VK_NULL_HANDLE;
-            BufferManager::Destroy(ctx.TLAS.buffer);
+            ctx.TLAS.buffer = {};
         }
     }
 
@@ -296,7 +287,7 @@ void CreateTLAS() {
     DEBUG_ASSERT(ctx.TLAS.accel == VK_NULL_HANDLE || update, "TLAS already created!");
     u32 countInstance = (u32)instances.size();
 
-    vkw::Buffer instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), vkw::Usage::AccelerationStructureBuildInputReadOnly, vkw::Memory::GPU);
+    vkw::Buffer instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), vkw::Usage::AccelerationStructureInput, vkw::Memory::GPU);
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdCopy(instancesBuffer, instances.data(), instancesBuffer.size);
     vkw::EndCommandBuffer(vkw::Queue::Transfer);
@@ -346,17 +337,13 @@ void CreateTLAS() {
         ctx.vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &countInstance, &sizeInfo);
 
         if (!update) {
-            BufferDesc asBufferDesc;
-            asBufferDesc.size = sizeInfo.accelerationStructureSize;
-            asBufferDesc.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-            asBufferDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-            BufferManager::Create(asBufferDesc, ctx.TLAS.buffer);
+            ctx.TLAS.buffer = vkw::CreateBuffer(sizeInfo.accelerationStructureSize, vkw::Usage::AccelerationStructure, vkw::Memory::GPU);
 
             VkAccelerationStructureCreateInfoKHR createInfo{};
             createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
             createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
             createInfo.size = sizeInfo.accelerationStructureSize;
-            createInfo.buffer = ctx.TLAS.buffer.buffer;
+            createInfo.buffer = ctx.TLAS.buffer.GetBuffer();
             ctx.vkCreateAccelerationStructureKHR(device, &createInfo, nullptr, &ctx.TLAS.accel);
 
             VkWriteDescriptorSetAccelerationStructureKHR descriptorAccelerationStructure{};
@@ -380,12 +367,7 @@ void CreateTLAS() {
             DEBUG_TRACE("Update descriptor sets in CreateTLAS!");
         }
 
-        //BufferDesc scratchDesc;
-        //scratchDesc.size = sizeInfo.buildScratchSize;
-        //scratchDesc.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        //scratchDesc.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
         scratchBuffer = vkw::CreateBuffer(sizeInfo.buildScratchSize, vkw::Usage::Address | vkw::Usage::Storage, vkw::Memory::GPU);
-        //BufferManager::Create(scratchDesc, scratchBuffer);
 
         VkBufferDeviceAddressInfo scratchInfo{};
         scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -428,11 +410,11 @@ void Destroy() {
     VkDevice device = vkw::ctx().device;
     for (int i = 0; i < ctx.BLAS.size(); i++) {
         ctx.vkDestroyAccelerationStructureKHR(device, ctx.BLAS[i].accel, nullptr);
-        BufferManager::Destroy(ctx.BLAS[i].buffer);
+        ctx.BLAS[i].buffer = {};
     }
     ctx.BLAS.clear();
     ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
-    BufferManager::Destroy(ctx.TLAS.buffer);
+    ctx.TLAS.buffer = {};
     ctx.TLAS.accel = VK_NULL_HANDLE;
 }
 
