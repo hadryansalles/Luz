@@ -169,8 +169,13 @@ void AssetManager::InitializeMesh(RID rid) {
         vkw::Memory::GPU,
         ("IndexBuffer" + std::to_string(rid))
     );
-    vkw::CopyFromCPU(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
-    vkw::CopyFromCPU(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::CmdCopy(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
+    vkw::CmdCopy(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
+    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Transfer);
+    // vkw::CopyFromCPU(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
+    // vkw::CopyFromCPU(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
 }
 
 void AssetManager::RecenterMesh(RID rid) {

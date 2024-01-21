@@ -66,7 +66,6 @@ enum Queue {
 };
 
 Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name = "");
-void CopyFromCPU(Buffer& buffer, void* data, uint32_t size, uint32_t dstOffset = 0);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);

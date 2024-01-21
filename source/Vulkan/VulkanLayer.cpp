@@ -142,33 +142,10 @@ void WaitQueue(Queue queue) {
 
 //void CmdBeginPresent(/*swapchain*/);
 //void CmdEndPresent();
-
-void CopyFromCPU(Buffer& buffer, void* data, uint32_t size, uint32_t dstOffset) {
-    BeginCommandBuffer(Queue::Transfer);
-    CmdCopy(buffer, data, size, dstOffset);
-    EndCommandBuffer(Queue::Transfer);
-    WaitQueue(Queue::Transfer);
-    return;
-
-    if (size > _ctx.stagingBufferSize) {
-        LOG_ERROR("Traying to copy data to Buffer {} greater than staging buffer size", buffer.resource->name);
-        return;
-    }
-    // map staging buffer to CPU memory to copy data
-    void* dst;
-    vkMapMemory(_ctx.device, _ctx.stagingBuffer.resource->memory, 0, size, 0, &dst);
-    memcpy(dst, data, size);
-    vkUnmapMemory(vkw::ctx().device, _ctx.stagingBuffer.resource->memory);
-
-    // copy staging buffer to dest buffer
-    auto cmdBuffer = vkw::ctx().BeginSingleTimeCommands();
-    VkBufferCopy copyRegion{};
-    copyRegion.srcOffset = 0;
-    copyRegion.dstOffset = dstOffset;
-    copyRegion.size = size;
-    vkCmdCopyBuffer(cmdBuffer, _ctx.stagingBuffer.resource->buffer, buffer.resource->buffer, 1, &copyRegion);
-    vkw::ctx().EndSingleTimeCommands(cmdBuffer);
-}
+    // BeginCommandBuffer(Queue::Transfer);
+    // CmdCopy(buffer, data, size, dstOffset);
+    // EndCommandBuffer(Queue::Transfer);
+    // WaitQueue(Queue::Transfer);
 
 uint32_t Buffer::StorageID() {
     return 0;

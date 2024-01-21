@@ -37,7 +37,7 @@ void Setup() {
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
 
-    AssetManager::LoadModels("assets/corvette_stingray.glb");
+    //AssetManager::LoadModels("assets/corvette_stingray.glb");
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
