@@ -5,7 +5,6 @@
 #include "Scene.hpp"
 #include "AssetManager.hpp"
 #include "ImageManager.hpp"
-#include "BufferManager.hpp"
 #include "FileManager.hpp"
 #include "Texture.hpp"
 #include "GraphicsPipelineManager.hpp"

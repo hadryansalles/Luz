@@ -1,8 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-
-#include "BufferManager.hpp"
+#include "VulkanLayer.h"
 
 struct ImageResource {
     VkImage image         = VK_NULL_HANDLE;

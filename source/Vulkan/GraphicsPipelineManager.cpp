@@ -401,24 +401,3 @@ void GraphicsPipelineManager::OnImgui(GraphicsPipelineDesc& desc, GraphicsPipeli
         }
     }
 }
-
-void GraphicsPipelineManager::WriteStorage(StorageBuffer& uniform, int index) {
-    int numFrames = vkw::ctx().swapChainImages.size();
-    std::vector<VkDescriptorBufferInfo> bufferInfos(numFrames);
-    std::vector<VkWriteDescriptorSet> writes(numFrames);
-    for (int i = 0; i < numFrames; i++) {
-        bufferInfos[i].buffer = uniform.resource.buffer;
-        bufferInfos[i].offset = i*uniform.sectionSize;
-        bufferInfos[i].range = uniform.dataSize;
-
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = bindlessDescriptorSet;
-        writes[i].dstBinding = GraphicsPipelineManager::STORAGE_BINDING;
-        writes[i].dstArrayElement = numFrames*index + i;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writes[i].descriptorCount = 1;
-        writes[i].pBufferInfo = &bufferInfos[i];
-    }
-    vkUpdateDescriptorSets(vkw::ctx().device, numFrames, writes.data(), 0, nullptr);
-    DEBUG_TRACE("Update descriptor sets in WriteStorage!");
-}

@@ -7,7 +7,6 @@
 #include "GraphicsPipelineManager.hpp"
 #include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
-#include "BufferManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
 #include "RayTracing.hpp"

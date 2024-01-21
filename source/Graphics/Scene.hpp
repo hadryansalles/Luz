@@ -4,7 +4,7 @@
 
 #include "Transform.hpp"
 #include "Camera.hpp"
-#include "BufferManager.hpp"
+#include "VulkanLayer.h"
 
 #define MAX_TEXTURES 4096
 #define MAX_MODELS 4096
@@ -107,8 +107,6 @@ namespace Scene {
     inline SceneBlock scene;
     inline ModelBlock models[MAX_MODELS];
     inline RID textures[MAX_TEXTURES];
-    inline StorageBuffer sceneBuffer2;
-    inline StorageBuffer modelsBuffer2;
     inline vkw::Buffer sceneBuffer;
     inline vkw::Buffer modelsBuffer;
     inline std::vector<RID> freeTextureRIDs;

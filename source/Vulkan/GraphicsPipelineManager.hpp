@@ -3,7 +3,6 @@
 #include <vulkan/vulkan.h>
 #include <string>
 
-#include "BufferManager.hpp"
 #include "Shader.hpp"
 
 struct GraphicsPipelineDesc {
@@ -42,8 +41,6 @@ public:
     static void DestroyPipeline(GraphicsPipelineResource& res);
     static void ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
-
-    static void WriteStorage(StorageBuffer& uniform, int index);
 
     static inline VkDescriptorPool GetImguiDescriptorPool()    { return imguiDescriptorPool;   }
 

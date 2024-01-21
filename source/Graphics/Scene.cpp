@@ -58,10 +58,6 @@ void CreateResources() {
     LUZ_PROFILE_FUNC();
     sceneBuffer = vkw::CreateBuffer(sizeof(Scene::scene), vkw::Usage::Storage | vkw::Usage::TransferDst);
     modelsBuffer = vkw::CreateBuffer(sizeof(Scene::models), vkw::Usage::Storage | vkw::Usage::TransferDst);
-    BufferManager::CreateStorageBuffer(Scene::sceneBuffer2, sizeof(Scene::scene));
-    BufferManager::CreateStorageBuffer(Scene::modelsBuffer2, sizeof(Scene::models));
-    GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer2, SCENE_BUFFER_INDEX);
-    GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer2, MODELS_BUFFER_INDEX);
 }
 
 void UpdateBuffers(int numFrame) {
@@ -71,8 +67,6 @@ void UpdateBuffers(int numFrame) {
     vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
     vkw::EndCommandBuffer(vkw::Queue::Transfer);
     vkw::WaitQueue(vkw::Queue::Transfer);
-    BufferManager::UpdateStorage(sceneBuffer2, numFrame, &scene);
-    BufferManager::UpdateStorage(modelsBuffer2, numFrame, &models);
 }
 
 void UpdateResources(int numFrame) {
@@ -125,8 +119,6 @@ void UpdateResources(int numFrame) {
 }
 
 void DestroyResources() {
-    BufferManager::DestroyStorageBuffer(sceneBuffer2);
-    BufferManager::DestroyStorageBuffer(modelsBuffer2);
     sceneBuffer = {};
     modelsBuffer = {};
 }
