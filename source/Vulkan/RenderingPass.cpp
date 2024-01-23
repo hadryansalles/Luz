@@ -5,11 +5,10 @@
 #include "VulkanLayer.h"
 
 void RenderingPassManager::Create() {
-    sampler = CreateSampler(1);
+    sampler = vkw::ctx().genericSampler;
 }
 
 void RenderingPassManager::Destroy() {
-    vkDestroySampler(vkw::ctx().device, sampler, nullptr);
     for (RID i = 0; i < nextRID; i++) {
         ImageManager::Destroy(imageAttachments[i]);
     }

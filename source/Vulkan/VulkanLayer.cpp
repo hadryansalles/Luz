@@ -2,7 +2,9 @@
 
 #include "VulkanLayer.h"
 #include "GraphicsPipelineManager.hpp"
+
 #include "common.h"
+#include "imgui/imgui_impl_vulkan.h"
 
 namespace vkw {
 
@@ -201,6 +203,7 @@ Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlag
         .layout = Layout::Undefined,
         .aspect = aspect,
         .rid = _ctx.nextImageRID++,
+        .imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)Layout::Undefined),
     };
 
     VkDescriptorImageInfo descriptorInfo = {

@@ -13,12 +13,6 @@ struct TextureDesc {
 };
 
 struct TextureResource {
-    ImageResource image;
-    VkSampler     sampler   = VK_NULL_HANDLE;
-    ImTextureID   imguiRID  = nullptr;
 };
 
-void CreateTextureResource(TextureDesc& desc, TextureResource& res);
-void DestroyTextureResource(TextureResource& res);
-void DrawTextureOnImgui(TextureResource& res);
-VkSampler CreateSampler(f32 maxLod);
+void DrawTextureOnImgui(vkw::Image& img);

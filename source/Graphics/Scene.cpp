@@ -375,13 +375,13 @@ void InspectModel(Model* model) {
         if (ImGui::TreeNode("Color")) {
             ImGui::ColorEdit3("Color", glm::value_ptr(model->block.material.color));
             ImGui::Checkbox("Use texture", &model->useColorMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.colorMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.colorMap]);
             AcceptTexturePayload(model->block.material.colorMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Normal")) {
             ImGui::Checkbox("Use texture", &model->useNormalMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.normalMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.normalMap]);
             AcceptTexturePayload(model->block.material.normalMap);
             ImGui::TreePop();
         }
@@ -389,20 +389,20 @@ void InspectModel(Model* model) {
             ImGui::DragFloat("Metallic", &model->block.material.metallic, 0.001, 0, 1);
             ImGui::DragFloat("Roughness", &model->block.material.roughness, 0.001, 0, 1);
             ImGui::Checkbox("Use texture", &model->useMetallicRoughnessMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.metallicRoughnessMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.metallicRoughnessMap]);
             AcceptTexturePayload(model->block.material.metallicRoughnessMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Emission")) {
             ImGui::ColorEdit3("Emission", glm::value_ptr( model->block.material.emission));
             ImGui::Checkbox("Use texture", &model->useEmissionMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.emissionMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.emissionMap]);
             AcceptTexturePayload(model->block.material.emissionMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Ambient Occlusion")) {
             ImGui::Checkbox("Use texture", &model->useAoMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.aoMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.aoMap]);
             AcceptTexturePayload(model->block.material.aoMap);
             ImGui::TreePop();
         }

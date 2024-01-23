@@ -48,7 +48,6 @@ void AssetManager::Destroy() {
     meshesLock.unlock();
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
-        DestroyTextureResource(textures[i]);
         images[i] = {};
         unintializedTextures.push_back(i);
     }
@@ -118,38 +117,6 @@ void AssetManager::UpdateResources() {
 }
 
 void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
-    return;
-    LUZ_PROFILE_FUNC();
-    if (rids.empty()) {
-        return;
-    }
-    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    const RID count = rids.size();
-    std::vector<VkDescriptorImageInfo> imageInfos(count);
-    std::vector<VkWriteDescriptorSet> writes(count);
-
-    VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
-
-    for (int i = 0; i < count; i++) {
-        RID rid = rids[i];
-        DEBUG_ASSERT(textures[rid].sampler != VK_NULL_HANDLE, "Texture not loaded!");
-        textures[rid].imguiRID = ImGui_ImplVulkan_AddTexture(textures[rid].sampler, textures[rid].image.view, layout);
-
-        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[i].imageView = textures[rid].image.view;
-        imageInfos[i].sampler = textures[rid].sampler;
-
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = bindlessDescriptorSet;
-        writes[i].dstBinding = 0;
-        writes[i].dstArrayElement = rid;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[i].descriptorCount = 1;
-        writes[i].pImageInfo = &imageInfos[i];
-    }
-    vkUpdateDescriptorSets(vkw::ctx().device, count, writes.data(), 0, nullptr);
-    DEBUG_TRACE("Update descriptor sets in UpdateTexturesDescriptor!");
 }
 
 void AssetManager::InitializeMesh(RID rid) {
@@ -217,7 +184,6 @@ void AssetManager::RecenterMesh(RID rid) {
 void AssetManager::InitializeTexture(RID id) {
     TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
-    CreateTextureResource(desc, res);
 
     images[id] = vkw::CreateImage(desc.width, desc.height, vkw::Format::RGBA8_unorm, vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst, "Texture " + std::to_string(id));
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
@@ -768,13 +734,13 @@ void AssetManager::OnImgui() {
             if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
-                DrawTextureOnImgui(textures[rid]);
+                DrawTextureOnImgui(images[rid]);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
                 ImGui::TreePop();

@@ -120,6 +120,7 @@ struct Image {
     Layout::ImageLayout layout;
     AspectFlags aspect;
     uint32_t rid;
+    ImTextureID imguiRID;
 };
 
 enum Queue {
