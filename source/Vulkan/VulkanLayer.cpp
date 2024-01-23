@@ -10,8 +10,7 @@ static Context _ctx;
 
 struct Resource {
     std::string name;
-    virtual ~Resource()
-    {};
+    virtual ~Resource() {};
 };
 
 struct BufferResource : Resource {
@@ -19,48 +18,60 @@ struct BufferResource : Resource {
     VkDeviceMemory memory;
 
     virtual ~BufferResource() {
-        vkDestroyBuffer(_ctx.device, buffer, ctx().allocator);
-        vkFreeMemory(_ctx.device, memory, ctx().allocator);
+        vkDestroyBuffer(_ctx.device, buffer, _ctx.allocator);
+        vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+    }
+};
+
+struct ImageResource : Resource {
+    VkImage image;
+    VkImageView view;
+    VkDeviceMemory memory;
+
+    virtual ~ImageResource() {
+        vkDestroyImageView(_ctx.device, view, _ctx.allocator);
+        vkDestroyImage(_ctx.device, image, _ctx.allocator);
+        vkFreeMemory(_ctx.device, memory, _ctx.allocator);
     }
 };
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
-    ctx().CreateInstance(window);
-    ctx().CreatePhysicalDevice();
-    ctx().CreateDevice();
-    ctx().CreateSurfaceFormats();
-    ctx().CreateSwapChain(width, height);
+    _ctx.CreateInstance(window);
+    _ctx.CreatePhysicalDevice();
+    _ctx.CreateDevice();
+    _ctx.CreateSurfaceFormats();
+    _ctx.CreateSwapChain(width, height);
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
-    ctx().DestroySwapChain();
-    ctx().CreateSurfaceFormats();
-    ctx().CreateSwapChain(width, height);
+    _ctx.DestroySwapChain();
+    _ctx.CreateSurfaceFormats();
+    _ctx.CreateSwapChain(width, height);
 }
 
 void Destroy() {
-    ctx().DestroySwapChain();
-    ctx().DestroyDevice();
-    ctx().DestroyInstance();
+    _ctx.DestroySwapChain();
+    _ctx.DestroyDevice();
+    _ctx.DestroyInstance();
 }
 
-Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const std::string& name) {
-    if (usage & Usage::Vertex) {
-        usage |= Usage::TransferDst;
+Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
+    if (usage & BufferUsage::Vertex) {
+        usage |= BufferUsage::TransferDst;
     }
 
-    if (usage & Usage::Index) {
-        usage |= Usage::TransferDst;
+    if (usage & BufferUsage::Index) {
+        usage |= BufferUsage::TransferDst;
     }
 
-    if (usage & Usage::Storage) {
-        usage |= Usage::Address;
+    if (usage & BufferUsage::Storage) {
+        usage |= BufferUsage::Address;
         size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
     }
 
-    if (usage & Usage::AccelerationStructureInput) {
-        usage |= Usage::Address;
-        usage |= Usage::TransferDst;
+    if (usage & BufferUsage::AccelerationStructureInput) {
+        usage |= BufferUsage::Address;
+        usage |= BufferUsage::TransferDst;
     }
 
     std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
@@ -87,7 +98,16 @@ Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const s
     vkBindBufferMemory(_ctx.device, res->buffer, res->memory, 0);
     res->name = name;
 
-    if (usage & Usage::Storage) {
+    Buffer buffer = {
+        .resource = res,
+        .size = size,
+        .usage = usage,
+        .memory = memory,
+        .rid = 0
+    };
+
+    if (usage & BufferUsage::Storage) {
+        buffer.rid = _ctx.nextBufferRID++;
         VkDescriptorBufferInfo descriptorInfo = {};
         VkWriteDescriptorSet write = {};
         descriptorInfo.buffer = res->buffer;
@@ -95,35 +115,130 @@ Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory, const s
         descriptorInfo.range = size;
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-        write.dstBinding = LUZ_BUFFER_BINDING;
-        write.dstArrayElement = _ctx.nextBufferRID;
+        write.dstBinding = LUZ_BINDING_BUFFER;
+        write.dstArrayElement = buffer.rid;
         write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         write.descriptorCount = 1;
         write.pBufferInfo = &descriptorInfo;
         vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
     }
 
-    return {
+    return buffer;
+}
+
+Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlags usage, const std::string& name) {
+    auto device = _ctx.device;
+    auto allocator = _ctx.allocator;
+
+    std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>();
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = width;
+    imageInfo.extent.height = height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = (VkFormat)format;
+    // tiling defines how the texels lay in memory
+    // optimal tiling is implementation dependent for more efficient memory access
+    // and linear makes the texels lay in row-major order, possibly with padding on each row
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    // not usable by the GPU, the first transition will discard the texels
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = (VkImageUsageFlags)usage;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.flags = 0;
+
+    auto result = vkCreateImage(device, &imageInfo, allocator, &res->image);
+    DEBUG_VK(result, "Failed to create image!");
+
+    VkMemoryRequirements memReq;
+    vkGetImageMemoryRequirements(device, res->image, &memReq);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex = _ctx.FindMemoryType(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    result = vkAllocateMemory(device, &allocInfo, allocator, &res->memory);
+    DEBUG_VK(result, "Failed to allocate image memory!");
+
+    vkBindImageMemory(device, res->image, res->memory, 0);
+
+    AspectFlags aspect = Aspect::Color;
+    if (format == Format::D24_unorm_S8_uint || format == Format::D32_sfloat) {
+        aspect = Aspect::Depth;
+    }
+    if (format == Format::D24_unorm_S8_uint) {
+        aspect |= Aspect::Stencil;
+    }
+
+    res->name = name;
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = res->image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = (VkFormat)format;
+    viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
+    DEBUG_VK(result, "Failed to create image view!");
+
+    Image image = {
         .resource = res,
-        .size = size,
+        .width = width,
+        .height = height,
         .usage = usage,
-        .memory = memory,
-        .rid = _ctx.nextBufferRID++,
+        .format = format,
+        .layout = Layout::Undefined,
+        .aspect = aspect,
+        .rid = _ctx.nextImageRID++,
     };
+
+    VkDescriptorImageInfo descriptorInfo = {
+        .sampler = _ctx.genericSampler,
+        .imageView = res->view,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+    write.dstBinding = LUZ_BINDING_TEXTURE;
+    write.dstArrayElement = image.rid;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.descriptorCount = 1;
+    write.pImageInfo = &descriptorInfo;
+    vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+
+    return image;
 }
 
-void Buffer::SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory) {
-    resource = std::make_shared<BufferResource>();
-    resource->buffer = vkBuffer;
-    resource->memory = vkMemory;
-}
-
-void CmdCopy(Buffer& dest, void* data, uint32_t size, uint32_t dstOfsset) {
-    _ctx.CmdCopy(dest, data, size, dstOfsset);
+void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
+    _ctx.CmdCopy(dst, data, size, dstOfsset);
 }
 
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
     _ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+}
+
+void CmdCopy(Image& dst, void* data, uint32_t size) {
+    _ctx.CmdCopy(dst, data, size); 
+}
+
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
+    _ctx.CmdCopy(dst, src, size, srcOffset); 
+}
+
+void CmdBarrier(Image& img, Layout::ImageLayout layout) {
+    _ctx.CmdBarrier(img, layout);
 }
 
 void BeginCommandBuffer(Queue queue) {
@@ -137,8 +252,8 @@ void BeginCommandBuffer(Queue queue) {
     vkBeginCommandBuffer(_ctx.queues[queue].commands[_ctx.currentImageIndex].buffer, &beginInfo);
 }
 
-uint64_t EndCommandBuffer(Queue queue) {
-    VkCommandBuffer cmdBuffer = _ctx.queues[queue].commands[_ctx.currentImageIndex].buffer;
+uint64_t EndCommandBuffer() {
+    VkCommandBuffer cmdBuffer = _ctx.queues[_ctx.currentQueue].commands[_ctx.currentImageIndex].buffer;
     vkEndCommandBuffer(cmdBuffer);
 
     VkSubmitInfo submitInfo{};
@@ -146,8 +261,9 @@ uint64_t EndCommandBuffer(Queue queue) {
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmdBuffer;
 
-    auto res = vkQueueSubmit(_ctx.queues[queue].queue, 1, &submitInfo, VK_NULL_HANDLE);
+    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, VK_NULL_HANDLE);
     DEBUG_VK(res, "Failed to submit command buffer");
+    _ctx.currentQueue = vkw::Queue::Count;
     return 0;
 }
 
@@ -163,10 +279,6 @@ void WaitQueue(Queue queue) {
     // CmdCopy(buffer, data, size, dstOffset);
     // EndCommandBuffer(Queue::Transfer);
     // WaitQueue(Queue::Transfer);
-
-uint32_t Buffer::StorageID() {
-    return 0;
-}
 
 VkBuffer Buffer::GetBuffer() {
     if (resource) {
@@ -619,14 +731,14 @@ void Context::CreateDevice() {
                 res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
                 DEBUG_VK(res, "Failed to allocate command buffer!");
 
-                queue.commands[i].staging = CreateBuffer(stagingBufferSize, Usage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
+                queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
                 vkMapMemory(device, queue.commands[i].staging.resource->memory, 0, stagingBufferSize, 0, (void**)&queue.commands[i].stagingCpu);
             }
         }
     }
 
-    // 1 por frame in flight por queue family
-    stagingBuffer = CreateBuffer(stagingBufferSize, Usage::TransferSrc, Memory::CPU, "Staging Buffer");
+    stagingBuffer = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "Staging Buffer");
+    genericSampler = CreateSampler(1.0);
 }
 
 void Context::DestroyDevice() {
@@ -638,8 +750,9 @@ void Context::DestroyDevice() {
             queues[q].commands[i].stagingCpu = nullptr;
         }
     }
-    vkDestroyCommandPool(device, commandPool, vkw::ctx().allocator);
-    vkDestroyDevice(device, vkw::ctx().allocator);
+    vkDestroySampler(device, genericSampler, allocator);
+    vkDestroyCommandPool(device, commandPool, allocator);
+    vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
     commandPool = VK_NULL_HANDLE;
     graphicsQueue = VK_NULL_HANDLE;
@@ -1034,6 +1147,96 @@ void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffse
     copyRegion.dstOffset = dstOffset;
     copyRegion.size = size;
     vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
+}
+
+void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
+    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    if (stagingBufferSize - cmd.stagingOffset < size) {
+        LOG_ERROR("not enough size in staging buffer to copy");
+        // todo: allocate additional buffer
+        return;
+    }
+    memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
+    CmdCopy(dst, cmd.staging, size, cmd.stagingOffset);
+    cmd.stagingOffset += size;
+}
+
+void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
+    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    VkBufferImageCopy region{};
+    region.bufferOffset = srcOffset;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    ASSERT(!(dst.aspect & Aspect::Depth || dst.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = { dst.width, dst.height, 1 };
+    vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
+}
+
+void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
+    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    VkImageSubresourceRange range = {};
+    range.aspectMask = (VkImageAspectFlags)img.aspect;
+    range.baseMipLevel = 0;
+    range.levelCount = VK_REMAINING_MIP_LEVELS;
+    range.baseArrayLayer = 0;
+    range.layerCount = VK_REMAINING_ARRAY_LAYERS;;
+
+    // todo: make more specilized acess
+    VkAccessFlags srcAccess = VK_ACCESS_MEMORY_WRITE_BIT;
+    VkAccessFlags dstAccess = 0;
+    VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.srcAccessMask = srcAccess;
+    barrier.dstAccessMask = dstAccess;
+    barrier.oldLayout = (VkImageLayout)img.layout;
+    barrier.newLayout = (VkImageLayout)layout;
+    barrier.image = img.resource->image;
+    barrier.subresourceRange = range;
+    vkCmdPipelineBarrier(cmd.buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    img.layout = layout;
+}
+
+VkSampler Context::CreateSampler(f32 maxLod) {
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    samplerInfo.anisotropyEnable = false;
+
+    // what color to return when clamp is active in addressing mode
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+    // if comparison is enabled, texels will be compared to a value an the result 
+    // is used in filtering operations, can be used in PCF on shadow maps
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = maxLod;
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    auto vkRes = vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+    DEBUG_VK(vkRes, "Failed to create texture sampler!");
+
+    return sampler;
 }
 
 }

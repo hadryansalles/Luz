@@ -49,6 +49,7 @@ void AssetManager::Destroy() {
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
         DestroyTextureResource(textures[i]);
+        images[i] = {};
         unintializedTextures.push_back(i);
     }
     texturesLock.unlock();
@@ -117,6 +118,7 @@ void AssetManager::UpdateResources() {
 }
 
 void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
+    return;
     LUZ_PROFILE_FUNC();
     if (rids.empty()) {
         return;
@@ -157,20 +159,20 @@ void AssetManager::InitializeMesh(RID rid) {
     res.indexCount = desc.indices.size();
     res.vertexBuffer = vkw::CreateBuffer(
         sizeof(MeshVertex) * desc.vertices.size(),
-        vkw::Usage::Vertex | vkw::Usage::AccelerationStructureInput,
+        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
         vkw::Memory::GPU,
         ("VertexBuffer" + std::to_string(rid))
     );
     res.indexBuffer = vkw::CreateBuffer(
         sizeof(uint32_t) * desc.indices.size(),
-        vkw::Usage::Index | vkw::Usage::AccelerationStructureInput,
+        vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput,
         vkw::Memory::GPU,
         ("IndexBuffer" + std::to_string(rid))
     );
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdCopy(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
     vkw::CmdCopy(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
-    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
@@ -216,6 +218,13 @@ void AssetManager::InitializeTexture(RID id) {
     TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
     CreateTextureResource(desc, res);
+
+    images[id] = vkw::CreateImage(desc.width, desc.height, vkw::Format::RGBA8_unorm, vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst, "Texture " + std::to_string(id));
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::CmdBarrier(images[id], vkw::Layout::TransferDst);
+    vkw::CmdCopy(images[id], desc.data, desc.width * desc.height * 4);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
 bool AssetManager::IsModel(std::filesystem::path path) {

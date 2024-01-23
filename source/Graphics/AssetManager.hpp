@@ -115,6 +115,8 @@ public:
     static inline TextureDesc textureDescs[MAX_TEXTURES];
     static inline TextureResource textures[MAX_TEXTURES];
 
+    static inline vkw::Image images[MAX_TEXTURES];
+
     static void Setup();
     static void Create();
     static void Destroy();

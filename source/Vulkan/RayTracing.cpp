@@ -168,7 +168,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
         maxScratchSize = std::max(maxScratchSize, buildAs[idx].sizeInfo.buildScratchSize);
     }
 
-    vkw::Buffer scratchBuffer = vkw::CreateBuffer(maxScratchSize, vkw::Usage::Storage, vkw::Memory::GPU);
+    vkw::Buffer scratchBuffer = vkw::CreateBuffer(maxScratchSize, vkw::BufferUsage::Storage, vkw::Memory::GPU);
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     bufferInfo.buffer = scratchBuffer.GetBuffer();
@@ -187,7 +187,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
                 for(const auto& idx : indices)
                 {
                     // Actual allocation of buffer and acceleration structure.
-                    buildAs[idx].as.buffer = vkw::CreateBuffer(buildAs[idx].sizeInfo.accelerationStructureSize, vkw::Usage::AccelerationStructure, vkw::Memory::GPU);
+                    buildAs[idx].as.buffer = vkw::CreateBuffer(buildAs[idx].sizeInfo.accelerationStructureSize, vkw::BufferUsage::AccelerationStructure, vkw::Memory::GPU);
 
                     VkAccelerationStructureCreateInfoKHR createInfo{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
                     createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
@@ -286,10 +286,10 @@ void CreateTLAS() {
     DEBUG_ASSERT(ctx.TLAS.accel == VK_NULL_HANDLE || update, "TLAS already created!");
     u32 countInstance = (u32)instances.size();
 
-    vkw::Buffer instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), vkw::Usage::AccelerationStructureInput, vkw::Memory::GPU);
+    vkw::Buffer instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), vkw::BufferUsage::AccelerationStructureInput, vkw::Memory::GPU);
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdCopy(instancesBuffer, instances.data(), instancesBuffer.size);
-    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Transfer);
 
     VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
@@ -336,7 +336,7 @@ void CreateTLAS() {
         ctx.vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &countInstance, &sizeInfo);
 
         if (!update) {
-            ctx.TLAS.buffer = vkw::CreateBuffer(sizeInfo.accelerationStructureSize, vkw::Usage::AccelerationStructure, vkw::Memory::GPU);
+            ctx.TLAS.buffer = vkw::CreateBuffer(sizeInfo.accelerationStructureSize, vkw::BufferUsage::AccelerationStructure, vkw::Memory::GPU);
 
             VkAccelerationStructureCreateInfoKHR createInfo{};
             createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
@@ -366,7 +366,7 @@ void CreateTLAS() {
             DEBUG_TRACE("Update descriptor sets in CreateTLAS!");
         }
 
-        scratchBuffer = vkw::CreateBuffer(sizeInfo.buildScratchSize, vkw::Usage::Address | vkw::Usage::Storage, vkw::Memory::GPU);
+        scratchBuffer = vkw::CreateBuffer(sizeInfo.buildScratchSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
 
         VkBufferDeviceAddressInfo scratchInfo{};
         scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;

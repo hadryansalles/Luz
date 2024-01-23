@@ -56,8 +56,8 @@ void Setup() {
 
 void CreateResources() {
     LUZ_PROFILE_FUNC();
-    sceneBuffer = vkw::CreateBuffer(sizeof(Scene::scene), vkw::Usage::Storage | vkw::Usage::TransferDst);
-    modelsBuffer = vkw::CreateBuffer(sizeof(Scene::models), vkw::Usage::Storage | vkw::Usage::TransferDst);
+    sceneBuffer = vkw::CreateBuffer(sizeof(Scene::scene), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+    modelsBuffer = vkw::CreateBuffer(sizeof(Scene::models), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
 }
 
 void UpdateBuffers(int numFrame) {
@@ -65,7 +65,7 @@ void UpdateBuffers(int numFrame) {
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
     vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
-    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Transfer);
 }
 

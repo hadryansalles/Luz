@@ -262,9 +262,9 @@ void ImageManager::Create(void* data, u32 width, u32 height, u16 channels, u32 m
     imageDesc.size = (u64) width * height * channels;
 
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
-    vkw::Buffer staging = vkw::CreateBuffer(imageDesc.size, vkw::Usage::TransferSrc | vkw::Usage::TransferDst, vkw::Memory::GPU);
+    vkw::Buffer staging = vkw::CreateBuffer(imageDesc.size, vkw::BufferUsage::TransferSrc | vkw::BufferUsage::TransferDst, vkw::Memory::GPU);
     vkw::CmdCopy(staging, data, imageDesc.size);
-    vkw::EndCommandBuffer(vkw::Queue::Transfer);
+    vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Transfer);
     Create(imageDesc, res, staging);
     staging = {};

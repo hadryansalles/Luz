@@ -16,47 +16,110 @@ enum Memory {
 };
 using MemoryFlags = Flags;
 
-enum Usage {
-    TransferSrc = 0x00000001,
-    TransferDst = 0x00000002,
-    UniformTexel = 0x00000004,
-    StorageTexel = 0x00000008,
-    Uniform = 0x00000010,
-    Storage = 0x00000020,
-    Index = 0x00000040,
-    Vertex = 0x00000080,
-    Indirect = 0x00000100,
-    Address = 0x00020000,
-    VideoDecodeSrc = 0x00002000,
-    VideoDecodeDst = 0x00004000,
-    TransformFeedback = 0x00000800,
-    TransformFeedbackCounter = 0x00001000,
-    ConditionalRendering = 0x00000200,
-    AccelerationStructureInput = 0x00080000,
-    AccelerationStructure = 0x00100000,
-    ShaderBindingTable = 0x00000400,
-    SamplerDescriptor = 0x00200000,
-    ResourceDescriptor = 0x00400000,
-    PushDescriptors = 0x04000000,
-    MicromapBuildInputReadOnly = 0x00800000,
-    MicromapStorage = 0x01000000,
+namespace BufferUsage {
+    enum {
+        TransferSrc = 0x00000001,
+        TransferDst = 0x00000002,
+        UniformTexel = 0x00000004,
+        StorageTexel = 0x00000008,
+        Uniform = 0x00000010,
+        Storage = 0x00000020,
+        Index = 0x00000040,
+        Vertex = 0x00000080,
+        Indirect = 0x00000100,
+        Address = 0x00020000,
+        VideoDecodeSrc = 0x00002000,
+        VideoDecodeDst = 0x00004000,
+        TransformFeedback = 0x00000800,
+        TransformFeedbackCounter = 0x00001000,
+        ConditionalRendering = 0x00000200,
+        AccelerationStructureInput = 0x00080000,
+        AccelerationStructure = 0x00100000,
+        ShaderBindingTable = 0x00000400,
+        SamplerDescriptor = 0x00200000,
+        ResourceDescriptor = 0x00400000,
+        PushDescriptors = 0x04000000,
+        MicromapBuildInputReadOnly = 0x00800000,
+        MicromapStorage = 0x01000000,
+    };
+}
+using BufferUsageFlags = Flags;
+
+enum Format {
+    RGBA8_unorm = 37,
+    BGRA8_unorm = 44,
+    RG32_sfloat = 103,
+    RGB32_sfloat = 106,
+    RGBA32_sfloat = 109,
+    D32_sfloat = 126,
+    D24_unorm_S8_uint = 129,
 };
-using UsageFlags = Flags;
+
+namespace ImageUsage {
+    enum {
+        TransferSrc = 0x00000001,
+        TransferDst = 0x00000002,
+        Sampled = 0x00000004,
+        Storage = 0x00000008,
+        ColorAttachment = 0x00000010,
+        DepthAttachment = 0x00000020,
+    };
+}
+using ImageUsageFlags = Flags;
+
+namespace Aspect {
+    enum {
+        Color = 1,
+        Depth = 2,
+        Stencil = 4,
+    };
+}
+using AspectFlags = Flags;
+
+namespace Layout {
+    enum ImageLayout {
+        Undefined = 0,
+        General = 1,
+        ColorAttachment = 2,
+        DepthStencilAttachment = 3,
+        DepthStencilRead = 4,
+        ShaderRead = 5,
+        TransferSrc = 6,
+        TransferDst = 7,
+        DepthReadStencilAttachment = 1000117000,
+        DepthAttachmentStencilRead = 1000117001,
+        DepthAttachment = 1000241000,
+        DepthRead = 1000241001,
+        StencilAttachment = 1000241002,
+        StencilRead = 1000241003,
+        Read = 1000314000,
+        Attachment = 1000314001,
+        Present = 1000001002,
+    };
+}
 
 struct BufferResource;
-struct CommandBufferResource;
+struct ImageResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
     uint32_t size;
-    UsageFlags usage;
+    BufferUsageFlags usage;
     MemoryFlags memory;
     uint32_t rid;
-
-// -------------------------------------- delete
-    uint32_t StorageID();
+// -------------------------------------- todo: delete
     VkBuffer GetBuffer();
-    void SetBuffer(VkBuffer vkBuffer, VkDeviceMemory vkMemory);
+};
+
+struct Image {
+    std::shared_ptr<ImageResource> resource;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    ImageUsageFlags usage;
+    Format format;
+    Layout::ImageLayout layout;
+    AspectFlags aspect;
+    uint32_t rid;
 };
 
 enum Queue {
@@ -66,13 +129,17 @@ enum Queue {
     Count = 3,
 };
 
-Buffer CreateBuffer(uint32_t size, UsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
+Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
+Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlags usage, const std::string& name = "");
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+void CmdCopy(Image& dst, void* data, uint32_t size);
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
+void CmdBarrier(Image& img, Layout::ImageLayout layout);
 
 void BeginCommandBuffer(Queue queue);
-uint64_t EndCommandBuffer(Queue queue);
+uint64_t EndCommandBuffer();
 void WaitQueue(Queue queue);
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
@@ -82,6 +149,9 @@ void Destroy();
 struct Context {
     void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
     void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+    void CmdCopy(Image& dst, void* data, uint32_t size);
+    void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
+    void CmdBarrier(Image& img, Layout::ImageLayout layout);
 
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -172,7 +242,9 @@ struct Context {
     bool swapChainDirty = true;
     int currentImageIndex = 0;
 
-    uint32_t nextBufferRID = 32;
+    uint32_t nextBufferRID = 0;
+    uint32_t nextImageRID = 0;
+    VkSampler genericSampler;
 
     // preferred, warn if not available
     static inline VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -207,6 +279,7 @@ struct Context {
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+    VkSampler CreateSampler(float maxLod);
 };
 
 // todo: move to private
