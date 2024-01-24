@@ -46,6 +46,7 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
+    // todo: something crashing inside imgui on resize
     _ctx.DestroySwapChain();
     _ctx.CreateSurfaceFormats();
     _ctx.CreateSwapChain(width, height);
@@ -203,29 +204,37 @@ Image CreateImage(const ImageDesc& desc) {
         .layout = Layout::Undefined,
         .aspect = aspect,
         .rid = _ctx.nextImageRID++,
-        .imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)Layout::Undefined),
     };
 
-    BeginCommandBuffer(Queue::Transfer);
-    CmdBarrier(image, Layout::ShaderRead);
-    EndCommandBuffer();
-    WaitQueue(Queue::Transfer);
+    if (desc.usage & ImageUsage::Sampled) {
+        Layout::ImageLayout newLayout = Layout::ShaderRead;
+        if (aspect == (Aspect::Depth | Aspect::Stencil)) {
+            newLayout = Layout::DepthStencilRead;
+        } else if (aspect == Aspect::Depth) {
+            newLayout = Layout::DepthRead;
+        }
+        BeginCommandBuffer(Queue::Transfer);
+        CmdBarrier(image, newLayout);
+        EndCommandBuffer();
+        WaitQueue(Queue::Transfer);
 
-    VkDescriptorImageInfo descriptorInfo = {
-        .sampler = _ctx.genericSampler,
-        .imageView = res->view,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
-    // todo: change to descriptor sampled/storage image
-    VkWriteDescriptorSet write = {};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    write.dstBinding = LUZ_BINDING_TEXTURE;
-    write.dstArrayElement = image.rid;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.descriptorCount = 1;
-    write.pImageInfo = &descriptorInfo;
-    vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+        image.imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)image.layout);
+
+        VkDescriptorImageInfo descriptorInfo = {
+            .sampler = _ctx.genericSampler,
+            .imageView = res->view,
+            .imageLayout = (VkImageLayout)image.layout,
+        };
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        write.dstBinding = LUZ_BINDING_TEXTURE;
+        write.dstArrayElement = image.rid;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
 
     return image;
 }
@@ -259,6 +268,7 @@ void CmdBarrier(Image& img, Layout::ImageLayout layout) {
 }
 
 void BeginCommandBuffer(Queue queue) {
+    ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
     Context::InternalQueue& iqueue = _ctx.queues[queue];
     vkResetCommandPool(_ctx.device, iqueue.commands[_ctx.currentImageIndex].pool, 0);
     iqueue.commands[_ctx.currentImageIndex].stagingOffset = 0;
@@ -426,7 +436,7 @@ void Context::CreateInstance(GLFWwindow* glfwWindow) {
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = engineName.c_str();
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_0;
+    appInfo.apiVersion = VK_API_VERSION_1_3;
 
     // tells which global extensions and validations to use
     // (they apply to the entire program)

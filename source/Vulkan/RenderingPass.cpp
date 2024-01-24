@@ -26,9 +26,6 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
             pass.colorAttachments.push_back(attach);
         }
 
-        VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-        DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
-
         pass.colorAttachInfos.resize(pass.colorAttachments.size());
 
         for (int i = 0; i < pass.colorAttachments.size(); i++) {

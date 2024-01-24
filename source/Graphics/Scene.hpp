@@ -11,9 +11,6 @@
 #define MAX_LIGHTS 16
 #define MAX_MESHES 2048
 
-#define SCENE_BUFFER_INDEX 0
-#define MODELS_BUFFER_INDEX 1
-
 struct LightBlock {
     glm::vec3 color = glm::vec3(1.0f);
     f32 intensity = 1.0f;
@@ -31,17 +28,25 @@ struct SceneBlock {
     LightBlock lights[MAX_LIGHTS];
     glm::vec3 ambientLightColor = glm::vec3(1.0f);
     f32 ambientLightIntensity = 0.03f;
+
     glm::mat4 projView = glm::mat4(1.0f);
     glm::mat4 inverseProj = glm::mat4(1.0f);
     glm::mat4 inverseView = glm::mat4(1.0f);
+
     glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
     u32 numLights = 0;
-    u32 aoNumSamples = 1;
+
     float aoMin = 0.001;
     float aoMax = 0.1;
     float aoPower = 1.45;
+    u32 aoNumSamples = 1;
+
     glm::ivec2 viewSize;
     u32 useBlueNoise = 0;
+    u32 whiteTexture = 0;
+
+    u32 blackTexture = 0;
+    u32 pad[3];
 };
 
 struct MaterialBlock {
@@ -49,11 +54,11 @@ struct MaterialBlock {
     glm::vec3 emission = glm::vec3(1.0f);
     f32 metallic    = 1;
     f32 roughness   = 1;
-    RID aoMap       = 0;
-    RID colorMap    = 0;
-    RID normalMap   = 0;
-    RID emissionMap = 1;
-    RID metallicRoughnessMap = 0;
+    int aoMap       = -1;
+    int colorMap    = -1;
+    int normalMap   = -1;
+    int emissionMap = -1;
+    int metallicRoughnessMap = -1;
     u32 PADDING[2];
 };
 
@@ -127,6 +132,9 @@ namespace Scene {
     inline int aoNumSamples = 1;
 
     inline RID lightMeshes[3];
+
+    inline vkw::Image whiteTexture;
+    inline vkw::Image blackTexture;
 
     void Setup();
     void CreateResources();

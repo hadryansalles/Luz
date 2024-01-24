@@ -87,7 +87,6 @@ vec4 BlueNoiseSample(int i) {
     return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
 }
 
-
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     if(numSamples == 0) {
         return 0;
@@ -155,13 +154,12 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     return clamp(pow(ao, scene.aoPower), 0.0, 1.0);
 }
 
-
 void main() {
-    vec4 albedo = texture(imageAttachs[albedoRID], fragTexCoord);
-    vec3 N = texture(imageAttachs[normalRID], fragTexCoord).xyz;
-    vec4 material = texture(imageAttachs[materialRID], fragTexCoord);
-    vec4 emission = texture(imageAttachs[emissionRID], fragTexCoord);
-    float depth = texture(imageAttachs[depthRID], fragTexCoord).r;
+    vec4 albedo = texture(textures[albedoRID], fragTexCoord);
+    vec3 N = texture(textures[normalRID], fragTexCoord).xyz;
+    vec4 material = texture(textures[materialRID], fragTexCoord);
+    vec4 emission = texture(textures[emissionRID], fragTexCoord);
+    float depth = texture(textures[depthRID], fragTexCoord).r;
     float occlusion = material.b;
     float roughness = material.r;
     float metallic = material.g;

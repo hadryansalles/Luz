@@ -18,19 +18,6 @@
 #include <imgui/imgui_impl_vulkan.h>
 
 void AssetManager::Setup() {
-    u8* whiteTexture = new u8[4];
-    whiteTexture[0] = 255;
-    whiteTexture[1] = 255;
-    whiteTexture[2] = 255;
-    whiteTexture[3] = 255;
-    u8* blackTexture = new u8[4];
-    blackTexture[0] = 0;
-    blackTexture[1] = 0;
-    blackTexture[2] = 0;
-    blackTexture[3] = 255;
-    CreateTexture("White", whiteTexture, 1, 1);
-    CreateTexture("Black", blackTexture, 1, 1);
-    LoadTexture("assets/blue_noise.png");
 }
 
 void AssetManager::Create() {
@@ -195,6 +182,7 @@ void AssetManager::InitializeTexture(RID id) {
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdBarrier(images[id], vkw::Layout::TransferDst);
     vkw::CmdCopy(images[id], desc.data, desc.width * desc.height * 4);
+    vkw::CmdBarrier(images[id], vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Transfer);
 }

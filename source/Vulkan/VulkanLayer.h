@@ -189,6 +189,7 @@ struct Context {
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_SPIRV_1_4_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        VK_KHR_DEVICE_GROUP_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
         VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
@@ -226,7 +227,7 @@ struct Context {
         std::vector<CommandResources> commands;
     };
     InternalQueue queues[Queue::Count];
-    Queue currentQueue = Queue::Graphics;
+    Queue currentQueue = Queue::Count;
     const uint32_t stagingBufferSize = 64 * 1024 * 1024;
 
     // TODO: remove after finishing queue refactoring

@@ -11,7 +11,7 @@
 namespace Scene {
 
 void AcceptMeshPayload();
-void AcceptTexturePayload(RID& textureID);
+void AcceptTexturePayload(int& textureID);
 
 void Setup() {
     LUZ_PROFILE_FUNC();
@@ -58,6 +58,37 @@ void CreateResources() {
     LUZ_PROFILE_FUNC();
     sceneBuffer = vkw::CreateBuffer(sizeof(Scene::scene), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
     modelsBuffer = vkw::CreateBuffer(sizeof(Scene::models), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+    u8* whiteTextureData = new u8[4];
+    whiteTextureData[0] = 255;
+    whiteTextureData[1] = 255;
+    whiteTextureData[2] = 255;
+    whiteTextureData[3] = 255;
+    u8* blackTextureData = new u8[4];
+    blackTextureData[0] = 0;
+    blackTextureData[1] = 0;
+    blackTextureData[2] = 0;
+    blackTextureData[3] = 255;
+    whiteTexture = vkw::CreateImage({
+        .width = 1,
+        .height = 1,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst
+    });
+    blackTexture = vkw::CreateImage({
+        .width = 1,
+        .height = 1,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst
+    });
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::CmdBarrier(whiteTexture, vkw::Layout::TransferDst);
+    vkw::CmdBarrier(blackTexture, vkw::Layout::TransferDst);
+    vkw::CmdCopy(whiteTexture, whiteTextureData, 4);
+    vkw::CmdCopy(blackTexture, blackTextureData, 4);
+    vkw::CmdBarrier(whiteTexture, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(blackTexture, vkw::Layout::ShaderRead);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
 void UpdateBuffers(int numFrame) {
@@ -78,20 +109,36 @@ void UpdateResources(int numFrame) {
         model->id = i;
         models[i] = model->block;
         models[i].model = model->transform.GetMatrix();
-        if (!model->useColorMap) {
-            models[i].material.colorMap = 0;
+        //models[i].material.colorMap = whiteTexture.rid;
+        //models[i].material.normalMap = whiteTexture.rid;
+        //models[i].material.metallicRoughnessMap = whiteTexture.rid;
+        //models[i].material.aoMap = whiteTexture.rid;
+        //models[i].material.emissionMap = blackTexture.rid;
+        //continue;
+        if (!model->useColorMap || model->block.material.colorMap == -1) {
+            models[i].material.colorMap = whiteTexture.rid;
+        } else {
+            models[i].material.colorMap = AssetManager::images[model->block.material.colorMap].rid;
         }
-        if (!model->useNormalMap) {
-            models[i].material.normalMap = 0;
+        if (!model->useNormalMap || model->block.material.normalMap == -1) {
+            models[i].material.normalMap = whiteTexture.rid;
+        } else {
+            models[i].material.normalMap = AssetManager::images[model->block.material.normalMap].rid;
         }
-        if (!model->useMetallicRoughnessMap) {
-            models[i].material.metallicRoughnessMap = 0;
+        if (!model->useMetallicRoughnessMap || model->block.material.metallicRoughnessMap == -1) {
+            models[i].material.metallicRoughnessMap = whiteTexture.rid;
+        } else {
+            models[i].material.metallicRoughnessMap = AssetManager::images[model->block.material.metallicRoughnessMap].rid;
         }
-        if (!model->useEmissionMap) {
-            models[i].material.emissionMap = 0;
+        if (!model->useEmissionMap || model->block.material.emissionMap == -1) {
+            models[i].material.emissionMap = blackTexture.rid;
+        } else {
+            models[i].material.emissionMap = AssetManager::images[model->block.material.emissionMap].rid;
         }
-        if (!model->useAoMap) {
-            models[i].material.aoMap = 0;
+        if (!model->useAoMap || model->block.material.aoMap == -1) {
+            models[i].material.aoMap = whiteTexture.rid;
+        } else {
+            models[i].material.aoMap = AssetManager::images[model->block.material.aoMap].rid;
         }
     }
     for (int i = 0; i < lightEntities.size(); i++) {
@@ -101,7 +148,7 @@ void UpdateResources(int numFrame) {
         models[id].model = light->transform.GetMatrix();
         models[id].material.color = glm::vec4(0, 0, 0, lightGizmosOpacity);
         models[id].material.emission = light->block.color * light->block.intensity;
-        models[id].material.emissionMap = 0;
+        models[id].material.emissionMap = whiteTexture.rid;
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
@@ -121,6 +168,8 @@ void UpdateResources(int numFrame) {
 void DestroyResources() {
     sceneBuffer = {};
     modelsBuffer = {};
+    whiteTexture = {};
+    blackTexture = {};
 }
 
 Model* CreateModel() {
@@ -519,7 +568,7 @@ void AcceptMeshPayload() {
     }
 }
 
-void AcceptTexturePayload(RID& textureID) {
+void AcceptTexturePayload(int& textureID) {
     if (ImGui::BeginDragDropTarget()) {
         const ImGuiPayload* payloadTexture = ImGui::AcceptDragDropPayload("texture");
         if (payloadTexture) {
@@ -528,7 +577,7 @@ void AcceptTexturePayload(RID& textureID) {
         }
         const ImGuiPayload* payloadTextureID = ImGui::AcceptDragDropPayload("textureID");
         if (payloadTextureID) {
-            textureID = *(RID*)payloadTextureID->Data;
+            textureID = *(int*)payloadTextureID->Data;
         }
     }
 }
