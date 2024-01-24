@@ -241,6 +241,8 @@ private:
         //    throw std::runtime_error("failed to begin recording command buffer!");
         //}
 
+        vkw::CmdBarrier();
+
         DeferredShading::BeginOpaquePass(commandBuffer);
 
         DeferredShading::OpaqueConstants constants;
@@ -263,10 +265,14 @@ private:
 
         DeferredShading::EndPass(commandBuffer);
 
+        vkw::CmdBarrier();
+
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(commandBuffer, lightPassConstants);
+
+        vkw::CmdBarrier();
 
         DeferredShading::BeginPresentPass(commandBuffer);
         if (drawUi) {

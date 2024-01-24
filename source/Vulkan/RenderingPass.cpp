@@ -45,6 +45,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
                 .height = extent.height,
                 .format = (vkw::Format)pass.gpoDesc.depthFormat,
                 .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
+                .name = "Depth image " + pass.gpoDesc.name,
             });
             pass.depthAttachInfo = {};
             pass.depthAttachInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;

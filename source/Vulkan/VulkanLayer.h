@@ -148,6 +148,7 @@ void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, ui
 void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
+void CmdBarrier();
 
 void BeginCommandBuffer(Queue queue);
 uint64_t EndCommandBuffer();
@@ -181,22 +182,12 @@ struct Context {
 
     bool enableValidationLayers = true;
 
-    static inline std::vector<const char*> requiredExtensions = {
+    std::vector<const char*> requiredExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-        VK_KHR_MAINTENANCE3_EXTENSION_NAME,
-        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        VK_KHR_DEVICE_GROUP_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-        VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME,
-        VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,
     };
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -257,10 +248,10 @@ struct Context {
     VkSampler genericSampler;
 
     // preferred, warn if not available
-    static inline VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
-    static inline VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    static inline VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    static inline VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+    VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
     Buffer stagingBuffer;
     uint32_t stagingBufferOffset = 0;
@@ -298,6 +289,8 @@ struct Context {
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
     VkSampler CreateSampler(float maxLod);
+
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
 };
 
 // todo: move to private

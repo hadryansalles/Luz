@@ -90,11 +90,11 @@ void CreateBLAS(std::vector<RID>& meshes) {
         vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         vertexBufferInfo.buffer = mesh.vertexBuffer.GetBuffer();
         vertexBufferInfo.pNext = nullptr;
-        VkDeviceAddress vertexAddress = ctx.vkGetBufferDeviceAddressKHR(device, &vertexBufferInfo);
+        VkDeviceAddress vertexAddress = vkGetBufferDeviceAddress(device, &vertexBufferInfo);
         VkBufferDeviceAddressInfo indexBufferInfo{};
         indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         indexBufferInfo.buffer = mesh.indexBuffer.GetBuffer();
-        VkDeviceAddress indexAddress = ctx.vkGetBufferDeviceAddressKHR(device, &indexBufferInfo);
+        VkDeviceAddress indexAddress = vkGetBufferDeviceAddress(device, &indexBufferInfo);
 
         u32 maxPrimitiveCount = mesh.indexCount / 3;
 
@@ -169,7 +169,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     bufferInfo.buffer = scratchBuffer.GetBuffer();
-    VkDeviceAddress scratchAddress = ctx.vkGetBufferDeviceAddressKHR(device, &bufferInfo);
+    VkDeviceAddress scratchAddress = vkGetBufferDeviceAddress(device, &bufferInfo);
 
     std::vector<uint32_t> indices; // Indices of the BLAS to create
     VkDeviceSize          batchSize = 0;
@@ -297,7 +297,7 @@ void CreateTLAS() {
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     bufferInfo.buffer = instancesBuffer.GetBuffer();
-    VkDeviceAddress instancesBufferAddr = ctx.vkGetBufferDeviceAddressKHR(device, &bufferInfo);
+    VkDeviceAddress instancesBufferAddr = vkGetBufferDeviceAddress(device, &bufferInfo);
 
     VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -371,7 +371,7 @@ void CreateTLAS() {
         VkBufferDeviceAddressInfo scratchInfo{};
         scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         scratchInfo.buffer = scratchBuffer.GetBuffer();
-        VkDeviceAddress scratchAddress = ctx.vkGetBufferDeviceAddressKHR(device, &scratchInfo);
+        VkDeviceAddress scratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
 
         // Update build information
         buildInfo.srcAccelerationStructure = ctx.TLAS.accel;
@@ -397,7 +397,6 @@ void Create() {
     VkDevice device = vkw::ctx().device;
     ctx.vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
     ctx.vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
-    ctx.vkGetBufferDeviceAddressKHR = (PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetBufferDeviceAddressKHR");
     ctx.vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
     ctx.vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
     ctx.vkCreateRayTracingPipelinesKHR = (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR");

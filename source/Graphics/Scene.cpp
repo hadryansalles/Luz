@@ -72,23 +72,28 @@ void CreateResources() {
         .width = 1,
         .height = 1,
         .format = vkw::Format::RGBA8_unorm,
-        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "white texture"
     });
     blackTexture = vkw::CreateImage({
         .width = 1,
         .height = 1,
         .format = vkw::Format::RGBA8_unorm,
-        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "black texture"
     });
-    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdBarrier(whiteTexture, vkw::Layout::TransferDst);
     vkw::CmdBarrier(blackTexture, vkw::Layout::TransferDst);
     vkw::CmdCopy(whiteTexture, whiteTextureData, 4);
     vkw::CmdCopy(blackTexture, blackTextureData, 4);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Graphics);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdBarrier(whiteTexture, vkw::Layout::ShaderRead);
     vkw::CmdBarrier(blackTexture, vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Graphics);
 }
 
 void UpdateBuffers() {

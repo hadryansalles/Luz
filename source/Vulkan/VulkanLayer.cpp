@@ -208,22 +208,22 @@ Image CreateImage(const ImageDesc& desc) {
 
     if (desc.usage & ImageUsage::Sampled) {
         Layout::ImageLayout newLayout = Layout::ShaderRead;
-        if (aspect == (Aspect::Depth | Aspect::Stencil)) {
-            newLayout = Layout::DepthStencilRead;
-        } else if (aspect == Aspect::Depth) {
-            newLayout = Layout::DepthRead;
-        }
-        BeginCommandBuffer(Queue::Transfer);
-        CmdBarrier(image, newLayout);
-        EndCommandBuffer();
-        WaitQueue(Queue::Transfer);
+        //if (aspect == (Aspect::Depth | Aspect::Stencil)) {
+        //    newLayout = Layout::DepthStencilRead;
+        //} else if (aspect == Aspect::Depth) {
+        //    newLayout = Layout::DepthRead;
+        //}
+        //BeginCommandBuffer(Queue::Transfer);
+        //CmdBarrier(image, newLayout);
+        //EndCommandBuffer();
+        //WaitQueue(Queue::Transfer);
 
-        image.imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)image.layout);
+        image.imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
 
         VkDescriptorImageInfo descriptorInfo = {
             .sampler = _ctx.genericSampler,
             .imageView = res->view,
-            .imageLayout = (VkImageLayout)image.layout,
+            .imageLayout = (VkImageLayout)newLayout,
         };
         VkWriteDescriptorSet write = {};
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -235,6 +235,14 @@ Image CreateImage(const ImageDesc& desc) {
         write.pImageInfo = &descriptorInfo;
         vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
     }
+
+    VkDebugUtilsObjectNameInfoEXT name = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+    .objectHandle = (uint64_t)(VkBuffer)res->image,
+    .pObjectName = desc.name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
 
     return image;
 }
@@ -265,6 +273,22 @@ void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
     _ctx.CmdBarrier(img, layout);
+}
+
+void CmdBarrier() {
+    VkMemoryBarrier2 barrier = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    };
+    VkDependencyInfo dependency = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1,
+        .pMemoryBarriers = &barrier,
+    };
+    vkCmdPipelineBarrier2(_ctx.GetCurrentCommandBuffer(), &dependency);
 }
 
 void BeginCommandBuffer(Queue queue) {
@@ -483,8 +507,6 @@ void Context::CreateInstance(GLFWwindow* glfwWindow) {
         requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
-    requiredExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-
     // set to active all extensions that we enabled
     for (size_t i = 0; i < requiredExtensions.size(); i++) {
         for (size_t j = 0; j < instanceExtensions.size(); j++) {
@@ -613,6 +635,7 @@ void Context::CreatePhysicalDevice() {
         queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
 
         // get max number of samples
+        vkGetPhysicalDeviceFeatures(device, &physicalFeatures);
         vkGetPhysicalDeviceProperties(device, &physicalProperties);
         vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
 
@@ -790,6 +813,7 @@ void Context::CreateDevice() {
 
     stagingBuffer = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "Staging Buffer");
     genericSampler = CreateSampler(1.0);
+    vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
 }
 
 void Context::DestroyDevice() {
@@ -1189,32 +1213,31 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
     range.baseArrayLayer = 0;
     range.layerCount = VK_REMAINING_ARRAY_LAYERS;;
 
-    // todo: make more specilized acess
-    VkAccessFlags srcAccess = VK_ACCESS_MEMORY_WRITE_BIT;
-    VkAccessFlags dstAccess = 0;
+    VkAccessFlags srcAccess = VK_ACCESS_NONE;
+    VkAccessFlags dstAccess = VK_ACCESS_NONE;
     VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
     VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
-    if (img.layout == Layout::DepthAttachment && layout == Layout::DepthRead) {
-        srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    } else if (img.layout == Layout::ColorAttachment && layout == Layout::ShaderRead) {
-        srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-        srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    } else if (img.layout == Layout::ColorAttachment && layout == Layout::Present) {
-        srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-        srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    } else if (layout == Layout::DepthAttachment) {
-        dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    } else if (layout == Layout::ColorAttachment) {
-        dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    }
+    //if (img.layout == Layout::DepthAttachment && layout == Layout::DepthRead) {
+    //    srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    //} else if (img.layout == Layout::ColorAttachment && layout == Layout::ShaderRead) {
+    //    srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    //    srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    //} else if (img.layout == Layout::ColorAttachment && layout == Layout::Present) {
+    //    srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    //    srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    //} else if (layout == Layout::DepthAttachment) {
+    //    dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    //    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    //} else if (layout == Layout::ColorAttachment) {
+    //    dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    //    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    //}
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

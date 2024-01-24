@@ -13,8 +13,6 @@
 namespace DeferredShading {
 
 struct Context {
-    PFN_vkCmdBeginRenderingKHR vkCmdBeginRendering;
-    PFN_vkCmdEndRenderingKHR vkCmdEndRendering;
     const char* presentTypes[7] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth", "All"};
     int presentType = 0;
 };
@@ -84,8 +82,6 @@ void Setup() {
 void Create() {
     VkDevice device = vkw::ctx().device;
     RenderingPassManager::Create();
-    ctx.vkCmdBeginRendering = (PFN_vkCmdBeginRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdBeginRenderingKHR");
-    ctx.vkCmdEndRendering = (PFN_vkCmdEndRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR");
     RenderingPassManager::CreateRenderingPass(lightPass);
     RenderingPassManager::CreateRenderingPass(opaquePass);
     RenderingPassManager::CreateRenderingPass(presentPass);
@@ -136,7 +132,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     renderingInfo.pDepthAttachment = &opaquePass.depthAttachInfo;
     renderingInfo.pStencilAttachment = nullptr;
 
-    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.pipeline);
@@ -144,7 +140,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
 }
 
 void EndPass(VkCommandBuffer commandBuffer) {
-    ctx.vkCmdEndRendering(commandBuffer);
+    vkCmdEndRendering(commandBuffer);
 }
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
@@ -176,13 +172,13 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     renderingInfo.pDepthAttachment = nullptr;
     renderingInfo.pStencilAttachment = nullptr;
 
-    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.pipeline);
     vkCmdPushConstants(commandBuffer, lightPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-    ctx.vkCmdEndRendering(commandBuffer);
+    vkCmdEndRendering(commandBuffer);
 }
 
 void BeginPresentPass(VkCommandBuffer commandBuffer) {
@@ -222,7 +218,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
     renderingInfo.pDepthAttachment = nullptr;
     renderingInfo.pStencilAttachment = nullptr;
 
-    ctx.vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, presentPass.gpo.pipeline);
     vkCmdPushConstants(commandBuffer, presentPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
@@ -231,7 +227,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
 }
 
 void EndPresentPass(VkCommandBuffer commandBuffer) {
-    ctx.vkCmdEndRendering(commandBuffer);
+    vkCmdEndRendering(commandBuffer);
     ImageManager::BarrierColorAttachmentToPresent(commandBuffer, vkw::ctx().GetCurrentSwapChainImage());
 }
 
