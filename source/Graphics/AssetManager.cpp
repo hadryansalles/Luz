@@ -185,7 +185,13 @@ void AssetManager::InitializeTexture(RID id) {
     TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
 
-    images[id] = vkw::CreateImage(desc.width, desc.height, vkw::Format::RGBA8_unorm, vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst, "Texture " + std::to_string(id));
+    images[id] = vkw::CreateImage({
+        .width = desc.width,
+        .height = desc.height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "Texture " + std::to_string(id),
+    });
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdBarrier(images[id], vkw::Layout::TransferDst);
     vkw::CmdCopy(images[id], desc.data, desc.width * desc.height * 4);

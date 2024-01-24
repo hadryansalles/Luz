@@ -119,10 +119,10 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
 
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        ImageResource image = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
-        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image.image);
+        VkImage image = opaquePass.colorAttachments[i].GetImage();
+        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image);
     }
-    ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, RenderingPassManager::imageAttachments[opaquePass.depthAttachment].image);
+    ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, opaquePass.depthAttachment.GetImage());
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -149,20 +149,20 @@ void EndPass(VkCommandBuffer commandBuffer) {
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        ImageResource res = RenderingPassManager::imageAttachments[opaquePass.colorAttachments[i]];
-        ImageManager::BarrierColorAttachmentToRead(commandBuffer, res.image);
+        VkImage res = opaquePass.colorAttachments[i].GetImage();
+        ImageManager::BarrierColorAttachmentToRead(commandBuffer, res);
     }
-    ImageResource depthRes = RenderingPassManager::imageAttachments[opaquePass.depthAttachment];
-    ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes.image);
+    VkImage depthRes = opaquePass.depthAttachment.GetImage();
+    ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes);
 
-    constants.albedoRID = opaquePass.colorAttachments[0];
-    constants.normalRID = opaquePass.colorAttachments[1];
-    constants.materialRID = opaquePass.colorAttachments[2];
-    constants.emissionRID = opaquePass.colorAttachments[3];
-    constants.depthRID = opaquePass.depthAttachment;
+    constants.albedoRID = opaquePass.colorAttachments[0].rid;
+    constants.normalRID = opaquePass.colorAttachments[1].rid;
+    constants.materialRID = opaquePass.colorAttachments[2].rid;
+    constants.emissionRID = opaquePass.colorAttachments[3].rid;
+    constants.depthRID = opaquePass.depthAttachment.rid;
 
-    ImageResource lightColorRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes.image);
+    VkImage lightColorRes = lightPass.colorAttachments[0].GetImage();
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes);
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -186,16 +186,16 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
 }
 
 void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
-    ImageResource& lightRes = RenderingPassManager::imageAttachments[lightPass.colorAttachments[0]];
-    ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes.image);
+    VkImage lightRes = lightPass.colorAttachments[0].GetImage();
+    ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes);
 
     PresentConstant constants;
-    constants.lightRID = lightPass.colorAttachments[0];
-    constants.albedoRID = opaquePass.colorAttachments[0];
-    constants.normalRID = opaquePass.colorAttachments[1];
-    constants.materialRID = opaquePass.colorAttachments[2];
-    constants.emissionRID = opaquePass.colorAttachments[3];
-    constants.depthRID = opaquePass.depthAttachment;
+    constants.lightRID = lightPass.colorAttachments[0].rid;
+    constants.albedoRID = opaquePass.colorAttachments[0].rid;
+    constants.normalRID = opaquePass.colorAttachments[1].rid;
+    constants.materialRID = opaquePass.colorAttachments[2].rid;
+    constants.emissionRID = opaquePass.colorAttachments[3].rid;
+    constants.depthRID = opaquePass.depthAttachment.rid;
 
     constants.imageType = ctx.presentType;
 

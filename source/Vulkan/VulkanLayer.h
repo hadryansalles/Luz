@@ -121,6 +121,8 @@ struct Image {
     AspectFlags aspect;
     uint32_t rid;
     ImTextureID imguiRID;
+    VkImageView GetView();
+    VkImage GetImage();
 };
 
 enum Queue {
@@ -130,8 +132,16 @@ enum Queue {
     Count = 3,
 };
 
+struct ImageDesc {
+    uint32_t width;
+    uint32_t height;
+    Format format;
+    ImageUsageFlags usage;
+    std::string name = "";
+};
+
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
-Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlags usage, const std::string& name = "");
+Image CreateImage(const ImageDesc& desc);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);

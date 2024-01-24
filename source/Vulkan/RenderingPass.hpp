@@ -8,8 +8,8 @@ struct RenderingPass {
     GraphicsPipelineResource gpo;
     std::vector<VkClearColorValue> clearColors;
     VkClearDepthStencilValue clearDepth;
-    std::vector<RID> colorAttachments;
-    RID depthAttachment;
+    std::vector<vkw::Image> colorAttachments;
+    vkw::Image depthAttachment;
     std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
     VkRenderingAttachmentInfoKHR depthAttachInfo;
     bool createAttachments = true;
@@ -17,7 +17,6 @@ struct RenderingPass {
 
 class RenderingPassManager {
 public:
-    static inline ImageResource imageAttachments[64];
     static inline VkSampler sampler;
     static inline RID nextRID;
 

@@ -128,7 +128,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     return buffer;
 }
 
-Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlags usage, const std::string& name) {
+Image CreateImage(const ImageDesc& desc) {
     auto device = _ctx.device;
     auto allocator = _ctx.allocator;
 
@@ -137,19 +137,19 @@ Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlag
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = width;
-    imageInfo.extent.height = height;
+    imageInfo.extent.width = desc.width;
+    imageInfo.extent.height = desc.height;
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = (VkFormat)format;
+    imageInfo.format = (VkFormat)desc.format;
     // tiling defines how the texels lay in memory
     // optimal tiling is implementation dependent for more efficient memory access
     // and linear makes the texels lay in row-major order, possibly with padding on each row
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     // not usable by the GPU, the first transition will discard the texels
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = (VkImageUsageFlags)usage;
+    imageInfo.usage = (VkImageUsageFlags)desc.usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.flags = 0;
@@ -171,20 +171,20 @@ Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlag
     vkBindImageMemory(device, res->image, res->memory, 0);
 
     AspectFlags aspect = Aspect::Color;
-    if (format == Format::D24_unorm_S8_uint || format == Format::D32_sfloat) {
+    if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
         aspect = Aspect::Depth;
     }
-    if (format == Format::D24_unorm_S8_uint) {
+    if (desc.format == Format::D24_unorm_S8_uint) {
         aspect |= Aspect::Stencil;
     }
 
-    res->name = name;
+    res->name = desc.name;
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = res->image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = (VkFormat)format;
+    viewInfo.format = (VkFormat)desc.format;
     viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
@@ -196,21 +196,27 @@ Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlag
 
     Image image = {
         .resource = res,
-        .width = width,
-        .height = height,
-        .usage = usage,
-        .format = format,
+        .width = desc.width,
+        .height = desc.height,
+        .usage = desc.usage,
+        .format = desc.format,
         .layout = Layout::Undefined,
         .aspect = aspect,
         .rid = _ctx.nextImageRID++,
         .imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)Layout::Undefined),
     };
 
+    BeginCommandBuffer(Queue::Transfer);
+    CmdBarrier(image, Layout::ShaderRead);
+    EndCommandBuffer();
+    WaitQueue(Queue::Transfer);
+
     VkDescriptorImageInfo descriptorInfo = {
         .sampler = _ctx.genericSampler,
         .imageView = res->view,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
+    // todo: change to descriptor sampled/storage image
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
@@ -222,6 +228,14 @@ Image CreateImage(uint32_t width, uint32_t height, Format format, ImageUsageFlag
     vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
 
     return image;
+}
+
+VkImageView Image::GetView() {
+    return resource->view;
+}
+
+VkImage Image::GetImage() {
+    return resource->image;
 }
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {

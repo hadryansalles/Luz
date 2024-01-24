@@ -41,9 +41,6 @@ struct RayTracingContext {
     bool recreateTLAS = false;
     bool autoUpdateTLAS = true;
 
-    ImageResource image;
-    VkSampler sampler;
-    ImTextureID imguiTextureID;
     VkViewport viewport;
 
     std::vector<AccelerationStructure> BLAS;
@@ -418,22 +415,6 @@ void Destroy() {
 }
 
 void OnImgui() {
-    LUZ_PROFILE_FUNC();
-    if (ImGui::Begin("Ray Tracing")) {
-        ImGui::Checkbox("Enabled", &ctx.useRayTracing);
-        ImGui::Checkbox("Auto Update", &ctx.autoUpdateTLAS);
-        ImVec2 imgSize = ImVec2(ctx.image.width, ctx.image.height);
-        ImVec2 winSize = ImGui::GetContentRegionAvail();
-        float t;
-        if (imgSize.x / imgSize.y > winSize.x / winSize.y) {
-            t = winSize.x / imgSize.x;
-        } else {
-            t = winSize.y / imgSize.y;
-        }
-        ImVec2 size = ImVec2(imgSize.x * t, imgSize.y*t);
-        ImGui::Image(ctx.imguiTextureID, size);
-    }
-    ImGui::End();
 }
 
 void SetRecreateTLAS() {
