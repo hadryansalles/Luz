@@ -109,12 +109,6 @@ void UpdateResources() {
         model->id = i;
         models[i] = model->block;
         models[i].model = model->transform.GetMatrix();
-        //models[i].material.colorMap = whiteTexture.rid;
-        //models[i].material.normalMap = whiteTexture.rid;
-        //models[i].material.metallicRoughnessMap = whiteTexture.rid;
-        //models[i].material.aoMap = whiteTexture.rid;
-        //models[i].material.emissionMap = blackTexture.rid;
-        //continue;
         if (!model->useColorMap || model->block.material.colorMap == -1) {
             models[i].material.colorMap = whiteTexture.rid;
         } else {

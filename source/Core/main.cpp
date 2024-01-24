@@ -273,12 +273,6 @@ private:
             ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
         }
         DeferredShading::EndPresentPass(commandBuffer);
-
-        // vkCmdEndRenderPass(commandBuffer);
-        //vkw::EndCommandBuffer();
-        //if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        //    throw std::runtime_error("failed to record command buffer!");
-        //}
     }
 
     void drawFrame() {

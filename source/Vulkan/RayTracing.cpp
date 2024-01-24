@@ -179,7 +179,8 @@ void CreateBLAS(std::vector<RID>& meshes) {
         batchSize += buildAs[idx].sizeInfo.accelerationStructureSize;
         // Over the limit or last BLAS element
         if (batchSize >= batchLimit || idx == nbBlas - 1) {
-            VkCommandBuffer cmdBuf = vkw::ctx().BeginSingleTimeCommands();
+            vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+            VkCommandBuffer cmdBuf = vkw::ctx().GetCurrentCommandBuffer();
             {
                 for(const auto& idx : indices)
                 {
@@ -208,7 +209,8 @@ void CreateBLAS(std::vector<RID>& meshes) {
                                      VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &barrier, 0, nullptr, 0, nullptr);
                 }
             }
-            vkw::ctx().EndSingleTimeCommands(cmdBuf);
+            vkw::EndCommandBuffer();
+            vkw::WaitQueue(vkw::Queue::Graphics);
             // Reset
             batchSize = 0;
             indices.clear();
@@ -289,7 +291,8 @@ void CreateTLAS() {
     vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Transfer);
 
-    VkCommandBuffer commandBuffer = vkw::ctx().BeginSingleTimeCommands();
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    VkCommandBuffer commandBuffer = vkw::ctx().GetCurrentCommandBuffer();
 
     VkBufferDeviceAddressInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -383,7 +386,8 @@ void CreateTLAS() {
         ctx.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildInfo, &pBuildOffsetInfo);
     }
 
-    vkw::ctx().EndSingleTimeCommands(commandBuffer);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
     scratchBuffer = {};
     instancesBuffer = {};
 }

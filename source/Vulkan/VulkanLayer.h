@@ -232,7 +232,6 @@ struct Context {
 
     // TODO: remove after finishing queue refactoring
     VkQueue graphicsQueue = VK_NULL_HANDLE;
-    VkCommandPool commandPool = VK_NULL_HANDLE;
     int graphicsFamily = -1;
 
     VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -240,7 +239,6 @@ struct Context {
     VkSwapchainKHR swapChain = VK_NULL_HANDLE;
     std::vector<VkImage> swapChainImages;
     std::vector<VkImageView> swapChainViews;
-    std::vector<VkCommandBuffer> commandBuffers;
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
@@ -282,8 +280,6 @@ struct Context {
 
     uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
     bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-    VkCommandBuffer BeginSingleTimeCommands();
-    void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
     uint32_t Acquire();
     void SubmitAndPresent(uint32_t imageIndex);

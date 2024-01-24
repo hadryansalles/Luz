@@ -763,10 +763,6 @@ void Context::CreateDevice() {
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.queueFamilyIndex = vkw::ctx().graphicsFamily;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        res = vkCreateCommandPool(device, &poolInfo, allocator, &commandPool);
-        DEBUG_VK(res, "Failed to create command pool!");
-
         poolInfo.flags = 0;
 
         VkCommandBufferAllocateInfo allocInfo{};
@@ -806,10 +802,8 @@ void Context::DestroyDevice() {
         }
     }
     vkDestroySampler(device, genericSampler, allocator);
-    vkDestroyCommandPool(device, commandPool, allocator);
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
-    commandPool = VK_NULL_HANDLE;
     graphicsQueue = VK_NULL_HANDLE;
 }
 
@@ -934,20 +928,6 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         DEBUG_VK(res, "Failed to create SwapChain image view!");
     }
 
-    // create command buffers 
-    {
-        commandBuffers.resize(swapChainImages.size());
-
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = vkw::ctx().commandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
-
-        auto res = vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data());
-        DEBUG_VK(res, "Failed to allocate command buffers!");
-    }
-
     // synchronization objects
     {
         imageAvailableSemaphores.resize(framesInFlight);
@@ -989,14 +969,12 @@ void Context::DestroySwapChain() {
         vkDestroyFence(device, inFlightFences[i], allocator);
     }
 
-    vkFreeCommandBuffers(device, vkw::ctx().commandPool, (uint32_t)commandBuffers.size(), commandBuffers.data());
     vkDestroySwapchainKHR(device, swapChain, allocator);
 
     imageAvailableSemaphores.clear();
     renderFinishedSemaphores.clear();
     inFlightFences.clear();
     imagesInFlight.clear();
-    commandBuffers.clear();
     swapChainViews.clear();
     swapChainImages.clear();
     swapChain = VK_NULL_HANDLE;
@@ -1105,41 +1083,6 @@ bool Context::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatu
     }
 
     return false;
-}
-
-VkCommandBuffer Context::BeginSingleTimeCommands() {
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = commandPool;
-    allocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    return commandBuffer;
-}
-
-void Context::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
-    vkEndCommandBuffer(commandBuffer);
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    auto res = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    DEBUG_VK(res, "Failed to submit single time command buffer");
-    res = vkQueueWaitIdle(graphicsQueue);
-    DEBUG_VK(res, "Failed to wait idle command buffer");
-
-    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
 VkSurfaceFormatKHR Context::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
