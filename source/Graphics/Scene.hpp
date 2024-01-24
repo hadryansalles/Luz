@@ -138,7 +138,7 @@ namespace Scene {
 
     void Setup();
     void CreateResources();
-    void UpdateResources(int numFrame);
+    void UpdateResources();
     void DestroyResources();
 
     Entity* CreateEntity(Entity* copy);

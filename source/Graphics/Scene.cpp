@@ -91,7 +91,7 @@ void CreateResources() {
     vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
-void UpdateBuffers(int numFrame) {
+void UpdateBuffers() {
     LUZ_PROFILE_FUNC();
     vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
@@ -100,7 +100,7 @@ void UpdateBuffers(int numFrame) {
     vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
-void UpdateResources(int numFrame) {
+void UpdateResources() {
     LUZ_PROFILE_FUNC();
     scene.numLights = 0;
     scene.viewSize = glm::vec2(vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height);
@@ -161,7 +161,7 @@ void UpdateResources(int numFrame) {
     scene.projView = camera.GetProj() * camera.GetView();
     scene.inverseProj = glm::inverse(camera.GetProj());
     scene.inverseView = glm::inverse(camera.GetView());
-    UpdateBuffers(numFrame);
+    UpdateBuffers();
     RayTracing::CreateTLAS();
 }
 

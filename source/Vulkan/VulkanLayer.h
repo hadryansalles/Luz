@@ -288,6 +288,16 @@ struct Context {
     uint32_t Acquire();
     void SubmitAndPresent(uint32_t imageIndex);
 
+    inline VkCommandBuffer GetCurrentCommandBuffer() {
+        return queues[currentQueue].commands[currentImageIndex].buffer;
+    }
+    inline VkImage GetCurrentSwapChainImage() {
+        return swapChainImages[currentImageIndex];
+    }
+    inline VkImageView GetCurrentSwapChainView() {
+        return swapChainViews[currentImageIndex];
+    }
+
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);

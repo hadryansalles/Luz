@@ -39,8 +39,8 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
 void BeginOpaquePass(VkCommandBuffer commandBuffer);
 void EndPass(VkCommandBuffer commandBuffer);
 
-void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame);
-void EndPresentPass(VkCommandBuffer commandBuffer, int numFrame);
+void BeginPresentPass(VkCommandBuffer commandBuffer);
+void EndPresentPass(VkCommandBuffer commandBuffer);
 void OnImgui(int numFrame);
 
 }

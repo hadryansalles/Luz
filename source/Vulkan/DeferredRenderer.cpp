@@ -185,7 +185,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     ctx.vkCmdEndRendering(commandBuffer);
 }
 
-void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
+void BeginPresentPass(VkCommandBuffer commandBuffer) {
     VkImage lightRes = lightPass.colorAttachments[0].GetImage();
     ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes);
 
@@ -199,11 +199,11 @@ void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
 
     constants.imageType = ctx.presentType;
 
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, vkw::ctx().swapChainImages[numFrame]);
+    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, vkw::ctx().GetCurrentSwapChainImage());
 
     VkRenderingAttachmentInfoKHR colorAttach{};
     colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    colorAttach.imageView = vkw::ctx().swapChainViews[numFrame];
+    colorAttach.imageView = vkw::ctx().GetCurrentSwapChainView();
     colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttach.resolveMode = VK_RESOLVE_MODE_NONE;
     colorAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -230,9 +230,9 @@ void BeginPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
 }
 
-void EndPresentPass(VkCommandBuffer commandBuffer, int numFrame) {
+void EndPresentPass(VkCommandBuffer commandBuffer) {
     ctx.vkCmdEndRendering(commandBuffer);
-    ImageManager::BarrierColorAttachmentToPresent(commandBuffer, vkw::ctx().swapChainImages[numFrame]);
+    ImageManager::BarrierColorAttachmentToPresent(commandBuffer, vkw::ctx().GetCurrentSwapChainImage());
 }
 
 void OnImgui(int numFrame) {

@@ -224,20 +224,22 @@ private:
         imguiDrawData = ImGui::GetDrawData();
     }
 
-    void updateCommandBuffer(size_t frameIndex) {
+    void updateCommandBuffer() {
         LUZ_PROFILE_FUNC();
         auto device = vkw::ctx().device;
         auto instance = vkw::ctx().instance;
-        auto commandBuffer = vkw::ctx().commandBuffers[frameIndex];
 
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;
-        beginInfo.pInheritanceInfo = nullptr;
+        vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+        auto commandBuffer = vkw::ctx().GetCurrentCommandBuffer();
 
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
+        //VkCommandBufferBeginInfo beginInfo{};
+        //beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        //beginInfo.flags = 0;
+        //beginInfo.pInheritanceInfo = nullptr;
+
+        //if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        //    throw std::runtime_error("failed to begin recording command buffer!");
+        //}
 
         DeferredShading::BeginOpaquePass(commandBuffer);
 
@@ -266,17 +268,17 @@ private:
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(commandBuffer, lightPassConstants);
 
-        DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
+        DeferredShading::BeginPresentPass(commandBuffer);
         if (drawUi) {
             ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
         }
-        DeferredShading::EndPresentPass(commandBuffer, frameIndex);
+        DeferredShading::EndPresentPass(commandBuffer);
 
         // vkCmdEndRenderPass(commandBuffer);
-
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
+        //vkw::EndCommandBuffer();
+        //if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        //    throw std::runtime_error("failed to record command buffer!");
+        //}
     }
 
     void drawFrame() {
@@ -289,8 +291,8 @@ private:
             return;
         }
 
-        updateUniformBuffer(image);
-        updateCommandBuffer(image);
+        updateUniformBuffer();
+        updateCommandBuffer();
 
         vkw::ctx().SubmitAndPresent(image);
 
@@ -325,9 +327,9 @@ private:
         Scene::camera.SetExtent(ext.width, ext.height);
     }
 
-    void updateUniformBuffer(uint32_t currentImage) {
+    void updateUniformBuffer() {
         LUZ_PROFILE_FUNC();
-        Scene::UpdateResources(currentImage);
+        Scene::UpdateResources();
     }
 
     void SetupImgui() {

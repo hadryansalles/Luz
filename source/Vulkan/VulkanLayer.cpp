@@ -288,7 +288,35 @@ uint64_t EndCommandBuffer() {
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmdBuffer;
 
-    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, VK_NULL_HANDLE);
+    VkFence fence = VK_NULL_HANDLE;
+    if (_ctx.currentQueue == Queue::Graphics) {
+        // check if a previous frame is using this image
+        if (_ctx.imagesInFlight[_ctx.currentImageIndex] != VK_NULL_HANDLE) {
+            vkWaitForFences(_ctx.device, 1, &_ctx.imagesInFlight[_ctx.currentImageIndex], VK_TRUE, UINT64_MAX);
+        }
+
+        // mark the image as now being in use by this frame
+        _ctx.imagesInFlight[_ctx.currentImageIndex] = _ctx.inFlightFences[_ctx.swapChainCurrentFrame];
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkSemaphore waitSemaphores[] = { _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame] };
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = waitSemaphores;
+        submitInfo.pWaitDstStageMask = waitStages;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &(cmdBuffer);
+
+        VkSemaphore signalSemaphores[] = { _ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame] };
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = signalSemaphores;
+
+        vkResetFences(_ctx.device, 1, &_ctx.inFlightFences[_ctx.swapChainCurrentFrame]);
+        fence = _ctx.inFlightFences[_ctx.swapChainCurrentFrame];
+    }
+    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, fence);
     DEBUG_VK(res, "Failed to submit command buffer");
     _ctx.currentQueue = vkw::Queue::Count;
     return 0;
@@ -1007,13 +1035,14 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
+    VkCommandBuffer cmdBuffer = GetCurrentCommandBuffer();
     VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[swapChainCurrentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &(commandBuffers[imageIndex]);
+    submitInfo.pCommandBuffers = &cmdBuffer;
 
     VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[swapChainCurrentFrame] };
     submitInfo.signalSemaphoreCount = 1;
@@ -1021,8 +1050,12 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
 
     vkResetFences(device, 1, &inFlightFences[swapChainCurrentFrame]);
 
+    vkEndCommandBuffer(cmdBuffer);
+
     auto res = vkQueueSubmit(vkw::ctx().graphicsQueue, 1, &submitInfo, inFlightFences[swapChainCurrentFrame]);
     DEBUG_VK(res, "Failed to submit draw command buffer!");
+
+    currentQueue = Queue::Count;
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1218,6 +1251,27 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
     VkAccessFlags dstAccess = 0;
     VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
     VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+    if (img.layout == Layout::DepthAttachment && layout == Layout::DepthRead) {
+        srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    } else if (img.layout == Layout::ColorAttachment && layout == Layout::ShaderRead) {
+        srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    } else if (img.layout == Layout::ColorAttachment && layout == Layout::Present) {
+        srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    } else if (layout == Layout::DepthAttachment) {
+        dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    } else if (layout == Layout::ColorAttachment) {
+        dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
