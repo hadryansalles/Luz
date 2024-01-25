@@ -160,6 +160,7 @@ void main() {
     vec4 material = texture(textures[materialRID], fragTexCoord);
     vec4 emission = texture(textures[emissionRID], fragTexCoord);
     float depth = texture(textures[depthRID], fragTexCoord).r;
+    // float depth = 1.0;
     float occlusion = material.b;
     float roughness = material.r;
     float metallic = material.g;
@@ -216,4 +217,5 @@ void main() {
     vec3 color = ambient + Lo;
     color = color / (color + vec3(1.0));
     outColor = vec4(pow(color, vec3(1.0/2.2)) + emission.rgb, 1.0);
+    // outColor = vec4(step(depth, 10));
 }

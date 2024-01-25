@@ -179,7 +179,8 @@ void CreateBLAS(std::vector<RID>& meshes) {
         batchSize += buildAs[idx].sizeInfo.accelerationStructureSize;
         // Over the limit or last BLAS element
         if (batchSize >= batchLimit || idx == nbBlas - 1) {
-            vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+            // todo: keep an eye, maybe move to graphics
+            vkw::BeginCommandBuffer(vkw::Queue::Compute);
             VkCommandBuffer cmdBuf = vkw::ctx().GetCurrentCommandBuffer();
             {
                 for(const auto& idx : indices)
@@ -210,7 +211,7 @@ void CreateBLAS(std::vector<RID>& meshes) {
                 }
             }
             vkw::EndCommandBuffer();
-            vkw::WaitQueue(vkw::Queue::Graphics);
+            vkw::WaitQueue(vkw::Queue::Compute);
             // Reset
             batchSize = 0;
             indices.clear();

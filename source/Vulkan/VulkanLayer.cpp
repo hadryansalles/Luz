@@ -239,8 +239,16 @@ Image CreateImage(const ImageDesc& desc) {
     VkDebugUtilsObjectNameInfoEXT name = {
     .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
     .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-    .objectHandle = (uint64_t)(VkBuffer)res->image,
+    .objectHandle = (uint64_t)(VkImage)res->image,
     .pObjectName = desc.name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+    std::string strName = desc.name + "View";
+    name = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+        .objectHandle = (uint64_t)(VkImageView)res->view,
+        .pObjectName = strName.c_str(),
     };
     _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
 
@@ -275,72 +283,33 @@ void CmdBarrier(Image& img, Layout::ImageLayout layout) {
     _ctx.CmdBarrier(img, layout);
 }
 
-void CmdBarrier() {
-    VkMemoryBarrier2 barrier = {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-    };
-    VkDependencyInfo dependency = {
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .memoryBarrierCount = 1,
-        .pMemoryBarriers = &barrier,
-    };
-    vkCmdPipelineBarrier2(_ctx.GetCurrentCommandBuffer(), &dependency);
-}
-
 void BeginCommandBuffer(Queue queue) {
     ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
+
+    _ctx.currentQueue = queue;
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(_ctx.device, 1, &cmd.fence);
+
     Context::InternalQueue& iqueue = _ctx.queues[queue];
     vkResetCommandPool(_ctx.device, iqueue.commands[_ctx.currentImageIndex].pool, 0);
     iqueue.commands[_ctx.currentImageIndex].stagingOffset = 0;
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    _ctx.currentQueue = queue;
     vkBeginCommandBuffer(_ctx.queues[queue].commands[_ctx.currentImageIndex].buffer, &beginInfo);
 }
 
 uint64_t EndCommandBuffer() {
-    VkCommandBuffer cmdBuffer = _ctx.queues[_ctx.currentQueue].commands[_ctx.currentImageIndex].buffer;
-    vkEndCommandBuffer(cmdBuffer);
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkEndCommandBuffer(cmd.buffer);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmdBuffer;
+    submitInfo.pCommandBuffers = &cmd.buffer;
 
-    VkFence fence = VK_NULL_HANDLE;
-    if (_ctx.currentQueue == Queue::Graphics) {
-        // check if a previous frame is using this image
-        if (_ctx.imagesInFlight[_ctx.currentImageIndex] != VK_NULL_HANDLE) {
-            vkWaitForFences(_ctx.device, 1, &_ctx.imagesInFlight[_ctx.currentImageIndex], VK_TRUE, UINT64_MAX);
-        }
-
-        // mark the image as now being in use by this frame
-        _ctx.imagesInFlight[_ctx.currentImageIndex] = _ctx.inFlightFences[_ctx.swapChainCurrentFrame];
-
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        VkSemaphore waitSemaphores[] = { _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame] };
-        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &(cmdBuffer);
-
-        VkSemaphore signalSemaphores[] = { _ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame] };
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
-
-        vkResetFences(_ctx.device, 1, &_ctx.inFlightFences[_ctx.swapChainCurrentFrame]);
-        fence = _ctx.inFlightFences[_ctx.swapChainCurrentFrame];
-    }
-    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, fence);
+    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
     DEBUG_VK(res, "Failed to submit command buffer");
     _ctx.currentQueue = vkw::Queue::Count;
     return 0;
@@ -807,6 +776,11 @@ void Context::CreateDevice() {
 
                 queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
                 vkMapMemory(device, queue.commands[i].staging.resource->memory, 0, stagingBufferSize, 0, (void**)&queue.commands[i].stagingCpu);
+
+                VkFenceCreateInfo fenceInfo{};
+                fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+                fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+                vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
             }
         }
     }
@@ -823,6 +797,7 @@ void Context::DestroyDevice() {
             vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
             queues[q].commands[i].staging = {};
             queues[q].commands[i].stagingCpu = nullptr;
+            vkDestroyFence(device, queues[q].commands[i].fence, allocator);
         }
     }
     vkDestroySampler(device, genericSampler, allocator);
@@ -952,27 +927,38 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         DEBUG_VK(res, "Failed to create SwapChain image view!");
     }
 
+    for (size_t i = 0; i < swapChainImages.size(); i++) {
+        std::string strName = ("SwapChain Image " + std::to_string(i));
+        VkDebugUtilsObjectNameInfoEXT name = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+            .objectHandle = (uint64_t)(VkImage)swapChainImages[i],
+            .pObjectName = strName.c_str(),
+        };
+        _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+        strName = ("SwapChain View " + std::to_string(i));
+        name = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+            .objectHandle = (uint64_t)(VkImageView)swapChainViews[i],
+            .pObjectName = strName.c_str(),
+        };
+        _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+    }
+
     // synchronization objects
     {
         imageAvailableSemaphores.resize(framesInFlight);
         renderFinishedSemaphores.resize(framesInFlight);
-        inFlightFences.resize(framesInFlight);
-        imagesInFlight.resize(swapChainImages.size(), VK_NULL_HANDLE);
 
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        VkFenceCreateInfo fenceInfo{};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    
         for (size_t i = 0; i < framesInFlight; i++) {
             auto res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
             DEBUG_VK(res, "Failed to create semaphore!");
             res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]);
             DEBUG_VK(res, "Failed to create semaphore!");
-            res = vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]);
-            DEBUG_VK(res, "Failed to create fence!");
         }
     }
 
@@ -990,15 +976,12 @@ void Context::DestroySwapChain() {
     for (size_t i = 0; i < framesInFlight; i++) {
         vkDestroySemaphore(device, imageAvailableSemaphores[i], allocator);
         vkDestroySemaphore(device, renderFinishedSemaphores[i], allocator);
-        vkDestroyFence(device, inFlightFences[i], allocator);
     }
 
     vkDestroySwapchainKHR(device, swapChain, allocator);
 
     imageAvailableSemaphores.clear();
     renderFinishedSemaphores.clear();
-    inFlightFences.clear();
-    imagesInFlight.clear();
     swapChainViews.clear();
     swapChainImages.clear();
     swapChain = VK_NULL_HANDLE;
@@ -1007,15 +990,12 @@ void Context::DestroySwapChain() {
 uint32_t Context::Acquire() {
     LUZ_PROFILE_FUNC();
 
-    vkWaitForFences(device, 1, &inFlightFences[swapChainCurrentFrame], VK_TRUE, UINT64_MAX);
-
     uint32_t imageIndex;
     auto res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[swapChainCurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR) {
         swapChainDirty = true;
-    }
-    else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+    } else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
         DEBUG_VK(res, "Failed to acquire swap chain image!");
     }
 
@@ -1026,38 +1006,20 @@ uint32_t Context::Acquire() {
 void Context::SubmitAndPresent(uint32_t imageIndex) {
     LUZ_PROFILE_FUNC();
 
-    // check if a previous frame is using this image
-    if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
-        vkWaitForFences(device, 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
-    }
-
-    // mark the image as now being in use by this frame
-    imagesInFlight[imageIndex] = inFlightFences[swapChainCurrentFrame];
-
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkCommandBuffer cmdBuffer = GetCurrentCommandBuffer();
     VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[swapChainCurrentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmdBuffer;
+    submitInfo.pCommandBuffers = &(queues[currentQueue].commands[imageIndex].buffer);
 
     VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[swapChainCurrentFrame] };
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
-
-    vkResetFences(device, 1, &inFlightFences[swapChainCurrentFrame]);
-
-    vkEndCommandBuffer(cmdBuffer);
-
-    auto res = vkQueueSubmit(vkw::ctx().graphicsQueue, 1, &submitInfo, inFlightFences[swapChainCurrentFrame]);
-    DEBUG_VK(res, "Failed to submit draw command buffer!");
-
-    currentQueue = Queue::Count;
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1070,17 +1032,24 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr;
 
-    res = vkQueuePresentKHR(vkw::ctx().graphicsQueue, &presentInfo);
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkEndCommandBuffer(cmd.buffer);
+
+    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
+    DEBUG_VK(res, "Failed to submit command buffer");
+
+    res = vkQueuePresentKHR(queues[currentQueue].queue, &presentInfo);
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
         swapChainDirty = true;
         return;
-    } 
+    }
     else if (res != VK_SUCCESS) {
         DEBUG_VK(res, "Failed to present swap chain image!");
     }
 
     swapChainCurrentFrame = (swapChainCurrentFrame + 1) % framesInFlight;
+    currentQueue = Queue::Count;
 }
 
 uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
@@ -1213,31 +1182,10 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
     range.baseArrayLayer = 0;
     range.layerCount = VK_REMAINING_ARRAY_LAYERS;;
 
-    VkAccessFlags srcAccess = VK_ACCESS_NONE;
-    VkAccessFlags dstAccess = VK_ACCESS_NONE;
+    VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
+    VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
     VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
     VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-
-    //if (img.layout == Layout::DepthAttachment && layout == Layout::DepthRead) {
-    //    srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    //} else if (img.layout == Layout::ColorAttachment && layout == Layout::ShaderRead) {
-    //    srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    //    srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    //} else if (img.layout == Layout::ColorAttachment && layout == Layout::Present) {
-    //    srcAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    //    srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    //} else if (layout == Layout::DepthAttachment) {
-    //    dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    //    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    //} else if (layout == Layout::ColorAttachment) {
-    //    dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    //    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    //    dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    //}
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

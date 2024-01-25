@@ -211,6 +211,7 @@ struct Context {
         Buffer staging;
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer buffer = VK_NULL_HANDLE;
+        VkFence fence = VK_NULL_HANDLE;
     };
     struct InternalQueue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -232,8 +233,6 @@ struct Context {
     std::vector<VkImageView> swapChainViews;
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkFence> inFlightFences;
-    std::vector<VkFence> imagesInFlight;
 
     uint32_t additionalImages = 0;
     uint32_t framesInFlight = 3;
@@ -283,6 +282,9 @@ struct Context {
     }
     inline VkImageView GetCurrentSwapChainView() {
         return swapChainViews[currentImageIndex];
+    }
+    inline CommandResources& GetCurrentCommandResources() {
+        return queues[currentQueue].commands[currentImageIndex];
     }
 
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);

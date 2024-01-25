@@ -232,17 +232,6 @@ private:
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
         auto commandBuffer = vkw::ctx().GetCurrentCommandBuffer();
 
-        //VkCommandBufferBeginInfo beginInfo{};
-        //beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        //beginInfo.flags = 0;
-        //beginInfo.pInheritanceInfo = nullptr;
-
-        //if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        //    throw std::runtime_error("failed to begin recording command buffer!");
-        //}
-
-        vkw::CmdBarrier();
-
         DeferredShading::BeginOpaquePass(commandBuffer);
 
         DeferredShading::OpaqueConstants constants;
@@ -265,14 +254,10 @@ private:
 
         DeferredShading::EndPass(commandBuffer);
 
-        vkw::CmdBarrier();
-
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(commandBuffer, lightPassConstants);
-
-        vkw::CmdBarrier();
 
         DeferredShading::BeginPresentPass(commandBuffer);
         if (drawUi) {
@@ -312,7 +297,6 @@ private:
         vkDeviceWaitIdle(device);
         DestroyFrameResources();
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
-        //SwapChain::Create();
         PBRGraphicsPipeline::Create();
         Scene::CreateResources();
         CreateImgui();

@@ -22,6 +22,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
                 .height = extent.height,
                 .format = (vkw::Format)pass.gpoDesc.colorFormats[i],
                 .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+                .name = "Color Attachment " + pass.gpoDesc.name + " " + std::to_string(i) ,
             });
             pass.colorAttachments.push_back(attach);
         }

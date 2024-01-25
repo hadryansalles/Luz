@@ -82,27 +82,27 @@ void CreateResources() {
         .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
         .name = "black texture"
     });
-    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdBarrier(whiteTexture, vkw::Layout::TransferDst);
     vkw::CmdBarrier(blackTexture, vkw::Layout::TransferDst);
     vkw::CmdCopy(whiteTexture, whiteTextureData, 4);
     vkw::CmdCopy(blackTexture, blackTextureData, 4);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Graphics);
-    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+    vkw::WaitQueue(vkw::Queue::Transfer);
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
     vkw::CmdBarrier(whiteTexture, vkw::Layout::ShaderRead);
     vkw::CmdBarrier(blackTexture, vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Graphics);
+    vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
 void UpdateBuffers() {
     LUZ_PROFILE_FUNC();
-    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
     vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Graphics);
 }
 
 void UpdateResources() {
