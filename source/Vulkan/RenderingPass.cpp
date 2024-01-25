@@ -62,6 +62,11 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
 
 void RenderingPassManager::DestroyRenderingPass(RenderingPass& pass) {
     GraphicsPipelineManager::DestroyPipeline(pass.gpo);
+    static std::vector<vkw::Image> thrash;
+    for (int i = 0; i < pass.colorAttachments.size(); i++) {
+        thrash.push_back(pass.colorAttachments[i]);
+    }
+    thrash.push_back(pass.depthAttachment);
     pass.colorAttachments.clear();
     pass.depthAttachment = {};
 }
