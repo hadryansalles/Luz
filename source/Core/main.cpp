@@ -5,7 +5,6 @@
 #include "Camera.hpp"
 #include "Shader.hpp"
 #include "GraphicsPipelineManager.hpp"
-#include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
@@ -59,7 +58,6 @@ private:
 
     void Setup() {
         LUZ_PROFILE_FUNC();
-        PBRGraphicsPipeline::Setup();
         DeferredShading::Setup();
         AssetManager::Setup();
         SetupImgui();
@@ -75,13 +73,8 @@ private:
         LUZ_PROFILE_FUNC();
         Window::Create();
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
-        // Instance::Create();
-        // PhysicalDevice::Create();
-        //LogicalDevice::Create();
-        //SwapChain::Create();
         DEBUG_TRACE("Finish creating SwapChain.");
         GraphicsPipelineManager::Create();
-        PBRGraphicsPipeline::Create();
         CreateImgui();
         RayTracing::Create();
         DeferredShading::Create();
@@ -100,6 +93,7 @@ private:
     void DestroyVulkan() {
         LUZ_PROFILE_FUNC();
         DestroyFrameResources();
+        DestroyImgui();
         RayTracing::Destroy();
         GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
@@ -109,14 +103,8 @@ private:
 
     void DestroyFrameResources() {
         LUZ_PROFILE_FUNC();
-        PBRGraphicsPipeline::Destroy();
         Scene::DestroyResources();
-        
-        DestroyImgui();
         DeferredShading::Destroy();
-
-        //SwapChain::Destroy();
-        //LOG_INFO("Destroyed SwapChain.");
     }
 
     void MainLoop() {
@@ -136,17 +124,8 @@ private:
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
                 vkDeviceWaitIdle(vkw::ctx().device);
                 DeferredShading::ReloadShaders();
-            }
-            if (DirtyGlobalResources()) {
-                vkDeviceWaitIdle(vkw::ctx().device);
-                DestroyVulkan();
-                CreateVulkan();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
-            } else if (PBRGraphicsPipeline::IsDirty()) {
-                vkDeviceWaitIdle(vkw::ctx().device);
-                PBRGraphicsPipeline::Destroy();
-                PBRGraphicsPipeline::Create();
             } else if (Window::IsDirty()) {
                 Window::ApplyChanges();
             }
@@ -154,13 +133,6 @@ private:
         vkDeviceWaitIdle(vkw::ctx().device);
     }
 
-    bool DirtyGlobalResources() {
-        bool dirty = false;
-        // dirty |= Instance::IsDirty();
-        //dirty |= PhysicalDevice::IsDirty();
-        //dirty |= LogicalDevice::IsDirty();
-        return dirty;
-    }
 
     bool DirtyFrameResources() {
         bool dirty = false;
@@ -190,7 +162,6 @@ private:
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
                 if (ImGui::BeginTabItem("Configuration")) {
                     Window::OnImgui();
-                    PBRGraphicsPipeline::OnImgui();
                     Scene::camera.OnImgui();
                     ImGui::EndTabItem();
                 }
@@ -231,6 +202,9 @@ private:
 
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
         auto commandBuffer = vkw::ctx().GetCurrentCommandBuffer();
+
+        vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
+        vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
 
         DeferredShading::BeginOpaquePass(commandBuffer);
 
@@ -297,9 +271,7 @@ private:
         vkDeviceWaitIdle(device);
         DestroyFrameResources();
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
-        PBRGraphicsPipeline::Create();
         Scene::CreateResources();
-        CreateImgui();
         DeferredShading::Create();
         createUniformProjection();
     }
@@ -410,8 +382,8 @@ private:
         initInfo.Instance = instance;
         initInfo.PhysicalDevice = vkw::ctx().physicalDevice;
         initInfo.Device = device;
-        initInfo.QueueFamily = vkw::ctx().graphicsFamily;
-        initInfo.Queue = vkw::ctx().graphicsQueue;
+        initInfo.QueueFamily = vkw::ctx().queues[vkw::Queue::Graphics].family;
+        initInfo.Queue = vkw::ctx().queues[vkw::Queue::Graphics].queue;
         initInfo.PipelineCache = VK_NULL_HANDLE;
         initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
         initInfo.MinImageCount = 2;

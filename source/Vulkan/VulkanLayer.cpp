@@ -46,7 +46,16 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
-    // todo: something crashing inside imgui on resize
+    for (int q = 0; q < Queue::Count; q++) {
+        for (int i = 0; i < _ctx.framesInFlight; i++) {
+            vkDestroyFence(_ctx.device, _ctx.queues[q].commands[i].fence, _ctx.allocator);
+            VkFenceCreateInfo fenceInfo{};
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+            vkCreateFence(_ctx.device, &fenceInfo, _ctx.allocator, &_ctx.queues[q].commands[i].fence);
+        }
+    }
+    _ctx.currentImageIndex = 0;
     _ctx.DestroySwapChain();
     _ctx.CreateSurfaceFormats();
     _ctx.CreateSwapChain(width, height);
@@ -575,6 +584,7 @@ void Context::CreatePhysicalDevice() {
 
         int computeFamily = -1;
         int transferFamily = -1;
+        int graphicsFamily = -1;
 
         // select the family for each type of queue that we want
         for (int i = 0; i < familyCount; i++) {
@@ -748,13 +758,11 @@ void Context::CreateDevice() {
     for (int q = 0; q < Queue::Count; q++) {
         vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
     }
-    graphicsQueue = queues[Queue::Graphics].queue;
 
     // command pool
     {
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.queueFamilyIndex = vkw::ctx().graphicsFamily;
         poolInfo.flags = 0;
 
         VkCommandBufferAllocateInfo allocInfo{};
@@ -803,7 +811,6 @@ void Context::DestroyDevice() {
     vkDestroySampler(device, genericSampler, allocator);
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
-    graphicsQueue = VK_NULL_HANDLE;
 }
 
 void Context::CreateSurfaceFormats() {
@@ -1039,6 +1046,7 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
     DEBUG_VK(res, "Failed to submit command buffer");
 
     res = vkQueuePresentKHR(queues[currentQueue].queue, &presentInfo);
+    currentQueue = Queue::Count;
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
         swapChainDirty = true;
@@ -1049,7 +1057,6 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
     }
 
     swapChainCurrentFrame = (swapChainCurrentFrame + 1) % framesInFlight;
-    currentQueue = Queue::Count;
 }
 
 uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {

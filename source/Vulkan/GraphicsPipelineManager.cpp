@@ -163,12 +163,16 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     auto device = vkw::ctx().device;
     auto allocator = vkw::ctx().allocator;
 
-    std::vector<ShaderResource> shaderResources(desc.shaderStages.size());
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.shaderStages.size());
-
-    for (int i = 0; i < shaderResources.size(); i++) {
-        Shader::Create(desc.shaderStages[i], shaderResources[i]);
-        shaderStages[i] = shaderResources[i].stageCreateInfo;
+    if (res.shaderResources.size() == 0) {
+        res.shaderResources.resize(desc.shaderStages.size());
+        for (int i = 0; i < res.shaderResources.size(); i++) {
+            Shader::Create(desc.shaderStages[i], res.shaderResources[i]);
+            shaderStages[i] = res.shaderResources[i].stageCreateInfo;
+        }
+    }
+    for (int i = 0; i < res.shaderResources.size(); i++) {
+        shaderStages[i] = res.shaderResources[i].stageCreateInfo;
     }
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
@@ -282,10 +286,6 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
 
     vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &res.pipeline);
     DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
-
-    for (int i = 0; i < shaderResources.size(); i++) {
-        Shader::Destroy(shaderResources[i]);
-    }
 
     res.dirty = false;
 }

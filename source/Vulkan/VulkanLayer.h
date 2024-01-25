@@ -222,10 +222,6 @@ struct Context {
     Queue currentQueue = Queue::Count;
     const uint32_t stagingBufferSize = 64 * 1024 * 1024;
 
-    // TODO: remove after finishing queue refactoring
-    VkQueue graphicsQueue = VK_NULL_HANDLE;
-    int graphicsFamily = -1;
-
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
     VkSwapchainKHR swapChain = VK_NULL_HANDLE;

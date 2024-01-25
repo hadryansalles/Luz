@@ -287,10 +287,10 @@ void CreateTLAS() {
     u32 countInstance = (u32)instances.size();
 
     vkw::Buffer instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), vkw::BufferUsage::AccelerationStructureInput, vkw::Memory::GPU);
-    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdCopy(instancesBuffer, instances.data(), instancesBuffer.size);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Graphics);
 
     vkw::BeginCommandBuffer(vkw::Graphics);
     VkCommandBuffer commandBuffer = vkw::ctx().GetCurrentCommandBuffer();

@@ -27,10 +27,10 @@ void ImageManager::InsertBarrier (
     barrier.image = image;
     barrier.subresourceRange = subresourceRange;
 
-    //srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    //dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    //barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    //barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
     vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }

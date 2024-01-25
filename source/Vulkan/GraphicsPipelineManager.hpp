@@ -23,6 +23,7 @@ struct GraphicsPipelineResource {
     VkPipeline            pipeline = VK_NULL_HANDLE;
     VkPipelineLayout      layout   = VK_NULL_HANDLE;
     bool                  dirty    = false;
+    std::vector<ShaderResource> shaderResources;
 };
 
 class GraphicsPipelineManager {

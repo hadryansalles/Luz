@@ -115,10 +115,12 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
 
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        VkImage image = opaquePass.colorAttachments[i].GetImage();
-        ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image);
+        //VkImage image = opaquePass.colorAttachments[i].GetImage();
+        //ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image);
+        vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ColorAttachment);
     }
-    ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, opaquePass.depthAttachment.GetImage());
+    //ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, opaquePass.depthAttachment.GetImage());
+    vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthAttachment);
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -145,11 +147,13 @@ void EndPass(VkCommandBuffer commandBuffer) {
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        VkImage res = opaquePass.colorAttachments[i].GetImage();
-        ImageManager::BarrierColorAttachmentToRead(commandBuffer, res);
+        //VkImage res = opaquePass.colorAttachments[i].GetImage();
+        //ImageManager::BarrierColorAttachmentToRead(commandBuffer, res);
+        vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ShaderRead);
     }
-    VkImage depthRes = opaquePass.depthAttachment.GetImage();
-    ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes);
+    //VkImage depthRes = opaquePass.depthAttachment.GetImage();
+    //ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes);
+    vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthRead);
 
     constants.albedoRID = opaquePass.colorAttachments[0].rid;
     constants.normalRID = opaquePass.colorAttachments[1].rid;
@@ -157,8 +161,9 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     constants.emissionRID = opaquePass.colorAttachments[3].rid;
     constants.depthRID = opaquePass.depthAttachment.rid;
 
-    VkImage lightColorRes = lightPass.colorAttachments[0].GetImage();
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes);
+    //VkImage lightColorRes = lightPass.colorAttachments[0].GetImage();
+    //ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes);
+    vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ColorAttachment);
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -182,8 +187,9 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
 }
 
 void BeginPresentPass(VkCommandBuffer commandBuffer) {
-    VkImage lightRes = lightPass.colorAttachments[0].GetImage();
-    ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes);
+    //VkImage lightRes = lightPass.colorAttachments[0].GetImage();
+    //ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes);
+    vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ShaderRead);
 
     PresentConstant constants;
     constants.lightRID = lightPass.colorAttachments[0].rid;
@@ -195,6 +201,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
 
     constants.imageType = ctx.presentType;
 
+    //vkw::CmdBarrier(vkw::ctx()., vkw::Layout::ShaderRead);
     ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, vkw::ctx().GetCurrentSwapChainImage());
 
     VkRenderingAttachmentInfoKHR colorAttach{};

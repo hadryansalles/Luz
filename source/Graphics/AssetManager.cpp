@@ -179,12 +179,12 @@ void AssetManager::InitializeTexture(RID id) {
         .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
         .name = "Texture " + std::to_string(id),
     });
-    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdBarrier(images[id], vkw::Layout::TransferDst);
     vkw::CmdCopy(images[id], desc.data, desc.width * desc.height * 4);
     vkw::CmdBarrier(images[id], vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Graphics);
 }
 
 bool AssetManager::IsModel(std::filesystem::path path) {
