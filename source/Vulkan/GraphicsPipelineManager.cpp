@@ -295,10 +295,17 @@ void GraphicsPipelineManager::DestroyPipeline(GraphicsPipelineResource& res) {
     vkDestroyPipelineLayout(vkw::ctx().device, res.layout, vkw::ctx().allocator);
 }
 
+void GraphicsPipelineManager::DestroyShaders(GraphicsPipelineResource& res) {
+    for (int i = 0; i < res.shaderResources.size(); i++) {
+        Shader::Destroy(res.shaderResources[i]);
+    }
+}
+
 void GraphicsPipelineManager::ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res) {
     for (int i = 0; i < desc.shaderStages.size(); i++) {
         desc.shaderStages[i].shaderBytes.clear();
     }
+    DestroyShaders(res);
     DestroyPipeline(res);
     CreatePipeline(desc, res);
 }

@@ -100,10 +100,6 @@ void AssetManager::UpdateResources() {
     for (RID rid : toInitialize) {
         InitializeTexture(rid);
     }
-    UpdateTexturesDescriptor(toInitialize);
-}
-
-void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
 }
 
 void AssetManager::InitializeMesh(RID rid) {

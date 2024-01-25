@@ -83,7 +83,6 @@ struct MeshResource {
 #define MAX_TEXTURES 2048
 
 class AssetManager {
-    static inline RID nextMeshRID = 0;
     static inline std::vector<RID> unintializedMeshes;
     static inline std::mutex meshesLock;
 
@@ -109,6 +108,8 @@ class AssetManager {
     static bool IsGLTF(std::filesystem::path path);
 
 public:
+    static inline RID nextMeshRID = 0;
+
     static inline MeshDesc meshDescs[MAX_MESHES];
     static inline MeshResource meshes[MAX_MESHES];
 

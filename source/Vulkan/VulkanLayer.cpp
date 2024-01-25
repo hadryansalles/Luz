@@ -46,16 +46,6 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
-    for (int q = 0; q < Queue::Count; q++) {
-        for (int i = 0; i < _ctx.framesInFlight; i++) {
-            vkDestroyFence(_ctx.device, _ctx.queues[q].commands[i].fence, _ctx.allocator);
-            VkFenceCreateInfo fenceInfo{};
-            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-            vkCreateFence(_ctx.device, &fenceInfo, _ctx.allocator, &_ctx.queues[q].commands[i].fence);
-        }
-    }
-    _ctx.currentImageIndex = 0;
     _ctx.DestroySwapChain();
     _ctx.CreateSurfaceFormats();
     _ctx.CreateSwapChain(width, height);
@@ -759,55 +749,11 @@ void Context::CreateDevice() {
         vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
     }
 
-    // command pool
-    {
-        VkCommandPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.flags = 0;
-
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
-
-        for (int q = 0; q < Queue::Count; q++) {
-            InternalQueue& queue = queues[q];
-            poolInfo.queueFamilyIndex = queue.family;
-            queue.commands.resize(framesInFlight);
-            for (int i = 0; i < framesInFlight; i++) {
-                res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
-                DEBUG_VK(res, "Failed to create command pool!");
-
-                allocInfo.commandPool = queue.commands[i].pool;
-                res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
-                DEBUG_VK(res, "Failed to allocate command buffer!");
-
-                queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
-                vkMapMemory(device, queue.commands[i].staging.resource->memory, 0, stagingBufferSize, 0, (void**)&queue.commands[i].stagingCpu);
-
-                VkFenceCreateInfo fenceInfo{};
-                fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-                fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-                vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
-            }
-        }
-    }
-
-    stagingBuffer = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "Staging Buffer");
     genericSampler = CreateSampler(1.0);
     vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
 }
 
 void Context::DestroyDevice() {
-    stagingBuffer = {};
-    for (int q = 0; q < Queue::Count; q++) {
-        for (int i = 0; i < framesInFlight; i++) {
-            vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
-            queues[q].commands[i].staging = {};
-            queues[q].commands[i].stagingCpu = nullptr;
-            vkDestroyFence(device, queues[q].commands[i].fence, allocator);
-        }
-    }
     vkDestroySampler(device, genericSampler, allocator);
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
@@ -971,8 +917,42 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 
     LOG_INFO("Create Swapchain");
     swapChainCurrentFrame = 0;
+    currentImageIndex = 0;
     swapChainDirty = false;
 
+    // command pool
+    {
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags = 0;
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = 1;
+
+        for (int q = 0; q < Queue::Count; q++) {
+            InternalQueue& queue = queues[q];
+            poolInfo.queueFamilyIndex = queue.family;
+            queue.commands.resize(framesInFlight);
+            for (int i = 0; i < framesInFlight; i++) {
+                auto res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
+                DEBUG_VK(res, "Failed to create command pool!");
+
+                allocInfo.commandPool = queue.commands[i].pool;
+                res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
+                DEBUG_VK(res, "Failed to allocate command buffer!");
+
+                queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
+                vkMapMemory(device, queue.commands[i].staging.resource->memory, 0, stagingBufferSize, 0, (void**)&queue.commands[i].stagingCpu);
+
+                VkFenceCreateInfo fenceInfo{};
+                fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+                fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+                vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
+            }
+        }
+    }
 }
 
 void Context::DestroySwapChain() {
@@ -986,6 +966,15 @@ void Context::DestroySwapChain() {
     }
 
     vkDestroySwapchainKHR(device, swapChain, allocator);
+
+    for (int q = 0; q < Queue::Count; q++) {
+        for (int i = 0; i < framesInFlight; i++) {
+            vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
+            queues[q].commands[i].staging = {};
+            queues[q].commands[i].stagingCpu = nullptr;
+            vkDestroyFence(device, queues[q].commands[i].fence, allocator);
+        }
+    }
 
     imageAvailableSemaphores.clear();
     renderFinishedSemaphores.clear();

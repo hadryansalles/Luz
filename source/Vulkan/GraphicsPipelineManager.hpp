@@ -40,6 +40,7 @@ public:
     static void CreateDefaultDesc(GraphicsPipelineDesc& desc);
     static void CreatePipeline(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void DestroyPipeline(GraphicsPipelineResource& res);
+    static void DestroyShaders(GraphicsPipelineResource& res);
     static void ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
 

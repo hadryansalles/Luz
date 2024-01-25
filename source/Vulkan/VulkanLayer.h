@@ -248,9 +248,6 @@ struct Context {
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
-    Buffer stagingBuffer;
-    uint32_t stagingBufferOffset = 0;
-
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();
 
