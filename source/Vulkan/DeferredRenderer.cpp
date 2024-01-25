@@ -87,6 +87,16 @@ void Create() {
     RenderingPassManager::CreateRenderingPass(presentPass);
 }
 
+void Recreate() {
+    //RenderingPassManager::DestroyRenderingPass(lightPass);
+    RenderingPassManager::DestroyRenderingPass(opaquePass);
+    //RenderingPassManager::DestroyRenderingPass(presentPass);
+
+    //RenderingPassManager::CreateRenderingPass(lightPass);
+    RenderingPassManager::CreateRenderingPass(opaquePass);
+    //RenderingPassManager::CreateRenderingPass(presentPass);
+}
+
 void Destroy() {
     RenderingPassManager::DestroyRenderingPass(opaquePass);
     RenderingPassManager::DestroyRenderingPass(presentPass);

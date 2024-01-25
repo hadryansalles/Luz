@@ -28,6 +28,7 @@ inline RenderingPass presentPass = {};
 
 void Setup();
 void Create();
+void Recreate();
 void Destroy();
 void ReloadShaders();
 

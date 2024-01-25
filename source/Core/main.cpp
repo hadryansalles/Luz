@@ -92,19 +92,14 @@ private:
 
     void DestroyVulkan() {
         LUZ_PROFILE_FUNC();
-        DestroyFrameResources();
         DestroyImgui();
+        Scene::DestroyResources();
         RayTracing::Destroy();
+        DeferredShading::Destroy();
         GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
         vkw::Destroy();
         Window::Destroy();
-    }
-
-    void DestroyFrameResources() {
-        LUZ_PROFILE_FUNC();
-        Scene::DestroyResources();
-        DeferredShading::Destroy();
     }
 
     void MainLoop() {
@@ -269,10 +264,8 @@ private:
         }
         Window::UpdateFramebufferSize();
         vkDeviceWaitIdle(device);
-        DestroyFrameResources();
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
-        Scene::CreateResources();
-        DeferredShading::Create();
+        DeferredShading::Recreate();
         createUniformProjection();
     }
 
