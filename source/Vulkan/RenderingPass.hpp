@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ImageManager.hpp"
+#include "VulkanLayer.h"
 #include "GraphicsPipelineManager.hpp"
 
 struct RenderingPass {
@@ -19,9 +19,13 @@ class RenderingPassManager {
 public:
     static inline VkSampler sampler;
     static inline RID nextRID;
+    static inline std::vector<vkw::Image> thrash;
 
     static void Create();
     static void Destroy();
+    static void DestroyTrash() {
+        thrash.clear();
+    }
     static void CreateRenderingPass(RenderingPass& pass);
     static void DestroyRenderingPass(RenderingPass& pass);
 };

@@ -82,9 +82,10 @@ vec3 HemisphereSample(vec2 rng) {
 }
 
 vec4 BlueNoiseSample(int i) {
-    vec2 blueNoiseSize = textureSize(BLUE_NOISE_TEXTURE, 0);
-    ivec2 fragUV = ivec2(mod(gl_FragCoord.xy + GOLDEN_RATIO*blueNoiseSize*(frame%64 + i*vec2(5, 7)), blueNoiseSize));
-    return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
+    // vec2 blueNoiseSize = textureSize(BLUE_NOISE_TEXTURE, 0);
+    // ivec2 fragUV = ivec2(mod(gl_FragCoord.xy + GOLDEN_RATIO*blueNoiseSize*(frame%64 + i*vec2(5, 7)), blueNoiseSize));
+    // return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
+    return vec4(1, 0, 0, 0);
 }
 
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {

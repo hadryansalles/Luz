@@ -6,6 +6,9 @@
 #include "Camera.hpp"
 #include "VulkanLayer.h"
 
+// todo: move to some proper place
+#include "imgui/imgui_impl_vulkan.h"
+
 #define MAX_TEXTURES 4096
 #define MAX_MODELS 4096
 #define MAX_LIGHTS 16
@@ -164,4 +167,12 @@ namespace Scene {
     void InspectEntity(Entity* entity);
 
     void RenderTransformGizmo(Transform& transform);
+}
+
+inline void DrawTextureOnImgui(vkw::Image& img) {
+    float hSpace = ImGui::GetContentRegionAvail().x/2.5f;
+    f32 maxSize = std::max(img.width, img.height);
+    ImVec2 size = ImVec2((f32)img.width/maxSize, (f32)img.height/maxSize);
+    size = ImVec2(size.x*hSpace, size.y * hSpace);
+    ImGui::Image(img.imguiRID, size);
 }

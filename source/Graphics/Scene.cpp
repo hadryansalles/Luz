@@ -5,6 +5,7 @@
 #include "Window.hpp"
 #include "RayTracing.hpp"
 #include "VulkanLayer.h"
+#include "RenderingPass.hpp"
 
 #include <imgui/imgui_stdlib.h>
 
@@ -98,6 +99,8 @@ void CreateResources() {
 
 void UpdateResources() {
     LUZ_PROFILE_FUNC();
+    scene.whiteTexture = whiteTexture.rid;
+    scene.blackTexture = blackTexture.rid;
     scene.numLights = 0;
     scene.viewSize = glm::vec2(vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height);
     for (int i = 0; i < modelEntities.size(); i++) {
@@ -372,6 +375,9 @@ void OnImgui() {
         bool active = scene.useBlueNoise == 1;
         ImGui::Checkbox("Blue noise", &active);
         scene.useBlueNoise = active ? 1 : 0;
+        if (ImGui::Button("Clear thrash")) {
+            RenderingPassManager::DestroyTrash();
+        }
     }
 }
 

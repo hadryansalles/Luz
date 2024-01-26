@@ -3,9 +3,15 @@
 #include <filesystem>
 #include <mutex>
 
-#include "Texture.hpp"
 #include "Scene.hpp"
 #include "VulkanLayer.h"
+
+struct TextureDesc {
+    std::filesystem::path path = "";
+    void* data                 = nullptr;
+    uint32_t width             = 0;
+    uint32_t height            = 0;
+};
 
 struct MeshVertex {
     glm::vec3 pos;
@@ -114,7 +120,6 @@ public:
     static inline MeshResource meshes[MAX_MESHES];
 
     static inline TextureDesc textureDescs[MAX_TEXTURES];
-    static inline TextureResource textures[MAX_TEXTURES];
 
     static inline vkw::Image images[MAX_TEXTURES];
 

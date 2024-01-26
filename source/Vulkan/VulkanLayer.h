@@ -164,6 +164,7 @@ struct Context {
     void CmdCopy(Image& dst, void* data, uint32_t size);
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
+    void CmdBarrier();
 
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -225,7 +226,8 @@ struct Context {
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
     VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-    std::vector<VkImage> swapChainImages;
+    std::vector<Image> swapChainImages;
+    std::vector<VkImage> swapChainImageResources;
     std::vector<VkImageView> swapChainViews;
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
@@ -270,11 +272,8 @@ struct Context {
     inline VkCommandBuffer GetCurrentCommandBuffer() {
         return queues[currentQueue].commands[currentImageIndex].buffer;
     }
-    inline VkImage GetCurrentSwapChainImage() {
+    inline Image& GetCurrentSwapChainImage() {
         return swapChainImages[currentImageIndex];
-    }
-    inline VkImageView GetCurrentSwapChainView() {
-        return swapChainViews[currentImageIndex];
     }
     inline CommandResources& GetCurrentCommandResources() {
         return queues[currentQueue].commands[currentImageIndex];

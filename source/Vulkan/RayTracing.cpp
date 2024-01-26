@@ -4,9 +4,7 @@
 #include "Shader.hpp"
 #include "Scene.hpp"
 #include "AssetManager.hpp"
-#include "ImageManager.hpp"
 #include "FileManager.hpp"
-#include "Texture.hpp"
 #include "GraphicsPipelineManager.hpp"
 #include "VulkanLayer.h"
 

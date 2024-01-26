@@ -26,14 +26,18 @@ struct BufferResource : Resource {
 };
 
 struct ImageResource : Resource {
-    VkImage image;
-    VkImageView view;
-    VkDeviceMemory memory;
+    VkImage image = VK_NULL_HANDLE;
+    VkImageView view = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    bool fromSwapchain = false;
 
     virtual ~ImageResource() {
-        vkDestroyImageView(_ctx.device, view, _ctx.allocator);
-        vkDestroyImage(_ctx.device, image, _ctx.allocator);
-        vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+        if (!fromSwapchain && memory != VK_NULL_HANDLE) {
+            LOG_INFO("Destroying image {}", name);
+            vkDestroyImageView(_ctx.device, view, _ctx.allocator);
+            vkDestroyImage(_ctx.device, image, _ctx.allocator);
+            vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+        }
     }
 };
 
@@ -207,16 +211,11 @@ Image CreateImage(const ImageDesc& desc) {
 
     if (desc.usage & ImageUsage::Sampled) {
         Layout::ImageLayout newLayout = Layout::ShaderRead;
-        //if (aspect == (Aspect::Depth | Aspect::Stencil)) {
-        //    newLayout = Layout::DepthStencilRead;
-        //} else if (aspect == Aspect::Depth) {
-        //    newLayout = Layout::DepthRead;
-        //}
-        //BeginCommandBuffer(Queue::Transfer);
-        //CmdBarrier(image, newLayout);
-        //EndCommandBuffer();
-        //WaitQueue(Queue::Transfer);
-
+        if (aspect == (Aspect::Depth | Aspect::Stencil)) {
+            newLayout = Layout::DepthStencilRead;
+        } else if (aspect == Aspect::Depth) {
+            newLayout = Layout::DepthRead;
+        }
         image.imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
 
         VkDescriptorImageInfo descriptorInfo = {
@@ -280,6 +279,10 @@ void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
     _ctx.CmdBarrier(img, layout);
+}
+
+void CmdBarrier() {
+    _ctx.CmdBarrier();
 }
 
 void BeginCommandBuffer(Queue queue) {
@@ -858,16 +861,17 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         DEBUG_VK(res, "Failed to create swap chain!");
 
         vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
-        swapChainImages.resize(imageCount);
-        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+        swapChainImageResources.resize(imageCount);
+        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImageResources.data());
     }
 
     // create image views
-    swapChainViews.resize(swapChainImages.size());
+    swapChainViews.resize(swapChainImageResources.size());
+    swapChainImages.resize(swapChainImageResources.size());
     for (size_t i = 0; i < swapChainImages.size(); i++) {
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = swapChainImages[i];
+        viewInfo.image = swapChainImageResources[i];
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         viewInfo.format = colorFormat;
         viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -878,6 +882,15 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 
         auto res = vkCreateImageView(device, &viewInfo, allocator, &swapChainViews[i]);
         DEBUG_VK(res, "Failed to create SwapChain image view!");
+
+        swapChainImages[i].resource = std::make_shared<ImageResource>();
+        swapChainImages[i].resource->fromSwapchain = true;
+        swapChainImages[i].resource->image = swapChainImageResources[i];
+        swapChainImages[i].resource->view = swapChainViews[i];
+        swapChainImages[i].layout = Layout::Undefined;
+        swapChainImages[i].width = width;
+        swapChainImages[i].height = height;
+        swapChainImages[i].aspect = Aspect::Color;
     }
 
     for (size_t i = 0; i < swapChainImages.size(); i++) {
@@ -885,7 +898,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         VkDebugUtilsObjectNameInfoEXT name = {
             .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
             .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-            .objectHandle = (uint64_t)(VkImage)swapChainImages[i],
+            .objectHandle = (uint64_t)(VkImage)swapChainImageResources[i],
             .pObjectName = strName.c_str(),
         };
         _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
@@ -1195,6 +1208,22 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
     barrier.subresourceRange = range;
     vkCmdPipelineBarrier(cmd.buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
     img.layout = layout;
+}
+
+void Context::CmdBarrier() {
+    VkMemoryBarrier2 barrier = {
+    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+    .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    };
+    VkDependencyInfo dependency = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1,
+        .pMemoryBarriers = &barrier,
+    };
+    vkCmdPipelineBarrier2(GetCurrentCommandBuffer(), &dependency);
 }
 
 VkSampler Context::CreateSampler(f32 maxLod) {

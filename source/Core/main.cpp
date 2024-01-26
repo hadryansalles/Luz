@@ -1,6 +1,5 @@
 #include "Luzpch.hpp" 
 
-#include "ImageManager.hpp"
 #include "Window.hpp"
 #include "Camera.hpp"
 #include "Shader.hpp"
@@ -200,6 +199,7 @@ private:
 
         vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
         vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
+        vkw::CmdBarrier();
 
         DeferredShading::BeginOpaquePass(commandBuffer);
 
@@ -256,7 +256,6 @@ private:
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
         auto device = vkw::ctx().device;
-        //auto instance = vkw::ctx().instance;
         vkDeviceWaitIdle(device);
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
@@ -265,7 +264,9 @@ private:
         Window::UpdateFramebufferSize();
         vkDeviceWaitIdle(device);
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
+        vkDeviceWaitIdle(device);
         DeferredShading::Recreate();
+        vkDeviceWaitIdle(device);
         createUniformProjection();
     }
 

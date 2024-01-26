@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "DeferredRenderer.hpp"
-#include "Texture.hpp"
 #include "RenderingPass.hpp"
 #include "AssetManager.hpp"
 #include "VulkanLayer.h"
@@ -102,6 +101,10 @@ void Destroy() {
     RenderingPassManager::DestroyRenderingPass(presentPass);
     RenderingPassManager::DestroyRenderingPass(lightPass);
     RenderingPassManager::Destroy();
+
+    GraphicsPipelineManager::DestroyShaders(opaquePass.gpo);
+    GraphicsPipelineManager::DestroyShaders(presentPass.gpo);
+    GraphicsPipelineManager::DestroyShaders(lightPass.gpo);
 }
 
 void ReloadShaders() {
@@ -125,11 +128,8 @@ void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* dat
 
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        //VkImage image = opaquePass.colorAttachments[i].GetImage();
-        //ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, image);
         vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ColorAttachment);
     }
-    //ImageManager::BarrierDepthUndefinedToAttachment(commandBuffer, opaquePass.depthAttachment.GetImage());
     vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthAttachment);
 
     VkRenderingInfoKHR renderingInfo{};
@@ -157,12 +157,8 @@ void EndPass(VkCommandBuffer commandBuffer) {
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        //VkImage res = opaquePass.colorAttachments[i].GetImage();
-        //ImageManager::BarrierColorAttachmentToRead(commandBuffer, res);
         vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ShaderRead);
     }
-    //VkImage depthRes = opaquePass.depthAttachment.GetImage();
-    //ImageManager::BarrierDepthAttachmentToRead(commandBuffer, depthRes);
     vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthRead);
 
     constants.albedoRID = opaquePass.colorAttachments[0].rid;
@@ -171,8 +167,6 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     constants.emissionRID = opaquePass.colorAttachments[3].rid;
     constants.depthRID = opaquePass.depthAttachment.rid;
 
-    //VkImage lightColorRes = lightPass.colorAttachments[0].GetImage();
-    //ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, lightColorRes);
     vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ColorAttachment);
 
     VkRenderingInfoKHR renderingInfo{};
@@ -197,8 +191,6 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
 }
 
 void BeginPresentPass(VkCommandBuffer commandBuffer) {
-    //VkImage lightRes = lightPass.colorAttachments[0].GetImage();
-    //ImageManager::BarrierColorAttachmentToRead(commandBuffer, lightRes);
     vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ShaderRead);
 
     PresentConstant constants;
@@ -208,15 +200,13 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
     constants.materialRID = opaquePass.colorAttachments[2].rid;
     constants.emissionRID = opaquePass.colorAttachments[3].rid;
     constants.depthRID = opaquePass.depthAttachment.rid;
-
     constants.imageType = ctx.presentType;
 
-    //vkw::CmdBarrier(vkw::ctx()., vkw::Layout::ShaderRead);
-    ImageManager::BarrierColorUndefinedToAttachment(commandBuffer, vkw::ctx().GetCurrentSwapChainImage());
+    vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
 
     VkRenderingAttachmentInfoKHR colorAttach{};
     colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    colorAttach.imageView = vkw::ctx().GetCurrentSwapChainView();
+    colorAttach.imageView = vkw::ctx().GetCurrentSwapChainImage().GetView();
     colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttach.resolveMode = VK_RESOLVE_MODE_NONE;
     colorAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -245,7 +235,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
 
 void EndPresentPass(VkCommandBuffer commandBuffer) {
     vkCmdEndRendering(commandBuffer);
-    ImageManager::BarrierColorAttachmentToPresent(commandBuffer, vkw::ctx().GetCurrentSwapChainImage());
+    vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::Present);
 }
 
 void OnImgui(int numFrame) {

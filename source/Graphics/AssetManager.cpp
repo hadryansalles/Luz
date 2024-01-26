@@ -165,7 +165,6 @@ void AssetManager::RecenterMesh(RID rid) {
 }
 
 void AssetManager::InitializeTexture(RID id) {
-    TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
 
     images[id] = vkw::CreateImage({

@@ -76,4 +76,3 @@ layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tla
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]
 #define GET_MODEL(id) modelsBuffer[modelBufferIndex].models[(id)]
-#define BLUE_NOISE_TEXTURE textures[2]

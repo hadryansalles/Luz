@@ -1,13 +1,12 @@
 #include "Luzpch.hpp"
 #include "RenderingPass.hpp"
-#include "ImageManager.hpp"
-#include "Texture.hpp"
 #include "VulkanLayer.h"
 
 void RenderingPassManager::Create() {
 }
 
 void RenderingPassManager::Destroy() {
+    DestroyTrash();
 }
 
 void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
@@ -62,7 +61,6 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
 
 void RenderingPassManager::DestroyRenderingPass(RenderingPass& pass) {
     GraphicsPipelineManager::DestroyPipeline(pass.gpo);
-    static std::vector<vkw::Image> thrash;
     for (int i = 0; i < pass.colorAttachments.size(); i++) {
         thrash.push_back(pass.colorAttachments[i]);
     }
