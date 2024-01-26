@@ -26,14 +26,13 @@ struct BufferResource : Resource {
 };
 
 struct ImageResource : Resource {
-    VkImage image = VK_NULL_HANDLE;
-    VkImageView view = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkImage image;
+    VkImageView view;
+    VkDeviceMemory memory;
     bool fromSwapchain = false;
 
     virtual ~ImageResource() {
-        if (!fromSwapchain && memory != VK_NULL_HANDLE) {
-            LOG_INFO("Destroying image {}", name);
+        if (!fromSwapchain) {
             vkDestroyImageView(_ctx.device, view, _ctx.allocator);
             vkDestroyImage(_ctx.device, image, _ctx.allocator);
             vkFreeMemory(_ctx.device, memory, _ctx.allocator);

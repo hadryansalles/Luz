@@ -6,7 +6,6 @@ void RenderingPassManager::Create() {
 }
 
 void RenderingPassManager::Destroy() {
-    DestroyTrash();
 }
 
 void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
@@ -61,10 +60,6 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
 
 void RenderingPassManager::DestroyRenderingPass(RenderingPass& pass) {
     GraphicsPipelineManager::DestroyPipeline(pass.gpo);
-    for (int i = 0; i < pass.colorAttachments.size(); i++) {
-        thrash.push_back(pass.colorAttachments[i]);
-    }
-    thrash.push_back(pass.depthAttachment);
     pass.colorAttachments.clear();
     pass.depthAttachment = {};
 }

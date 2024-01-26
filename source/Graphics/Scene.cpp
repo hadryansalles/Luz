@@ -375,9 +375,6 @@ void OnImgui() {
         bool active = scene.useBlueNoise == 1;
         ImGui::Checkbox("Blue noise", &active);
         scene.useBlueNoise = active ? 1 : 0;
-        if (ImGui::Button("Clear thrash")) {
-            RenderingPassManager::DestroyTrash();
-        }
     }
 }
 

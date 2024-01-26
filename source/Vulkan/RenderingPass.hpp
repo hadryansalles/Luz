@@ -23,9 +23,6 @@ public:
 
     static void Create();
     static void Destroy();
-    static void DestroyTrash() {
-        thrash.clear();
-    }
     static void CreateRenderingPass(RenderingPass& pass);
     static void DestroyRenderingPass(RenderingPass& pass);
 };
