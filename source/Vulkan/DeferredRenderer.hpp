@@ -26,6 +26,10 @@ inline RenderingPass opaquePass = {};
 inline RenderingPass lightPass = {};
 inline RenderingPass presentPass = {};
 
+inline vkw::Pipeline opaque = {};
+inline vkw::Pipeline light = {};
+inline vkw::Pipeline present = {};
+
 void Setup();
 void Create();
 void Recreate();

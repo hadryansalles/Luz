@@ -4,6 +4,7 @@
 #include <string>
 
 #include "Shader.hpp"
+#include "VulkanLayer.h"
 
 struct GraphicsPipelineDesc {
     std::string                                    name = "Default";
@@ -27,12 +28,12 @@ struct GraphicsPipelineResource {
 };
 
 class GraphicsPipelineManager {
-    static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
+    // static inline VkDescriptorPool imguiDescriptorPool   = VK_NULL_HANDLE;
 
-    // bindless resources
-    static inline VkDescriptorSet bindlessDescriptorSet          = VK_NULL_HANDLE;
-    static inline VkDescriptorPool bindlessDescriptorPool        = VK_NULL_HANDLE;
-    static inline VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+    // // bindless resources
+    // static inline VkDescriptorSet bindlessDescriptorSet          = VK_NULL_HANDLE;
+    // static inline VkDescriptorPool bindlessDescriptorPool        = VK_NULL_HANDLE;
+    // static inline VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
 
 public:
     static void Create();
@@ -44,10 +45,10 @@ public:
     static void ReloadShaders(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
     static void OnImgui(GraphicsPipelineDesc& desc, GraphicsPipelineResource& res);
 
-    static inline VkDescriptorPool GetImguiDescriptorPool()    { return imguiDescriptorPool;   }
+    static inline VkDescriptorPool GetImguiDescriptorPool()    { return vkw::ctx().imguiDescriptorPool;   }
 
     // bindless resources
-    static inline VkDescriptorSet& GetBindlessDescriptorSet() { return bindlessDescriptorSet; }
+    static inline VkDescriptorSet& GetBindlessDescriptorSet() { return vkw::ctx().bindlessDescriptorSet; }
 
     static inline constexpr int TEXTURES_BINDING = 0;
     static inline constexpr int STORAGE_BINDING = 1;

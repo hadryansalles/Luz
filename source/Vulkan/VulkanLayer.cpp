@@ -43,10 +43,6 @@ struct ImageResource : Resource {
 struct PipelineResource : Resource {
     VkPipeline pipeline;
     VkPipelineLayout layout;
-    std::filesystem::path vertex = "";
-    std::filesystem::path geometry = "";
-    std::filesystem::path fragment = "";
-    std::filesystem::path compute = "";
 
     virtual ~PipelineResource() {
         vkDestroyPipeline(_ctx.device, pipeline, _ctx.allocator);
@@ -266,63 +262,140 @@ Image CreateImage(const ImageDesc& desc) {
     return image;
 }
 
-Pipeline CreatePipeline(PipelineDesc desc) {
-    /*
-    desc.bindingDesc = MeshVertex::getBindingDescription();
-    desc.attributesDesc = MeshVertex::getAttributeDescriptions();
+Pipeline CreatePipeline(const PipelineDesc& desc) {
+    Pipeline pipeline;
+    pipeline.resource = std::make_shared<PipelineResource>();
+    pipeline.stages = desc.stages;
+    _ctx.LoadShaders(pipeline);
+    _ctx.CreatePipeline(desc, pipeline);
+    return pipeline;
+}
 
-    desc.rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+void Context::LoadShaders(Pipeline& pipeline) {
+    pipeline.stageBytes.clear();
+    for (auto& stage : pipeline.stages) {
+        pipeline.stageBytes.push_back(CompileShader(stage.path));
+    }
+}
+
+std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
+    char compile_string[1024];
+    char inpath[256];
+    char outpath[256];
+    std::string cwd = std::filesystem::current_path().string();
+    sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
+    sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
+    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
+    DEBUG_TRACE("[ShaderCompiler] Output:");
+    if(system(compile_string)) {
+        LOG_ERROR("[ShaderCompiler] Error!");
+    }
+
+    // 'ate' specify to start reading at the end of the file
+    // then we can use the read position to determine the size of the file
+    std::ifstream file(outpath, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        LOG_CRITICAL("Failed to open file: '{}'", outpath);
+    }
+    size_t fileSize = (size_t)file.tellg();
+    std::vector<char> buffer(fileSize);
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+
+    return buffer;
+}
+
+void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
+    pipeline.point = desc.point;
+    pipeline.resource->name = desc.name;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer = {};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     // fragments beyond near and far planes are clamped to them
-    desc.rasterizer.depthClampEnable = VK_FALSE;
-    desc.rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    desc.rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     // line thickness in terms of number of fragments
-    desc.rasterizer.lineWidth = 1.0f;
-    desc.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    desc.rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    desc.rasterizer.depthBiasEnable = VK_FALSE;
-    desc.rasterizer.depthBiasConstantFactor = 0.0f;
-    desc.rasterizer.depthBiasClamp = 0.0f;
-    desc.rasterizer.depthBiasSlopeFactor = 0.0f;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+    rasterizer.depthBiasConstantFactor = 0.0f;
+    rasterizer.depthBiasClamp = 0.0f;
+    rasterizer.depthBiasSlopeFactor = 0.0f;
 
-    desc.multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    desc.multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    desc.multisampling.sampleShadingEnable = VK_FALSE;
-    desc.multisampling.minSampleShading = 0.5f;
-    desc.multisampling.pSampleMask = nullptr;
+    VkPipelineMultisampleStateCreateInfo multisampling = {};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.minSampleShading = 0.5f;
+    multisampling.pSampleMask = nullptr;
 
-    desc.depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    desc.depthStencil.depthTestEnable = VK_TRUE;
-    desc.depthStencil.depthWriteEnable = VK_TRUE;
-    desc.depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-    desc.depthStencil.depthBoundsTestEnable = VK_FALSE;
-    desc.depthStencil.minDepthBounds = 0.0f;
-    desc.depthStencil.maxDepthBounds = 1.0f;
-    desc.depthStencil.stencilTestEnable = VK_FALSE;
-    desc.depthStencil.front = {};
-    desc.depthStencil.back = {};
-    auto device = vkw::ctx().device;
-    auto allocator = vkw::ctx().allocator;
+    VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.minDepthBounds = 0.0f;
+    depthStencil.maxDepthBounds = 1.0f;
+    depthStencil.stencilTestEnable = VK_FALSE;
+    depthStencil.front = {};
+    depthStencil.back = {};
 
-    std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.shaderStages.size());
-    if (res.shaderResources.size() == 0) {
-        res.shaderResources.resize(desc.shaderStages.size());
-        for (int i = 0; i < res.shaderResources.size(); i++) {
-            Shader::Create(desc.shaderStages[i], res.shaderResources[i]);
-            shaderStages[i] = res.shaderResources[i].stageCreateInfo;
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
+    std::vector<VkShaderModule> shaderModules(desc.stages.size());
+    for (int i = 0; i < desc.stages.size(); i++) {
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = pipeline.stageBytes[i].size();
+        createInfo.pCode = (const uint32_t*)(pipeline.stageBytes[i].data());
+        auto result = vkCreateShaderModule(device, &createInfo, allocator, &shaderModules[i]);
+        DEBUG_VK(result, "Failed to create shader module!");
+        shaderStages[i] = {};
+        shaderStages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStages[i].stage = (VkShaderStageFlagBits)desc.stages[i].stage;
+        shaderStages[i].module = shaderModules[i];
+        // function to invoke inside the shader module
+        // it's possible to combine multiple shaders into a single module
+        // using different entry points
+        shaderStages[i].pName = "main";
+        // this allow us to specify values for shader constants
+        shaderStages[i].pSpecializationInfo = nullptr;
+    }
+
+    std::vector<VkVertexInputAttributeDescription> attributeDescs(desc.vertexAttributes.size());
+    uint32_t attributeSize = 0;
+    for (int i = 0; i < desc.vertexAttributes.size(); i++) {
+        attributeDescs[i].binding = 0;
+        attributeDescs[i].location = i;
+        attributeDescs[i].format = (VkFormat)desc.vertexAttributes[i];
+        attributeDescs[i].offset = attributeSize;
+        if (desc.vertexAttributes[i] == Format::RG32_sfloat) {
+            attributeSize += 2 * sizeof(float);
+        } else if (desc.vertexAttributes[i] == Format::RGB32_sfloat) {
+            attributeSize += 3 * sizeof(float);
+        } else if (desc.vertexAttributes[i] == Format::RGBA32_sfloat) {
+            attributeSize += 4 * sizeof(float);
+        } else {
+            DEBUG_ASSERT(false, "Invalid Vertex Attribute");
         }
     }
-    for (int i = 0; i < res.shaderResources.size(); i++) {
-        shaderStages[i] = res.shaderResources[i].stageCreateInfo;
-    }
+
+    VkVertexInputBindingDescription bindingDescription{};
+    bindingDescription.binding = 0;
+    bindingDescription.stride = attributeSize;
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(desc.attributesDesc.size());
+    vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
     // these points to an array of structs that describe how to load the vertex data
-    vertexInputInfo.pVertexBindingDescriptions = &desc.bindingDesc;
-    vertexInputInfo.pVertexAttributeDescriptions = desc.attributesDesc.data();
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
 
     // define the type of input of our pipeline
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -365,15 +438,15 @@ Pipeline CreatePipeline(PipelineDesc desc) {
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
 
-    auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &res.layout);
+    auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &pipeline.resource->layout);
     DEBUG_VK(vkRes, "Failed to create pipeline layout!");
 
     VkPipelineRenderingCreateInfoKHR pipelineRendering{};
     pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
     pipelineRendering.colorAttachmentCount = desc.colorFormats.size();
-    pipelineRendering.pColorAttachmentFormats = desc.colorFormats.data();
-    pipelineRendering.depthAttachmentFormat = desc.depthFormat;
-    pipelineRendering.stencilAttachmentFormat = desc.stencilFormat;
+    pipelineRendering.pColorAttachmentFormats = (VkFormat*)desc.colorFormats.data();
+    pipelineRendering.depthAttachmentFormat = desc.useDepth ? (VkFormat)desc.depthFormat : VK_FORMAT_UNDEFINED;
+    pipelineRendering.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
     pipelineRendering.viewMask = 0;
 
     std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
@@ -403,12 +476,12 @@ Pipeline CreatePipeline(PipelineDesc desc) {
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &desc.rasterizer;
-    pipelineInfo.pMultisampleState = &desc.multisampling;
-    pipelineInfo.pDepthStencilState = &desc.depthStencil;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlendState;
     pipelineInfo.pDynamicState = nullptr;
-    pipelineInfo.layout = res.layout;
+    pipelineInfo.layout = pipeline.resource->layout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     // pipelineInfo.renderPass = SwapChain::GetRenderPass();
     pipelineInfo.subpass = 0;
@@ -418,10 +491,12 @@ Pipeline CreatePipeline(PipelineDesc desc) {
     pipelineInfo.basePipelineIndex = -1;
     pipelineInfo.pNext = &pipelineRendering;
 
-    vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &res.pipeline);
+    vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline.resource->pipeline);
     DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
-    */
-    return {};
+
+    for (int i = 0; i < shaderModules.size(); i++) {
+        vkDestroyShaderModule(device, shaderModules[i], allocator);
+    }
 }
 
 VkImageView Image::GetView() {
@@ -505,6 +580,17 @@ void CmdEndRendering() {
     vkCmdEndRendering(cmd.buffer);
 }
 
+void CmdBindPipeline(Pipeline& pipeline) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
+    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+    _ctx.currentPipeline = pipeline.resource;
+}
+
+void CmdPushConstants(void* data, uint32_t size) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
+}
 
 void BeginCommandBuffer(Queue queue) {
     ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
@@ -535,6 +621,7 @@ uint64_t EndCommandBuffer() {
     auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
     DEBUG_VK(res, "Failed to submit command buffer");
     _ctx.currentQueue = vkw::Queue::Count;
+    _ctx.currentPipeline = {};
     return 0;
 }
 
@@ -975,9 +1062,103 @@ void Context::CreateDevice() {
 
     genericSampler = CreateSampler(1.0);
     vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+
+    VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
+    VkDescriptorPoolCreateInfo imguiPoolInfo{};
+    imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    imguiPoolInfo.maxSets = (uint32_t)(1024);
+    imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
+    imguiPoolInfo.pPoolSizes = imguiPoolSizes;
+
+    VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
+    DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+
+    // create bindless resources
+    {
+        const u32 MAX_STORAGE = physicalProperties.limits.maxPerStageDescriptorStorageBuffers;
+        const u32 MAX_SAMPLEDIMAGES = physicalProperties.limits.maxPerStageDescriptorSampledImages;
+
+        // create descriptor set pool for bindless resources
+        std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
+            {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1}
+        };
+
+        VkDescriptorPoolCreateInfo bindlessPoolInfo{};
+        bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        bindlessPoolInfo.maxSets = 1;
+        bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
+        bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
+
+        result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+        DEBUG_VK(result, "Failed to create bindless descriptor pool!");
+
+        // create descriptor set layout for bindless resources
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        std::vector<VkDescriptorBindingFlags> bindingFlags;
+
+        VkDescriptorSetLayoutBinding texturesBinding{};
+        texturesBinding.binding = LUZ_BINDING_TEXTURE;
+        texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
+        texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(texturesBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding storageBuffersBinding{};
+        storageBuffersBinding.binding = LUZ_BINDING_BUFFER;
+        storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        storageBuffersBinding.descriptorCount = MAX_STORAGE;
+        storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(storageBuffersBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
+
+        VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+        accelerationStructureBinding.binding = LUZ_BINDING_TLAS;
+        accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        accelerationStructureBinding.descriptorCount = 1;
+        accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(accelerationStructureBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+        setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        setLayoutBindingFlags.bindingCount = bindingFlags.size();
+        setLayoutBindingFlags.pBindingFlags = bindingFlags.data();
+
+        VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
+        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorLayoutInfo.bindingCount = bindings.size();
+        descriptorLayoutInfo.pBindings = bindings.data();
+        descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
+
+        result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
+        DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
+
+        // create descriptor set for bindless resources
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = bindlessDescriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &bindlessDescriptorLayout;
+
+        result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
+        DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+    }
 }
 
 void Context::DestroyDevice() {
+    currentPipeline = {};
+    vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
+    vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
+    vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+    bindlessDescriptorSet = VK_NULL_HANDLE;
+    bindlessDescriptorPool = VK_NULL_HANDLE;
+    bindlessDescriptorLayout = VK_NULL_HANDLE;
     vkDestroySampler(device, genericSampler, allocator);
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;

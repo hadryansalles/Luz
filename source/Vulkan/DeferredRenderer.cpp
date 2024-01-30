@@ -84,6 +84,44 @@ void Create() {
     RenderingPassManager::CreateRenderingPass(lightPass);
     RenderingPassManager::CreateRenderingPass(opaquePass);
     RenderingPassManager::CreateRenderingPass(presentPass);
+
+    light = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "light.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "light.frag"},
+        },
+        .extent = {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height},
+        .name = "Light",
+        .vertexAttributes = {},
+        .colorFormats = {vkw::Format::RGBA8_unorm},
+        .useDepth = false,
+    });
+    opaque = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "opaque.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "opaque.frag"},
+        },
+        .extent = {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height},
+        .name = "Opaque",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
+        .colorFormats = {vkw::Format::RGBA8_unorm, vkw::Format::RGBA32_sfloat, vkw::Format::RGBA8_unorm, vkw::Format::RGBA8_unorm},
+        .useDepth = true,
+        .depthFormat = vkw::Format::D32_sfloat
+    });
+    present = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "present.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "present.frag"},
+        },
+        .extent = {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height},
+        .name = "Present",
+        .vertexAttributes = {},
+        .colorFormats = {vkw::Format::BGRA8_unorm},
+        .useDepth = false,
+    });
 }
 
 void Recreate() {
@@ -105,6 +143,9 @@ void Destroy() {
     GraphicsPipelineManager::DestroyShaders(opaquePass.gpo);
     GraphicsPipelineManager::DestroyShaders(presentPass.gpo);
     GraphicsPipelineManager::DestroyShaders(lightPass.gpo);
+    opaque = {};
+    light = {};
+    present = {};
 }
 
 void ReloadShaders() {
@@ -132,10 +173,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
     }
     vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthAttachment);
     vkw::CmdBeginRendering(opaquePass.colorAttachments, opaquePass.depthAttachment, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
-
-    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.pipeline);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkw::CmdBindPipeline(opaque);
 }
 
 void EndPass(VkCommandBuffer commandBuffer) {
@@ -156,10 +194,8 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     constants.depthRID = opaquePass.depthAttachment.rid;
 
     vkw::CmdBeginRendering(lightPass.colorAttachments, {}, {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height});
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.pipeline);
-    vkCmdPushConstants(commandBuffer, lightPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
-    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkw::CmdBindPipeline(light);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
     vkCmdEndRendering(commandBuffer);
 }
@@ -179,10 +215,8 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
     vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
 
     vkw::CmdBeginRendering({ vkw::ctx().GetCurrentSwapChainImage() }, {}, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, presentPass.gpo.pipeline);
-    vkCmdPushConstants(commandBuffer, presentPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
-    auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, presentPass.gpo.layout, 0, 1, &descriptorSet, 0, nullptr);
+    vkw::CmdBindPipeline(present);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
 }
 

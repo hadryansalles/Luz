@@ -7,6 +7,8 @@
 #include "VulkanLayer.h"
 
 void GraphicsPipelineManager::Create() {
+    return;
+    /*
     auto device = vkw::ctx().device;
     auto allocator = vkw::ctx().allocator;
     auto numFrames = vkw::ctx().swapChainImages.size();
@@ -108,9 +110,12 @@ void GraphicsPipelineManager::Create() {
         result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
         DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
     }
+    */
 }
 
 void GraphicsPipelineManager::Destroy() {
+    return;
+    /*
     vkDestroyDescriptorPool(vkw::ctx().device, imguiDescriptorPool, vkw::ctx().allocator);
 
     // bindless resources
@@ -121,6 +126,7 @@ void GraphicsPipelineManager::Destroy() {
         bindlessDescriptorPool = VK_NULL_HANDLE;
         bindlessDescriptorLayout = VK_NULL_HANDLE;
     }
+    */
 }
 
 void GraphicsPipelineManager::CreateDefaultDesc(GraphicsPipelineDesc& desc) {
@@ -210,7 +216,7 @@ void GraphicsPipelineManager::CreatePipeline(GraphicsPipelineDesc& desc, Graphic
     viewportState.pScissors = &scissor;
 
     std::vector<VkDescriptorSetLayout> layouts;
-    layouts.push_back(bindlessDescriptorLayout);
+    layouts.push_back(vkw::ctx().bindlessDescriptorLayout);
 
     VkPushConstantRange pushConstant{};
     pushConstant.offset = 0;

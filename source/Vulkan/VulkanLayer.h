@@ -123,6 +123,8 @@ struct Image {
     AspectFlags aspect;
     uint32_t rid;
     ImTextureID imguiRID;
+
+    // todo: remove
     VkImageView GetView();
     VkImage GetImage();
 };
@@ -142,36 +144,49 @@ struct ImageDesc {
     std::string name = "";
 };
 
-namespace PipelineFlags {
+namespace PipelinePoint {
     enum Point {
-        GraphicsPoint = 0,
-        ComputePoint = 1,
+        Graphics = 0,
+        Compute = 1,
+    };
+}
+
+namespace ShaderStage {
+    enum Stage {
+        Vertex = 0x00000001,
+        Geometry = 0x00000008,
+        Fragment = 0x00000010,
+        Compute = 0x00000020,
+        AllGraphics = 0x0000001F,
+        All = 0x7FFFFFFF,
     };
 }
 
 struct Pipeline {
+    struct Stage {
+        ShaderStage::Stage stage;
+        std::filesystem::path path;
+    };
+    PipelinePoint::Point point;
     std::shared_ptr<PipelineResource> resource;
-private:
-    std::vector<char> vertexBytes;
-    std::vector<char> geometryBytes;
-    std::vector<char> fragmentBytes;
-    std::vector<char> computeBytes;
+    std::vector<Stage> stages;
+    std::vector<std::vector<char>> stageBytes;
 };
 
 struct PipelineDesc {
-    PipelineFlags::Point point;
-    // todo: use vector with enum for each stage separately
-    std::filesystem::path vertex = "";
-    std::filesystem::path geometry = "";
-    std::filesystem::path fragment = "";
-    std::filesystem::path compute = "";
+    PipelinePoint::Point point;
+    std::vector<Pipeline::Stage> stages;
     glm::ivec2 extent = { 0, 0 };
     std::string name = "";
+    std::vector<Format> vertexAttributes;
+    std::vector<Format> colorFormats;
+    bool useDepth = false;
+    Format depthFormat;
 };
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
 Image CreateImage(const ImageDesc& desc);
-Pipeline CreatePipeline(PipelineDesc desc);
+Pipeline CreatePipeline(const PipelineDesc& desc);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -181,9 +196,8 @@ void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, const glm::ivec2& extent = { 0, 0 }, const glm::ivec2& offset = { 0, 0 });
 void CmdEndRendering();
-void CmdBindPipeline();
-//void CmdPushConstants()
-
+void CmdBindPipeline(Pipeline& pipeline);
+void CmdPushConstants(void* data, uint32_t size);
 
 void BeginCommandBuffer(Queue queue);
 uint64_t EndCommandBuffer();
@@ -202,6 +216,10 @@ struct Context {
     void CmdBarrier();
     void CmdBeginRendering();
     void CmdEndRendering();
+
+    void LoadShaders(Pipeline& pipeline);
+    std::vector<char> CompileShader(const std::filesystem::path& path);
+    void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
 
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -241,6 +259,12 @@ struct Context {
     std::vector<VkExtensionProperties> availableExtensions;
     std::vector<VkQueueFamilyProperties> availableFamilies;
 
+    // bindless resources
+    VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
+    VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+
     VkDevice device = VK_NULL_HANDLE;
 
     struct CommandResources {
@@ -258,6 +282,7 @@ struct Context {
     };
     InternalQueue queues[Queue::Count];
     Queue currentQueue = Queue::Count;
+    std::shared_ptr<PipelineResource> currentPipeline;
     const uint32_t stagingBufferSize = 64 * 1024 * 1024;
 
     VkPhysicalDeviceMemoryProperties memoryProperties;
