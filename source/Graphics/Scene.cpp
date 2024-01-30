@@ -1,11 +1,9 @@
 #include "Luzpch.hpp"
 #include "Scene.hpp"
 #include "AssetManager.hpp"
-#include "GraphicsPipelineManager.hpp"
 #include "Window.hpp"
 #include "RayTracing.hpp"
 #include "VulkanLayer.h"
-#include "RenderingPass.hpp"
 
 #include <imgui/imgui_stdlib.h>
 

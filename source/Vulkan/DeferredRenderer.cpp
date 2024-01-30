@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "DeferredRenderer.hpp"
-#include "RenderingPass.hpp"
 #include "AssetManager.hpp"
 #include "VulkanLayer.h"
 
@@ -14,6 +13,17 @@ namespace DeferredShading {
 struct Context {
     const char* presentTypes[7] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth", "All"};
     int presentType = 0;
+
+    vkw::Pipeline opaquePipeline;
+    vkw::Pipeline lightPipeline;
+    vkw::Pipeline presentPipeline;
+
+    vkw::Image albedo;
+    vkw::Image normal;
+    vkw::Image material;
+    vkw::Image emission;
+    vkw::Image depth;
+    vkw::Image light;
 };
 
 struct PresentConstant {
@@ -29,129 +39,96 @@ struct PresentConstant {
 Context ctx;
 
 void Setup() {
-    {
-        GraphicsPipelineManager::CreateDefaultDesc(lightPass.gpoDesc);
-        lightPass.gpoDesc.name = "Light";
-        lightPass.gpoDesc.shaderStages.resize(2);
-        lightPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        lightPass.gpoDesc.shaderStages[0].path = "light.vert";
-        lightPass.gpoDesc.shaderStages[0].entry_point = "main";
-        lightPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        lightPass.gpoDesc.shaderStages[1].path = "light.frag";
-        lightPass.gpoDesc.shaderStages[1].entry_point = "main";
-        lightPass.gpoDesc.attributesDesc.clear();
-        lightPass.gpoDesc.bindingDesc = {};
-        lightPass.gpoDesc.useDepthAttachment = false;
-        lightPass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
-        lightPass.clearColors = { {0, 0, 0, 1} };
-    }
-    {
-        GraphicsPipelineManager::CreateDefaultDesc(opaquePass.gpoDesc);
-        opaquePass.gpoDesc.name = "Opaque";
-        opaquePass.gpoDesc.shaderStages.resize(2);
-        opaquePass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        opaquePass.gpoDesc.shaderStages[0].path = "opaque.vert";
-        opaquePass.gpoDesc.shaderStages[0].entry_point = "main";
-        opaquePass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        opaquePass.gpoDesc.shaderStages[1].path = "opaque.frag";
-        opaquePass.gpoDesc.shaderStages[1].entry_point = "main";
-        opaquePass.gpoDesc.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R32G32B32A32_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM};
-        opaquePass.clearColors = { {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1}, {0, 0, 0, 1} };
-        opaquePass.gpoDesc.useDepthAttachment = true;
-        opaquePass.gpoDesc.depthFormat = VK_FORMAT_D32_SFLOAT;
-    }
-    {
-        GraphicsPipelineManager::CreateDefaultDesc(presentPass.gpoDesc);
-        presentPass.gpoDesc.name = "Present";
-        presentPass.gpoDesc.shaderStages.resize(2);
-        presentPass.gpoDesc.shaderStages[0].stageBit = VK_SHADER_STAGE_VERTEX_BIT;
-        presentPass.gpoDesc.shaderStages[0].path = "present.vert";
-        presentPass.gpoDesc.shaderStages[0].entry_point = "main";
-        presentPass.gpoDesc.shaderStages[1].stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
-        presentPass.gpoDesc.shaderStages[1].path = "present.frag";
-        presentPass.gpoDesc.shaderStages[1].entry_point = "main";
-        presentPass.gpoDesc.colorFormats = { VK_FORMAT_B8G8R8A8_UNORM };
-        presentPass.createAttachments = false;
-        presentPass.gpoDesc.attributesDesc.clear();
-        presentPass.gpoDesc.bindingDesc = {};
-        presentPass.gpoDesc.useDepthAttachment = false;
-    }
 }
 
-void Create() {
-    VkDevice device = vkw::ctx().device;
-    RenderingPassManager::Create();
-    RenderingPassManager::CreateRenderingPass(lightPass);
-    RenderingPassManager::CreateRenderingPass(opaquePass);
-    RenderingPassManager::CreateRenderingPass(presentPass);
-
-    light = vkw::CreatePipeline({
+void Recreate(uint32_t width, uint32_t height) {
+    ctx.albedo = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Albedo Attachment"
+    });
+    ctx.normal = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Normal Attachment"
+    });
+    ctx.material = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Material Attachment"
+    });
+    ctx.emission = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Emission Attachment"
+    });
+    ctx.light = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Light Attachment"
+    });
+    ctx.depth = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::D32_sfloat,
+        .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
+        .name = "Depth Attachment"
+    });
+    ctx.lightPipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
             {.stage = vkw::ShaderStage::Vertex, .path = "light.vert"},
             {.stage = vkw::ShaderStage::Fragment, .path = "light.frag"},
         },
-        .extent = {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height},
-        .name = "Light",
+        .extent = {width, height},
+        .name = "Light Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {vkw::Format::RGBA8_unorm},
+        .colorFormats = {ctx.light.format},
         .useDepth = false,
     });
-    opaque = vkw::CreatePipeline({
+    ctx.opaquePipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
             {.stage = vkw::ShaderStage::Vertex, .path = "opaque.vert"},
             {.stage = vkw::ShaderStage::Fragment, .path = "opaque.frag"},
         },
-        .extent = {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height},
-        .name = "Opaque",
+        .extent = {width, height},
+        .name = "Opaque Pipeline",
         .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
-        .colorFormats = {vkw::Format::RGBA8_unorm, vkw::Format::RGBA32_sfloat, vkw::Format::RGBA8_unorm, vkw::Format::RGBA8_unorm},
+        .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
         .useDepth = true,
-        .depthFormat = vkw::Format::D32_sfloat
+        .depthFormat = {ctx.depth.format}
     });
-    present = vkw::CreatePipeline({
+    ctx.presentPipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
             {.stage = vkw::ShaderStage::Vertex, .path = "present.vert"},
             {.stage = vkw::ShaderStage::Fragment, .path = "present.frag"},
         },
-        .extent = {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height},
-        .name = "Present",
+        .extent = {width, height},
+        .name = "Present Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {vkw::Format::BGRA8_unorm},
+        .colorFormats = {(vkw::Format)vkw::ctx().colorFormat},
         .useDepth = false,
     });
 }
 
-void Recreate() {
-    RenderingPassManager::DestroyRenderingPass(lightPass);
-    RenderingPassManager::DestroyRenderingPass(opaquePass);
-    RenderingPassManager::DestroyRenderingPass(presentPass);
-
-    RenderingPassManager::CreateRenderingPass(lightPass);
-    RenderingPassManager::CreateRenderingPass(opaquePass);
-    RenderingPassManager::CreateRenderingPass(presentPass);
-}
-
 void Destroy() {
-    RenderingPassManager::DestroyRenderingPass(opaquePass);
-    RenderingPassManager::DestroyRenderingPass(presentPass);
-    RenderingPassManager::DestroyRenderingPass(lightPass);
-    RenderingPassManager::Destroy();
-
-    GraphicsPipelineManager::DestroyShaders(opaquePass.gpo);
-    GraphicsPipelineManager::DestroyShaders(presentPass.gpo);
-    GraphicsPipelineManager::DestroyShaders(lightPass.gpo);
-    opaque = {};
-    light = {};
-    present = {};
+    ctx = {};
 }
 
 void ReloadShaders() {
-    GraphicsPipelineManager::ReloadShaders(opaquePass.gpoDesc, opaquePass.gpo);
-    GraphicsPipelineManager::ReloadShaders(presentPass.gpoDesc, presentPass.gpo);
-    GraphicsPipelineManager::ReloadShaders(lightPass.gpoDesc, lightPass.gpo);
+    // todo: reload
 }
 
 void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
@@ -163,17 +140,14 @@ void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
     vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
 }
 
-void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* data, u32 size) {
-    vkCmdPushConstants(commandBuffer, pass.gpo.layout, VK_SHADER_STAGE_ALL, 0, size, data);
-}
-
 void BeginOpaquePass(VkCommandBuffer commandBuffer) {
-    for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ColorAttachment);
+    std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
+    for (auto& attach : attachs) {
+        vkw::CmdBarrier(attach, vkw::Layout::ColorAttachment);
     }
-    vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthAttachment);
-    vkw::CmdBeginRendering(opaquePass.colorAttachments, opaquePass.depthAttachment, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
-    vkw::CmdBindPipeline(opaque);
+    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthAttachment);
+    vkw::CmdBeginRendering(attachs, ctx.depth, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
+    vkw::CmdBindPipeline(ctx.opaquePipeline);
 }
 
 void EndPass(VkCommandBuffer commandBuffer) {
@@ -181,41 +155,41 @@ void EndPass(VkCommandBuffer commandBuffer) {
 }
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
-    for (int i = 0; i < opaquePass.colorAttachments.size(); i++) {
-        vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ShaderRead);
+    std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
+    for (auto& attach : attachs) {
+        vkw::CmdBarrier(attach, vkw::Layout::ShaderRead);
     }
-    vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthRead);
-    vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ColorAttachment);
+    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ColorAttachment);
 
-    constants.albedoRID = opaquePass.colorAttachments[0].rid;
-    constants.normalRID = opaquePass.colorAttachments[1].rid;
-    constants.materialRID = opaquePass.colorAttachments[2].rid;
-    constants.emissionRID = opaquePass.colorAttachments[3].rid;
-    constants.depthRID = opaquePass.depthAttachment.rid;
+    constants.albedoRID = ctx.albedo.rid;
+    constants.normalRID = ctx.normal.rid;
+    constants.materialRID = ctx.material.rid;
+    constants.emissionRID = ctx.emission.rid;
+    constants.depthRID = ctx.depth.rid;
 
-    vkw::CmdBeginRendering(lightPass.colorAttachments, {}, {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height});
-    vkw::CmdBindPipeline(light);
+    vkw::CmdBeginRendering({ctx.light}, {}, {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height});
+    vkw::CmdBindPipeline(ctx.lightPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
     vkCmdEndRendering(commandBuffer);
 }
 
 void BeginPresentPass(VkCommandBuffer commandBuffer) {
-    vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 
     PresentConstant constants;
-    constants.lightRID = lightPass.colorAttachments[0].rid;
-    constants.albedoRID = opaquePass.colorAttachments[0].rid;
-    constants.normalRID = opaquePass.colorAttachments[1].rid;
-    constants.materialRID = opaquePass.colorAttachments[2].rid;
-    constants.emissionRID = opaquePass.colorAttachments[3].rid;
-    constants.depthRID = opaquePass.depthAttachment.rid;
+    constants.lightRID = ctx.light.rid;
+    constants.albedoRID = ctx.albedo.rid;
+    constants.normalRID = ctx.normal.rid;
+    constants.materialRID = ctx.material.rid;
+    constants.emissionRID = ctx.emission.rid;
+    constants.depthRID = ctx.depth.rid;
     constants.imageType = ctx.presentType;
 
     vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-
     vkw::CmdBeginRendering({ vkw::ctx().GetCurrentSwapChainImage() }, {}, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
-    vkw::CmdBindPipeline(present);
+    vkw::CmdBindPipeline(ctx.presentPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
 }

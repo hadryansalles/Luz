@@ -2,8 +2,6 @@
 
 #include "Window.hpp"
 #include "Camera.hpp"
-#include "Shader.hpp"
-#include "GraphicsPipelineManager.hpp"
 #include "FileManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
@@ -73,10 +71,9 @@ private:
         Window::Create();
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DEBUG_TRACE("Finish creating SwapChain.");
-        GraphicsPipelineManager::Create();
         CreateImgui();
         RayTracing::Create();
-        DeferredShading::Create();
+        DeferredShading::Recreate(Window::GetWidth(), Window::GetHeight());
         AssetManager::Create();
         Scene::CreateResources();
         createUniformProjection();
@@ -95,7 +92,6 @@ private:
         Scene::DestroyResources();
         RayTracing::Destroy();
         DeferredShading::Destroy();
-        GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
         vkw::Destroy();
         Window::Destroy();
@@ -209,14 +205,16 @@ private:
 
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;
-            DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
+            vkw::CmdPushConstants(&constants, sizeof(constants));
+            //DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
             DeferredShading::RenderMesh(commandBuffer, model->mesh);
         }
 
         if (Scene::renderLightGizmos) {
             for (Light* light : Scene::lightEntities) {
                 constants.modelID = light->id;
-                DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
+                vkw::CmdPushConstants(&constants, sizeof(constants));
+                //DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
                 DeferredShading::RenderMesh(commandBuffer, Scene::lightMeshes[light->block.type]);
             }
         }
@@ -265,7 +263,7 @@ private:
         vkDeviceWaitIdle(device);
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         vkDeviceWaitIdle(device);
-        DeferredShading::Recreate();
+        DeferredShading::Recreate(Window::GetWidth(), Window::GetHeight());
         vkDeviceWaitIdle(device);
         createUniformProjection();
     }
@@ -379,7 +377,7 @@ private:
         initInfo.QueueFamily = vkw::ctx().queues[vkw::Queue::Graphics].family;
         initInfo.Queue = vkw::ctx().queues[vkw::Queue::Graphics].queue;
         initInfo.PipelineCache = VK_NULL_HANDLE;
-        initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
+        initInfo.DescriptorPool = vkw::ctx().imguiDescriptorPool;
         initInfo.MinImageCount = 2;
         initInfo.ImageCount = (uint32_t)vkw::ctx().swapChainImages.size();
         initInfo.MSAASamples = vkw::ctx().numSamples;

@@ -1,8 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-
-#include "RenderingPass.hpp"
+#include "Base.hpp"
 
 namespace DeferredShading {
 
@@ -22,17 +21,8 @@ struct LightConstants {
     int depthRID;
 };
 
-inline RenderingPass opaquePass = {};
-inline RenderingPass lightPass = {};
-inline RenderingPass presentPass = {};
-
-inline vkw::Pipeline opaque = {};
-inline vkw::Pipeline light = {};
-inline vkw::Pipeline present = {};
-
 void Setup();
-void Create();
-void Recreate();
+void Recreate(uint32_t width, uint32_t height);
 void Destroy();
 void ReloadShaders();
 
@@ -40,7 +30,6 @@ void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants);
 
-void BindConstants(VkCommandBuffer commandBuffer, RenderingPass& pass, void* data, u32 size);
 void BeginOpaquePass(VkCommandBuffer commandBuffer);
 void EndPass(VkCommandBuffer commandBuffer);
 

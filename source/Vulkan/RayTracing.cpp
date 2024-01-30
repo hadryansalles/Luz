@@ -1,12 +1,11 @@
 #include "Luzpch.hpp"
 #include "RayTracing.hpp"
 
-#include "Shader.hpp"
 #include "Scene.hpp"
 #include "AssetManager.hpp"
 #include "FileManager.hpp"
-#include "GraphicsPipelineManager.hpp"
 #include "VulkanLayer.h"
+#include "common.h"
 
 #include <imgui/imgui_impl_vulkan.h>
 #include <imgui/imgui.h>
@@ -354,8 +353,8 @@ void CreateTLAS() {
             VkWriteDescriptorSet writeBindlessAccelerationStructure{};
             writeBindlessAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writeBindlessAccelerationStructure.pNext = &descriptorAccelerationStructure;
-            writeBindlessAccelerationStructure.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-            writeBindlessAccelerationStructure.dstBinding = GraphicsPipelineManager::ACCELERATION_STRUCTURE_BINDING;
+            writeBindlessAccelerationStructure.dstSet = vkw::ctx().bindlessDescriptorSet;
+            writeBindlessAccelerationStructure.dstBinding = LUZ_BINDING_TLAS;
             writeBindlessAccelerationStructure.dstArrayElement = 0;
             writeBindlessAccelerationStructure.descriptorCount = 1;
             writeBindlessAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;

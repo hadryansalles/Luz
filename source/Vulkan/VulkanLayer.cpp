@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "VulkanLayer.h"
-#include "GraphicsPipelineManager.hpp"
 
 #include "common.h"
 #include "imgui/imgui_impl_vulkan.h"
@@ -129,7 +128,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         descriptorInfo.offset = 0;
         descriptorInfo.range = size;
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        write.dstSet = vkw::ctx().bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_BUFFER;
         write.dstArrayElement = buffer.rid;
         write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -234,7 +233,7 @@ Image CreateImage(const ImageDesc& desc) {
         };
         VkWriteDescriptorSet write = {};
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
+        write.dstSet = vkw::ctx().bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_TEXTURE;
         write.dstArrayElement = image.rid;
         write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;

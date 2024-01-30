@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "AssetManager.hpp"
-#include "GraphicsPipelineManager.hpp"
 //#include "LogicalDevice.hpp"
 #include "VulkanLayer.h"
 #include "RayTracing.hpp"
