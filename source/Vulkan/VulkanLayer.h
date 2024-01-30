@@ -3,6 +3,7 @@
 #include <memory>
 #include <stdint.h>
 #include <string>
+#include <filesystem>
 
 struct GLFWwindow;
 
@@ -100,6 +101,7 @@ namespace Layout {
 
 struct BufferResource;
 struct ImageResource;
+struct PipelineResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
@@ -140,8 +142,36 @@ struct ImageDesc {
     std::string name = "";
 };
 
+namespace PipelineFlags {
+    enum Point {
+        GraphicsPoint = 0,
+        ComputePoint = 1,
+    };
+}
+
+struct Pipeline {
+    std::shared_ptr<PipelineResource> resource;
+private:
+    std::vector<char> vertexBytes;
+    std::vector<char> geometryBytes;
+    std::vector<char> fragmentBytes;
+    std::vector<char> computeBytes;
+};
+
+struct PipelineDesc {
+    PipelineFlags::Point point;
+    // todo: use vector with enum for each stage separately
+    std::filesystem::path vertex = "";
+    std::filesystem::path geometry = "";
+    std::filesystem::path fragment = "";
+    std::filesystem::path compute = "";
+    glm::ivec2 extent = { 0, 0 };
+    std::string name = "";
+};
+
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
 Image CreateImage(const ImageDesc& desc);
+Pipeline CreatePipeline(PipelineDesc desc);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -149,6 +179,11 @@ void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, const glm::ivec2& extent = { 0, 0 }, const glm::ivec2& offset = { 0, 0 });
+void CmdEndRendering();
+void CmdBindPipeline();
+//void CmdPushConstants()
+
 
 void BeginCommandBuffer(Queue queue);
 uint64_t EndCommandBuffer();
@@ -165,6 +200,8 @@ struct Context {
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
     void CmdBarrier();
+    void CmdBeginRendering();
+    void CmdEndRendering();
 
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;

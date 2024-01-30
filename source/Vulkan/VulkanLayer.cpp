@@ -40,6 +40,20 @@ struct ImageResource : Resource {
     }
 };
 
+struct PipelineResource : Resource {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+    std::filesystem::path vertex = "";
+    std::filesystem::path geometry = "";
+    std::filesystem::path fragment = "";
+    std::filesystem::path compute = "";
+
+    virtual ~PipelineResource() {
+        vkDestroyPipeline(_ctx.device, pipeline, _ctx.allocator);
+        vkDestroyPipelineLayout(_ctx.device, layout, _ctx.allocator);
+    }
+};
+
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     _ctx.CreateInstance(window);
     _ctx.CreatePhysicalDevice();
@@ -252,6 +266,164 @@ Image CreateImage(const ImageDesc& desc) {
     return image;
 }
 
+Pipeline CreatePipeline(PipelineDesc desc) {
+    /*
+    desc.bindingDesc = MeshVertex::getBindingDescription();
+    desc.attributesDesc = MeshVertex::getAttributeDescriptions();
+
+    desc.rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    // fragments beyond near and far planes are clamped to them
+    desc.rasterizer.depthClampEnable = VK_FALSE;
+    desc.rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    desc.rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    // line thickness in terms of number of fragments
+    desc.rasterizer.lineWidth = 1.0f;
+    desc.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    desc.rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    desc.rasterizer.depthBiasEnable = VK_FALSE;
+    desc.rasterizer.depthBiasConstantFactor = 0.0f;
+    desc.rasterizer.depthBiasClamp = 0.0f;
+    desc.rasterizer.depthBiasSlopeFactor = 0.0f;
+
+    desc.multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    desc.multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    desc.multisampling.sampleShadingEnable = VK_FALSE;
+    desc.multisampling.minSampleShading = 0.5f;
+    desc.multisampling.pSampleMask = nullptr;
+
+    desc.depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    desc.depthStencil.depthTestEnable = VK_TRUE;
+    desc.depthStencil.depthWriteEnable = VK_TRUE;
+    desc.depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    desc.depthStencil.depthBoundsTestEnable = VK_FALSE;
+    desc.depthStencil.minDepthBounds = 0.0f;
+    desc.depthStencil.maxDepthBounds = 1.0f;
+    desc.depthStencil.stencilTestEnable = VK_FALSE;
+    desc.depthStencil.front = {};
+    desc.depthStencil.back = {};
+    auto device = vkw::ctx().device;
+    auto allocator = vkw::ctx().allocator;
+
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.shaderStages.size());
+    if (res.shaderResources.size() == 0) {
+        res.shaderResources.resize(desc.shaderStages.size());
+        for (int i = 0; i < res.shaderResources.size(); i++) {
+            Shader::Create(desc.shaderStages[i], res.shaderResources[i]);
+            shaderStages[i] = res.shaderResources[i].stageCreateInfo;
+        }
+    }
+    for (int i = 0; i < res.shaderResources.size(); i++) {
+        shaderStages[i] = res.shaderResources[i].stageCreateInfo;
+    }
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(desc.attributesDesc.size());
+    // these points to an array of structs that describe how to load the vertex data
+    vertexInputInfo.pVertexBindingDescriptions = &desc.bindingDesc;
+    vertexInputInfo.pVertexAttributeDescriptions = desc.attributesDesc.data();
+
+    // define the type of input of our pipeline
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    // with this parameter true we can break up lines and triangles in _STRIP topology modes
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float> (vkw::ctx().swapChainExtent.width);
+    viewport.height = static_cast<float> (vkw::ctx().swapChainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = vkw::ctx().swapChainExtent;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    std::vector<VkDescriptorSetLayout> layouts;
+    layouts.push_back(bindlessDescriptorLayout);
+
+    VkPushConstantRange pushConstant{};
+    pushConstant.offset = 0;
+    pushConstant.size = 128;
+    pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = layouts.size();
+    pipelineLayoutInfo.pSetLayouts = layouts.data();
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+
+    auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &res.layout);
+    DEBUG_VK(vkRes, "Failed to create pipeline layout!");
+
+    VkPipelineRenderingCreateInfoKHR pipelineRendering{};
+    pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    pipelineRendering.colorAttachmentCount = desc.colorFormats.size();
+    pipelineRendering.pColorAttachmentFormats = desc.colorFormats.data();
+    pipelineRendering.depthAttachmentFormat = desc.depthFormat;
+    pipelineRendering.stencilAttachmentFormat = desc.stencilFormat;
+    pipelineRendering.viewMask = 0;
+
+    std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
+    for (int i = 0; i < desc.colorFormats.size(); i++) {
+        blendAttachments[i].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
+        blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+        blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+        blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+        blendAttachments[i].blendEnable = VK_FALSE;
+    }
+
+    VkPipelineColorBlendStateCreateInfo colorBlendState{};
+    colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlendState.logicOpEnable = VK_FALSE;
+    colorBlendState.logicOp = VK_LOGIC_OP_COPY;
+    colorBlendState.attachmentCount = blendAttachments.size();
+    colorBlendState.pAttachments = blendAttachments.data();
+    colorBlendState.blendConstants[0] = 0.0f;
+    colorBlendState.blendConstants[1] = 0.0f;
+    colorBlendState.blendConstants[2] = 0.0f;
+    colorBlendState.blendConstants[3] = 0.0f;
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages.data();
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &desc.rasterizer;
+    pipelineInfo.pMultisampleState = &desc.multisampling;
+    pipelineInfo.pDepthStencilState = &desc.depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlendState;
+    pipelineInfo.pDynamicState = nullptr;
+    pipelineInfo.layout = res.layout;
+    pipelineInfo.renderPass = VK_NULL_HANDLE;
+    // pipelineInfo.renderPass = SwapChain::GetRenderPass();
+    pipelineInfo.subpass = 0;
+    // if we were creating this pipeline by deriving it from another
+    // we should specify here
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.basePipelineIndex = -1;
+    pipelineInfo.pNext = &pipelineRendering;
+
+    vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &res.pipeline);
+    DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
+    */
+    return {};
+}
+
 VkImageView Image::GetView() {
     return resource->view;
 }
@@ -283,6 +455,56 @@ void CmdBarrier(Image& img, Layout::ImageLayout layout) {
 void CmdBarrier() {
     _ctx.CmdBarrier();
 }
+
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, const glm::ivec2& extent, const glm::ivec2& offset) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = 1;
+    renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y) };
+    renderingInfo.renderArea.offset = { offset.x, offset.y };
+    renderingInfo.flags = 0;
+
+    std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos(colorAttachs.size());
+    VkRenderingAttachmentInfoKHR depthAttachInfo;
+    for (int i = 0; i < colorAttachs.size(); i++) {
+        colorAttachInfos[i] = {};
+        colorAttachInfos[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
+        colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
+        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachInfos[i].clearValue.color = { 0, 0, 0, 1 };
+    }
+
+    renderingInfo.colorAttachmentCount = colorAttachInfos.size();
+    renderingInfo.pColorAttachments = colorAttachInfos.data();
+    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    if (depthAttach.resource) {
+        depthAttachInfo = {};
+        depthAttachInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        depthAttachInfo.imageView = depthAttach.resource->view;
+        depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+        depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
+        renderingInfo.pDepthAttachment = &depthAttachInfo;
+    }
+
+    vkCmdBeginRendering(cmd.buffer, &renderingInfo);
+}
+
+void CmdEndRendering() {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdEndRendering(cmd.buffer);
+}
+
 
 void BeginCommandBuffer(Queue queue) {
     ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");

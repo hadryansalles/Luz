@@ -131,20 +131,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
         vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ColorAttachment);
     }
     vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthAttachment);
-
-    VkRenderingInfoKHR renderingInfo{};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-    renderingInfo.viewMask = 0;
-    renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = vkw::ctx().swapChainExtent;
-    renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.flags = 0;
-    renderingInfo.colorAttachmentCount = opaquePass.colorAttachInfos.size();
-    renderingInfo.pColorAttachments = opaquePass.colorAttachInfos.data();
-    renderingInfo.pDepthAttachment = &opaquePass.depthAttachInfo;
-    renderingInfo.pStencilAttachment = nullptr;
-
-    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkw::CmdBeginRendering(opaquePass.colorAttachments, opaquePass.depthAttachment, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
 
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePass.gpo.pipeline);
@@ -152,7 +139,7 @@ void BeginOpaquePass(VkCommandBuffer commandBuffer) {
 }
 
 void EndPass(VkCommandBuffer commandBuffer) {
-    vkCmdEndRendering(commandBuffer);
+    vkw::CmdEndRendering();
 }
 
 void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
@@ -160,6 +147,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
         vkw::CmdBarrier(opaquePass.colorAttachments[i], vkw::Layout::ShaderRead);
     }
     vkw::CmdBarrier(opaquePass.depthAttachment, vkw::Layout::DepthRead);
+    vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ColorAttachment);
 
     constants.albedoRID = opaquePass.colorAttachments[0].rid;
     constants.normalRID = opaquePass.colorAttachments[1].rid;
@@ -167,21 +155,7 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     constants.emissionRID = opaquePass.colorAttachments[3].rid;
     constants.depthRID = opaquePass.depthAttachment.rid;
 
-    vkw::CmdBarrier(lightPass.colorAttachments[0], vkw::Layout::ColorAttachment);
-
-    VkRenderingInfoKHR renderingInfo{};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-    renderingInfo.viewMask = 0;
-    renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = vkw::ctx().swapChainExtent;
-    renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.flags = 0;
-    renderingInfo.colorAttachmentCount = lightPass.colorAttachInfos.size();
-    renderingInfo.pColorAttachments = lightPass.colorAttachInfos.data();
-    renderingInfo.pDepthAttachment = nullptr;
-    renderingInfo.pStencilAttachment = nullptr;
-
-    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkw::CmdBeginRendering(lightPass.colorAttachments, {}, {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height});
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightPass.gpo.pipeline);
     vkCmdPushConstants(commandBuffer, lightPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
@@ -204,28 +178,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
 
     vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
 
-    VkRenderingAttachmentInfoKHR colorAttach{};
-    colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    colorAttach.imageView = vkw::ctx().GetCurrentSwapChainImage().GetView();
-    colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colorAttach.resolveMode = VK_RESOLVE_MODE_NONE;
-    colorAttach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttach.clearValue.color = { 0, 0, 0, 1.0f };
-
-    VkRenderingInfoKHR renderingInfo{};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-    renderingInfo.viewMask = 0;
-    renderingInfo.layerCount = 1;
-    renderingInfo.renderArea.extent = vkw::ctx().swapChainExtent;
-    renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.flags = 0;
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttach;
-    renderingInfo.pDepthAttachment = nullptr;
-    renderingInfo.pStencilAttachment = nullptr;
-
-    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+    vkw::CmdBeginRendering({ vkw::ctx().GetCurrentSwapChainImage() }, {}, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, presentPass.gpo.pipeline);
     vkCmdPushConstants(commandBuffer, presentPass.gpo.layout, VK_SHADER_STAGE_ALL, 0, sizeof(constants), &constants);
     auto& descriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
@@ -234,7 +187,7 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
 }
 
 void EndPresentPass(VkCommandBuffer commandBuffer) {
-    vkCmdEndRendering(commandBuffer);
+    vkw::CmdEndRendering();
     vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::Present);
 }
 
