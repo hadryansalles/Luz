@@ -5,7 +5,6 @@
 #include "FileManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
-#include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanLayer.h"
 
@@ -72,7 +71,6 @@ private:
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DEBUG_TRACE("Finish creating SwapChain.");
         CreateImgui();
-        RayTracing::Create();
         DeferredShading::Recreate(Window::GetWidth(), Window::GetHeight());
         AssetManager::Create();
         Scene::CreateResources();
@@ -90,7 +88,6 @@ private:
         LUZ_PROFILE_FUNC();
         DestroyImgui();
         Scene::DestroyResources();
-        RayTracing::Destroy();
         DeferredShading::Destroy();
         AssetManager::Destroy();
         vkw::Destroy();
@@ -176,7 +173,6 @@ private:
         }
         ImGui::End();
 
-        RayTracing::OnImgui();
         DeferredShading::OnImgui(0);
 
         ImGui::ShowDemoWindow();

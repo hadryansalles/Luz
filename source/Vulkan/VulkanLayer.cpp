@@ -720,57 +720,37 @@ void CmdBuildBLAS(BLAS& blas) {
 
 void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& blasInstances) {
     auto& device = _ctx.device;
-    auto& allocator = _ctx.device;
     auto& cmd = _ctx.GetCurrentCommandResources();
     std::shared_ptr<TLASResource>& res = tlas.resource;
 
-    std::vector<VkAccelerationStructureInstanceKHR> instances;
-    instances.reserve(blasInstances.size());
-    for (const BLASInstance& instance : blasInstances) {
+    std::vector<VkAccelerationStructureInstanceKHR> instances(blasInstances.size());
+    for (int i = 0; i < instances.size(); i++) {
         VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-        addressInfo.accelerationStructure = instance.blas.resource->accel;
-
-        VkTransformMatrixKHR transform{};
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 4; j++) {
-                transform.matrix[i][j] = instance.modelMat[j][i];
+        addressInfo.accelerationStructure = blasInstances[i].blas.resource->accel;
+        instances[i] = {};
+        instances[i].instanceCustomIndex = blasInstances[i].customIndex;
+        instances[i].accelerationStructureReference = _ctx.vkGetAccelerationStructureDeviceAddressKHR(device, &addressInfo);
+        instances[i].flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+        instances[i].mask = 0xFF;
+        instances[i].instanceShaderBindingTableRecordOffset = 0;
+        for (int x = 0; x < 3; x++) {
+            for (int y = 0; y < 4; y++) {
+                instances[i].transform.matrix[x][y] = blasInstances[i].modelMat[y][x];
             }
         }
-
-        VkAccelerationStructureInstanceKHR vkInstance{};
-        vkInstance.transform = transform;
-        vkInstance.instanceCustomIndex = instance.customIndex;
-        vkInstance.accelerationStructureReference = _ctx.vkGetAccelerationStructureDeviceAddressKHR(device, &addressInfo);
-        vkInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-        vkInstance.mask = 0xFF;
-        vkInstance.instanceShaderBindingTableRecordOffset = 0;
-        instances.emplace_back(vkInstance);
     }
 
     CmdCopy(res->instancesBuffer, instances.data(), instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
-    EndCommandBuffer();
-    WaitQueue(vkw::Queue::Graphics);
-    BeginCommandBuffer(vkw::Queue::Graphics);
-
-    {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-
     VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 
-    // Build Offsets info: n instances
     VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {instances.size(), 0, 0, 0};
     const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
-
-    // Build the TLAS
     _ctx.vkCmdBuildAccelerationStructuresKHR(cmd.buffer, 1, &res->buildInfo, &pBuildOffsetInfo);
-
-    // after first build, set to update
-    res->buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
-    }
+    res->buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR; // after first build, set update moded
 }
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {

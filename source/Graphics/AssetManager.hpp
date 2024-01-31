@@ -83,6 +83,7 @@ struct MeshResource {
     vkw::Buffer indexBuffer;
     u32 vertexCount;
     u32 indexCount;
+    vkw::BLAS blas;
 };
 
 #define MAX_MESHES 2048

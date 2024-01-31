@@ -335,7 +335,7 @@ struct Context {
 
     uint32_t nextBufferRID = 0;
     uint32_t nextImageRID = 0;
-    uint32_t nextTLASRID = 1;
+    uint32_t nextTLASRID = 0;
     VkSampler genericSampler;
 
     // preferred, warn if not available

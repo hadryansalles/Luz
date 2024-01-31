@@ -2,7 +2,6 @@
 #include "Scene.hpp"
 #include "AssetManager.hpp"
 #include "Window.hpp"
-#include "RayTracing.hpp"
 #include "VulkanLayer.h"
 
 #include <imgui/imgui_stdlib.h>
@@ -93,6 +92,7 @@ void CreateResources() {
     vkw::CmdBarrier(blackTexture, vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Graphics);
+    tlas = vkw::CreateTLAS(1024, "mainTLAS");
 }
 
 void UpdateResources() {
@@ -152,7 +152,21 @@ void UpdateResources() {
     scene.projView = camera.GetProj() * camera.GetView();
     scene.inverseProj = glm::inverse(camera.GetProj());
     scene.inverseView = glm::inverse(camera.GetView());
-    RayTracing::CreateTLAS();
+    scene.tlasRid = tlas.rid;
+
+    std::vector<vkw::BLASInstance> vkwInstances(modelEntities.size());
+    for (int i = 0; i < modelEntities.size(); i++) {
+        MeshResource& mesh = AssetManager::meshes[modelEntities[i]->mesh];
+        vkwInstances[i] = {
+            .blas = mesh.blas,
+            .modelMat = modelEntities[i]->transform.GetMatrix(),
+            .customIndex = modelEntities[i]->id,
+        };
+    }
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    vkw::CmdBuildTLAS(tlas, vkwInstances);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
 }
 
 void DestroyResources() {
@@ -160,6 +174,7 @@ void DestroyResources() {
     modelsBuffer = {};
     whiteTexture = {};
     blackTexture = {};
+    tlas = {};
 }
 
 Model* CreateModel() {
@@ -170,7 +185,6 @@ Model* CreateModel() {
     entities.push_back(model);
     modelEntities.push_back(model);
     SetCollection(model, rootCollection);
-    RayTracing::SetRecreateTLAS();
     return model;
 }
 
@@ -191,7 +205,6 @@ Model* CreateModel(Model* copy) {
     entity->useEmissionMap = copy->useEmissionMap;
     entity->useMetallicRoughnessMap = copy->useMetallicRoughnessMap;
     modelEntities.push_back(entity);
-    RayTracing::SetRecreateTLAS();
     return entity;
 }
 
@@ -278,7 +291,6 @@ void DeleteEntity(Entity* entity) {
     if (entity->entityType == EntityType::Collection) {
         DeleteCollection((Collection*)entity);
     } else if (entity->entityType == EntityType::Model) {
-        RayTracing::SetRecreateTLAS();
         auto it = std::find(modelEntities.begin(), modelEntities.end(), (Model*)entity);
         DEBUG_ASSERT(it != modelEntities.end(), "Model isn't on the vector of models.");
         modelEntities.erase(it);

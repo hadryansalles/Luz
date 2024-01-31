@@ -3,7 +3,6 @@
 #include "AssetManager.hpp"
 //#include "LogicalDevice.hpp"
 #include "VulkanLayer.h"
-#include "RayTracing.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -29,6 +28,7 @@ void AssetManager::Destroy() {
     for (RID i = 0; i < nextMeshRID; i++) {
         meshes[i].vertexBuffer = {};
         meshes[i].indexBuffer = {};
+        meshes[i].blas = {};
         unintializedMeshes.push_back(i);
     }
     meshesLock.unlock();
@@ -89,7 +89,21 @@ void AssetManager::UpdateResources() {
         InitializeMesh(rid);
     }
     if (toInitialize.size()) {
-        RayTracing::CreateBLAS(toInitialize);
+        vkw::BeginCommandBuffer(vkw::Graphics);
+        for (RID meshID : toInitialize) {
+            MeshResource& mesh = meshes[meshID];
+            mesh.blas = vkw::CreateBLAS ({
+                .vertexBuffer = mesh.vertexBuffer,
+                .indexBuffer = mesh.indexBuffer,
+                .vertexCount = mesh.vertexCount,
+                .indexCount = mesh.indexCount,
+                .vertexStride = sizeof(MeshVertex),
+                .name = "Mesh " + std::to_string(meshID)
+            });;
+            vkw::CmdBuildBLAS(mesh.blas);
+        }
+        vkw::EndCommandBuffer();
+        vkw::WaitQueue(vkw::Graphics);
     }
 
     // initialize new textures

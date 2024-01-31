@@ -49,7 +49,8 @@ struct SceneBlock {
     u32 whiteTexture = 0;
 
     u32 blackTexture = 0;
-    u32 pad[3];
+    u32 tlasRid = 0;
+    u32 pad[2];
 };
 
 struct MaterialBlock {
@@ -138,6 +139,7 @@ namespace Scene {
 
     inline vkw::Image whiteTexture;
     inline vkw::Image blackTexture;
+    inline vkw::TLAS tlas;
 
     void Setup();
     void CreateResources();

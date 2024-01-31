@@ -64,7 +64,8 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBlock {
     int whiteTexture;
 
     int blackTexture;
-    int pad[3]; 
+    int tlasRid; 
+    int pad[2];
 } sceneBuffers[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {
@@ -73,7 +74,7 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {
 
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 
-#define tlas tlasBuffer[1]
+#define tlas tlasBuffer[scene.tlasRid]
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]
 #define GET_MODEL(id) modelsBuffer[modelBufferIndex].models[(id)]
