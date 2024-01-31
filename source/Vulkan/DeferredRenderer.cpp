@@ -2,10 +2,10 @@
 
 #include "DeferredRenderer.hpp"
 #include "SwapChain.hpp"
-#include "LogicalDevice.hpp"
 #include "Texture.hpp"
 #include "RenderingPass.hpp"
 #include "AssetManager.hpp"
+#include "VulkanLayer.h"
 
 #include "imgui/imgui_impl_vulkan.h"
 
@@ -83,7 +83,7 @@ void Setup() {
 }
 
 void Create() {
-    VkDevice device = LogicalDevice::GetVkDevice();
+    VkDevice device = vkw::ctx().device;
     RenderingPassManager::Create();
     ctx.vkCmdBeginRendering = (PFN_vkCmdBeginRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdBeginRenderingKHR");
     ctx.vkCmdEndRendering = (PFN_vkCmdEndRenderingKHR)vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR");

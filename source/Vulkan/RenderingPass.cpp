@@ -2,15 +2,15 @@
 #include "RenderingPass.hpp"
 #include "ImageManager.hpp"
 #include "Texture.hpp"
-#include "LogicalDevice.hpp"
 #include "SwapChain.hpp"
+#include "VulkanLayer.h"
 
 void RenderingPassManager::Create() {
     sampler = CreateSampler(1);
 }
 
 void RenderingPassManager::Destroy() {
-    vkDestroySampler(LogicalDevice::GetVkDevice(), sampler, nullptr);
+    vkDestroySampler(vkw::ctx().device, sampler, nullptr);
     for (RID i = 0; i < nextRID; i++) {
         ImageManager::Destroy(imageAttachments[i]);
     }
@@ -110,7 +110,7 @@ void RenderingPassManager::CreateRenderingPass(RenderingPass& pass) {
             pass.depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
         }
 
-        vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
+        vkUpdateDescriptorSets(vkw::ctx().device, count, writes.data(), 0, nullptr);
         DEBUG_TRACE("Update descriptor sets in CreateRenderingPass!");
     }
 }

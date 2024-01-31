@@ -2,7 +2,8 @@
 
 #include "AssetManager.hpp"
 #include "GraphicsPipelineManager.hpp"
-#include "LogicalDevice.hpp"
+//#include "LogicalDevice.hpp"
+#include "VulkanLayer.h"
 #include "RayTracing.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -145,7 +146,7 @@ void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
         writes[i].descriptorCount = 1;
         writes[i].pImageInfo = &imageInfos[i];
     }
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(vkw::ctx().device, count, writes.data(), 0, nullptr);
     DEBUG_TRACE("Update descriptor sets in UpdateTexturesDescriptor!");
 }
 
@@ -708,8 +709,8 @@ void DirOnImgui(std::filesystem::path path) {
 }
 
 void AssetManager::OnImgui() {
-    const float totalWidth = ImGui::GetContentRegionAvailWidth();
-    const float leftSpacing = ImGui::GetContentRegionAvailWidth()*1.0f/3.0f;
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
+    const float leftSpacing = ImGui::GetContentRegionAvail().x*1.0f/3.0f;
     if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) { 
         DirOnImgui(std::filesystem::path("assets"));
     }

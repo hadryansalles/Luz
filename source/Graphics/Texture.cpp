@@ -1,10 +1,8 @@
 #include "Luzpch.hpp"
 
 #include "Texture.hpp"
-#include "Instance.hpp"
-#include "PhysicalDevice.hpp"
-#include "LogicalDevice.hpp"
 #include "GraphicsPipelineManager.hpp"
+#include "VulkanLayer.h"
 
 #include "imgui/imgui_impl_vulkan.h"
 
@@ -18,13 +16,13 @@ void CreateTextureResource(TextureDesc& desc, TextureResource& res) {
 
 void DestroyTextureResource(TextureResource& res) {
     ImageManager::Destroy(res.image);
-    vkDestroySampler(LogicalDevice::GetVkDevice(), res.sampler, Instance::GetAllocator());
+    vkDestroySampler(vkw::ctx().device, res.sampler, vkw::ctx().allocator);
     res.sampler = VK_NULL_HANDLE;
     res.imguiRID = nullptr;
 }
 
 void DrawTextureOnImgui(TextureResource& res) {
-    float hSpace = ImGui::GetContentRegionAvailWidth()/2.5f;
+    float hSpace = ImGui::GetContentRegionAvail().x/2.5f;
     f32 maxSize = std::max(res.image.width, res.image.height);
     ImVec2 size = ImVec2((f32)res.image.width/maxSize, (f32)res.image.height/maxSize);
     size = ImVec2(size.x*hSpace, size.y * hSpace);
@@ -43,7 +41,7 @@ VkSampler CreateSampler(f32 maxLod) {
 
     // get the max ansotropy level of my device
     VkPhysicalDeviceProperties properties{};
-    vkGetPhysicalDeviceProperties(PhysicalDevice::GetVkPhysicalDevice(), &properties);
+    vkGetPhysicalDeviceProperties(vkw::ctx().physicalDevice, &properties);
 
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
@@ -62,7 +60,7 @@ VkSampler CreateSampler(f32 maxLod) {
     samplerInfo.maxLod = maxLod;
 
     VkSampler sampler = VK_NULL_HANDLE;
-    auto vkRes = vkCreateSampler(LogicalDevice::GetVkDevice(), &samplerInfo, nullptr, &sampler);
+    auto vkRes = vkCreateSampler(vkw::ctx().device, &samplerInfo, nullptr, &sampler);
     DEBUG_VK(vkRes, "Failed to create texture sampler!");
 
     return sampler;

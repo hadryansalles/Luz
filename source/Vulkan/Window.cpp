@@ -115,7 +115,7 @@ std::string VideoModeText(GLFWvidmode mode) {
 }
 
 void Window::OnImgui() {
-    const float totalWidth = ImGui::GetContentRegionAvailWidth();
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
     if (ImGui::CollapsingHeader("Window")) {
         // mode
         {

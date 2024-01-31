@@ -1,8 +1,5 @@
 #include "Luzpch.hpp" 
 
-#include "PhysicalDevice.hpp"
-#include "LogicalDevice.hpp"
-#include "Instance.hpp"
 #include "ImageManager.hpp"
 #include "Window.hpp"
 #include "SwapChain.hpp"
@@ -16,6 +13,7 @@
 #include "Scene.hpp"
 #include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
+#include "VulkanLayer.h"
 
 #include <stb_image.h>
 
@@ -78,9 +76,10 @@ private:
     void CreateVulkan() {
         LUZ_PROFILE_FUNC();
         Window::Create();
-        Instance::Create();
-        PhysicalDevice::Create();
-        LogicalDevice::Create();
+        vkw::Init(Window::GetGLFWwindow());
+        // Instance::Create();
+        // PhysicalDevice::Create();
+        //LogicalDevice::Create();
         SwapChain::Create();
         DEBUG_TRACE("Finish creating SwapChain.");
         GraphicsPipelineManager::Create();
@@ -102,16 +101,14 @@ private:
 
     void DestroyVulkan() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-
         DestroyFrameResources();
         RayTracing::Destroy();
         GraphicsPipelineManager::Destroy();
         AssetManager::Destroy();
-        LogicalDevice::Destroy();
-        PhysicalDevice::Destroy();
-        Instance::Destroy();
+        vkw::Destroy();
+        //LogicalDevice::Destroy();
+        //PhysicalDevice::Destroy();
+        //Instance::Destroy();
         Window::Destroy();
     }
 
@@ -142,31 +139,31 @@ private:
                 drawUi = !drawUi;
             }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+                vkDeviceWaitIdle(vkw::ctx().device);
                 DeferredShading::ReloadShaders();
             }
             if (DirtyGlobalResources()) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+                vkDeviceWaitIdle(vkw::ctx().device);
                 DestroyVulkan();
                 CreateVulkan();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
             } else if (PBRGraphicsPipeline::IsDirty()) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+                vkDeviceWaitIdle(vkw::ctx().device);
                 PBRGraphicsPipeline::Destroy();
                 PBRGraphicsPipeline::Create();
             } else if (Window::IsDirty()) {
                 Window::ApplyChanges();
             }
         }
-        vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+        vkDeviceWaitIdle(vkw::ctx().device);
     }
 
     bool DirtyGlobalResources() {
         bool dirty = false;
         // dirty |= Instance::IsDirty();
-        dirty |= PhysicalDevice::IsDirty();
-        dirty |= LogicalDevice::IsDirty();
+        //dirty |= PhysicalDevice::IsDirty();
+        //dirty |= LogicalDevice::IsDirty();
         return dirty;
     }
 
@@ -188,8 +185,8 @@ private:
 
     void imguiDrawFrame() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
+        auto device = vkw::ctx().device;
+        auto instance = vkw::ctx().instance;
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -198,9 +195,9 @@ private:
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
                 if (ImGui::BeginTabItem("Configuration")) {
                     Window::OnImgui();
-                    Instance::OnImgui();
-                    PhysicalDevice::OnImgui();
-                    LogicalDevice::OnImgui();
+                    //Instance::OnImgui();
+                    //PhysicalDevice::OnImgui();
+                    //LogicalDevice::OnImgui();
                     SwapChain::OnImgui();
                     PBRGraphicsPipeline::OnImgui();
                     Scene::camera.OnImgui();
@@ -238,8 +235,8 @@ private:
 
     void updateCommandBuffer(size_t frameIndex) {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
+        auto device = vkw::ctx().device;
+        auto instance = vkw::ctx().instance;
         auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
 
         VkCommandBufferBeginInfo beginInfo{};
@@ -311,8 +308,8 @@ private:
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
+        auto device = vkw::ctx().device;
+        //auto instance = vkw::ctx().instance;
         vkDeviceWaitIdle(device);
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
@@ -321,7 +318,8 @@ private:
         Window::UpdateFramebufferSize();
         vkDeviceWaitIdle(device);
         DestroyFrameResources();
-        PhysicalDevice::OnSurfaceUpdate();
+        vkw::ctx().OnSurfaceUpdate();
+        //PhysicalDevice::OnSurfaceUpdate();
         SwapChain::Create();
         PBRGraphicsPipeline::Create();
         Scene::CreateResources();
@@ -427,17 +425,17 @@ private:
 
     void CreateImgui() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
+        auto device = vkw::ctx().device;
+        auto instance = vkw::ctx().instance;
 
         ImGui_ImplGlfw_InitForVulkan(Window::GetGLFWwindow(), true);
 
         ImGui_ImplVulkan_InitInfo initInfo{};
         initInfo.Instance = instance;
-        initInfo.PhysicalDevice = PhysicalDevice::GetVkPhysicalDevice();
+        initInfo.PhysicalDevice = vkw::ctx().physicalDevice;
         initInfo.Device = device;
-        initInfo.QueueFamily = PhysicalDevice::GetGraphicsFamily();
-        initInfo.Queue = LogicalDevice::GetGraphicsQueue();
+        initInfo.QueueFamily = vkw::ctx().graphicsFamily;
+        initInfo.Queue = vkw::ctx().graphicsQueue;
         initInfo.PipelineCache = VK_NULL_HANDLE;
         initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
         initInfo.MinImageCount = 2;
@@ -445,12 +443,14 @@ private:
         initInfo.MSAASamples = SwapChain::GetNumSamples();
         initInfo.Allocator = VK_NULL_HANDLE;
         initInfo.CheckVkResultFn = CheckVulkanResult;
-        ImGui_ImplVulkan_Init(&initInfo, SwapChain::GetRenderPass());
-        
-        auto commandBuffer = LogicalDevice::BeginSingleTimeCommands();
-        ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
-        LogicalDevice::EndSingleTimeCommands(commandBuffer);
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
+        initInfo.UseDynamicRendering = true;
+        initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        ImGui_ImplVulkan_Init(&initInfo, nullptr);
+        ImGui_ImplVulkan_CreateFontsTexture();
+        //auto commandBuffer = vkw::ctx().BeginSingleTimeCommands();
+        //ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+        //vkw::ctx().EndSingleTimeCommands(commandBuffer);
+        //ImGui_ImplVulkan_DestroyFontUploadObjects();
     }
 
     void DestroyImgui() {

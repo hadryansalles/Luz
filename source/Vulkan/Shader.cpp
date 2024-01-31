@@ -1,8 +1,9 @@
 #include "Luzpch.hpp"
 
 #include "Shader.hpp"
-#include "Instance.hpp"
-#include "LogicalDevice.hpp"
+//#include "Instance.hpp"
+//#include "LogicalDevice.hpp"
+#include "VulkanLayer.h"
 #include "FileManager.hpp"
 
 #include <spirv_reflect.h>
@@ -26,12 +27,12 @@ void Shader::Create(const ShaderDesc& desc, ShaderResource& res) {
 
     std::vector<char> shaderBytes = FileManager::ReadRawBytes(outpath);
 
-    auto device = LogicalDevice::GetVkDevice();
+    auto device = vkw::ctx().device;
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = shaderBytes.size();
     createInfo.pCode = (const uint32_t*)(shaderBytes.data());
-    auto result = vkCreateShaderModule(device, &createInfo, Instance::GetAllocator(), &res.shaderModule);
+    auto result = vkCreateShaderModule(device, &createInfo, vkw::ctx().allocator, &res.shaderModule);
     DEBUG_VK(result, "Failed to create shader module!");
 
     res.stageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -46,5 +47,5 @@ void Shader::Create(const ShaderDesc& desc, ShaderResource& res) {
 }
 
 void Shader::Destroy(ShaderResource& res) {
-    vkDestroyShaderModule(LogicalDevice::GetVkDevice(), res.shaderModule, Instance::GetAllocator());
+    vkDestroyShaderModule(vkw::ctx().device, res.shaderModule, vkw::ctx().allocator);
 }

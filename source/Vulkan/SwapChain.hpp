@@ -10,15 +10,15 @@ private:
     static inline VkRenderPass                 renderPass = VK_NULL_HANDLE;
     static inline std::vector<VkImage>         images;
     static inline std::vector<VkImageView>     views;
-    static inline std::vector<VkFramebuffer>   framebuffers;
+    //static inline std::vector<VkFramebuffer>   framebuffers;
     static inline std::vector<VkCommandBuffer> commandBuffers;
     static inline std::vector<VkSemaphore>     imageAvailableSemaphores;
     static inline std::vector<VkSemaphore>     renderFinishedSemaphores;
     static inline std::vector<VkFence>         inFlightFences;
     static inline std::vector<VkFence>         imagesInFlight;
 
-    static inline ImageResource colorRes;
-    static inline ImageResource depthRes;
+    //static inline ImageResource colorRes;
+    //static inline ImageResource depthRes;
 
     static inline uint32_t   additionalImages;
     static inline uint32_t   framesInFlight;
@@ -52,7 +52,7 @@ public:
     static inline uint32_t              GetNumFrames()               { return images.size();     }
     static inline uint32_t              GetFramesInFlight()          { return framesInFlight;    }
     static inline VkRenderPass          GetRenderPass()              { return renderPass;        }
-    static inline VkFramebuffer         GetFramebuffer(uint32_t i)   { return framebuffers[i];   }
+    //static inline VkFramebuffer         GetFramebuffer(uint32_t i)   { return framebuffers[i];   }
     static inline VkSwapchainKHR        GetVkSwapChain()             { return swapChain;         }
     static inline VkSampleCountFlagBits GetNumSamples()              { return numSamples;        }
     static inline VkCommandBuffer       GetCommandBuffer(uint32_t i) { return commandBuffers[i]; }
@@ -60,6 +60,5 @@ public:
     static inline VkFormat              GetDepthFormat()             { return depthFormat;       }
     static inline VkImage               GetImage(u32 i)              { return images[i];         }
     static inline VkImageView           GetView(u32 i)               { return views[i];          }
-    static inline ImageResource&        GetDepthImage()              { return depthRes;          }
     static inline int                   GetCurrentImageIndex()       { return currentImageIndex; }
 };
