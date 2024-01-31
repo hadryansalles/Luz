@@ -70,6 +70,7 @@ struct BLASResource : Resource {
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
     const VkAccelerationStructureBuildRangeInfoKHR* rangeInfo;
     VkAccelerationStructureGeometryKHR asGeom = {};
+    VkAccelerationStructureBuildRangeInfoKHR offset;
 
     virtual ~BLASResource() {
         _ctx.vkDestroyAccelerationStructureKHR(_ctx.device, accel, _ctx.allocator);
@@ -416,11 +417,10 @@ BLAS CreateBLAS(const BLASDesc& desc) {
     res->asGeom.geometry.triangles = triangles;
 
     // The entire array will be used to build the BLAS.
-    VkAccelerationStructureBuildRangeInfoKHR offset;
-    offset.firstVertex = 0;
-    offset.primitiveCount = maxPrimitiveCount;
-    offset.primitiveOffset = 0;
-    offset.transformOffset = 0;
+    res->offset.firstVertex = 0;
+    res->offset.primitiveCount = maxPrimitiveCount;
+    res->offset.primitiveOffset = 0;
+    res->offset.transformOffset = 0;
 
     VkBuildAccelerationStructureFlagsKHR flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 
@@ -437,10 +437,10 @@ BLAS CreateBLAS(const BLASDesc& desc) {
     res->buildInfo.pGeometries = &res->asGeom;
 
     // Build range information
-    res->rangeInfo = &offset;
+    res->rangeInfo = &res->offset;
 
     // Finding sizes to create acceleration structures and scratch
-    uint32_t primCount = offset.primitiveCount;
+    uint32_t primCount = res->offset.primitiveCount;
     res->sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
     _ctx.vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &res->buildInfo, &primCount, &res->sizeInfo);
 

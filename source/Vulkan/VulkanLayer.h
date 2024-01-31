@@ -344,7 +344,7 @@ struct Context {
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
-    const uint32_t initialScratchBufferSize = 256*1024*1024;
+    const uint32_t initialScratchBufferSize = 64*1024*1024;
     Buffer asScratchBuffer;
     VkDeviceAddress asScratchAddress;
 

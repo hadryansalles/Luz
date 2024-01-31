@@ -59,6 +59,27 @@ struct RayTracingContext {
 RayTracingContext ctx;
 
 void CreateBLAS(std::vector<RID>& meshes) {
+
+    int lastBuiltBlas = ctx.vkwBlases.size();
+    for (RID meshID : meshes) {
+        MeshResource& mesh = AssetManager::meshes[meshID];
+        ctx.vkwBlases.push_back(vkw::CreateBLAS({
+            .vertexBuffer = mesh.vertexBuffer,
+            .indexBuffer = mesh.indexBuffer,
+            .vertexCount = mesh.vertexCount,
+            .indexCount = mesh.indexCount,
+            .vertexStride = sizeof(MeshVertex),
+            .name = "Mesh " + std::to_string(meshID)
+        }));
+    }
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    for (int i = lastBuiltBlas; i < ctx.vkwBlases.size(); i++) {
+        vkw::CmdBuildBLAS(ctx.vkwBlases[i]);
+    }
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
+    return;
+
     LUZ_PROFILE_FUNC();
     VkDevice device = vkw::ctx().device;
 
@@ -207,30 +228,26 @@ void CreateBLAS(std::vector<RID>& meshes) {
     }
     scratchBuffer = {};
 
-    int lastBuiltBlas = ctx.vkwBlases.size();
-    for (RID meshID : meshes) {
-        MeshResource& mesh = AssetManager::meshes[meshID];
-        ctx.vkwBlases.push_back(vkw::CreateBLAS({
-            .vertexBuffer = mesh.vertexBuffer,
-            .indexBuffer = mesh.indexBuffer,
-            .vertexCount = mesh.vertexCount,
-            .indexCount = mesh.indexCount,
-            .vertexStride = sizeof(MeshVertex),
-            .name = "Mesh " + std::to_string(meshID)
-        }));
-    }
-    vkw::BeginCommandBuffer(vkw::Graphics);
-    for (int i = lastBuiltBlas; i < ctx.vkwBlases.size(); i++) {
-        vkw::CmdBuildBLAS(ctx.vkwBlases[i]);
-    }
-    vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Graphics);
-
 
     LOG_INFO("Created BLAS.");
 }
 
 void CreateTLAS() {
+    const std::vector<Model*>& models = Scene::modelEntities;
+    std::vector<vkw::BLASInstance> vkwInstances(models.size());
+    for (int i = 0; i < models.size(); i++) {
+        vkwInstances[i] = {
+            .blas = ctx.vkwBlases[models[i]->mesh],
+            .modelMat = models[i]->transform.GetMatrix(),
+            .customIndex = models[i]->id,
+        };
+    }
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    vkw::CmdBuildTLAS(ctx.vkwTlas, vkwInstances);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
+    return;
+
     LUZ_PROFILE_FUNC();
     if (!ctx.autoUpdateTLAS || !ctx.useRayTracing) {
         return;
@@ -250,7 +267,6 @@ void CreateTLAS() {
         }
     }
 
-    const std::vector<Model*>& models = Scene::modelEntities;
     std::vector<VkAccelerationStructureInstanceKHR> instances;
     instances.reserve(models.size());
     for (int i = 0; i < models.size(); i++) {
@@ -394,19 +410,6 @@ void CreateTLAS() {
     vkw::WaitQueue(vkw::Graphics);
     scratchBuffer = {};
     instancesBuffer = {};
-
-    std::vector<vkw::BLASInstance> vkwInstances(models.size());
-    for (int i = 0; i < models.size(); i++) {
-        vkwInstances[i] = {
-            .blas = ctx.vkwBlases[models[i]->mesh],
-            .modelMat = models[i]->transform.GetMatrix(),
-            .customIndex = models[i]->id,
-        };
-    }
-    vkw::BeginCommandBuffer(vkw::Graphics);
-    vkw::CmdBuildTLAS(ctx.vkwTlas, vkwInstances);
-    vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Graphics);
 }
 
 void Create() {
