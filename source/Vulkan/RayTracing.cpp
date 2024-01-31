@@ -51,6 +51,8 @@ struct RayTracingContext {
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+
+    vkw::TLAS vkwTlas;
 };
 
 RayTracingContext ctx;
@@ -381,6 +383,8 @@ void Create() {
     ctx.vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
     ctx.vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
     ctx.vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
+
+    //ctx.vkwTlas = vkw::CreateTLAS(1024, "mainTLAS");
 }
 
 void Destroy() {
@@ -393,6 +397,8 @@ void Destroy() {
     ctx.vkDestroyAccelerationStructureKHR(device, ctx.TLAS.accel, nullptr);
     ctx.TLAS.buffer = {};
     ctx.TLAS.accel = VK_NULL_HANDLE;
+
+    ctx.vkwTlas = {};
 }
 
 void OnImgui() {

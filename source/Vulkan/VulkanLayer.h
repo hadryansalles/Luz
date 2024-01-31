@@ -196,12 +196,13 @@ struct BLASDesc {
 
 struct TLAS {
     std::shared_ptr<TLASResource> resource;
+    uint32_t rid;
 };
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
 Image CreateImage(const ImageDesc& desc);
 Pipeline CreatePipeline(const PipelineDesc& desc);
-TLAS CreateTLAS(TLAS& tlas, const std::vector<BLASDesc>& blas, const std::string& name);
+TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -319,6 +320,7 @@ struct Context {
 
     uint32_t nextBufferRID = 0;
     uint32_t nextImageRID = 0;
+    uint32_t nextTLASRID = 3;
     VkSampler genericSampler;
 
     // preferred, warn if not available
