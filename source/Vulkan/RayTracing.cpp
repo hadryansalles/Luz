@@ -31,9 +31,6 @@ struct BuildAccelerationStructure {
 };
 
 struct RayTracingContext {
-    VkPipeline pipeline;
-    VkPipelineLayout pipelineLayout;
-
     bool useRayTracing = true;
     bool recreateTLAS = false;
     bool autoUpdateTLAS = true;
@@ -48,26 +45,12 @@ struct RayTracingContext {
 
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR properties;
 
-    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR;
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
     PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
     PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
-    PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR;
-    PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR;
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
-};
-
-struct RayTracingPushConstants {
-    glm::mat4 view;
-    glm::mat4 proj;
-    //glm::mat4 viewProj;
-    //glm::mat4 projInverse;
-    //glm::mat4 viewInverse;
-    //glm::vec4 clearColor;
-    //glm::vec3 lightPosition;
-    //float lightIntensity;
 };
 
 RayTracingContext ctx;
@@ -397,9 +380,6 @@ void Create() {
     ctx.vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
     ctx.vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
     ctx.vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
-    ctx.vkCreateRayTracingPipelinesKHR = (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR");
-    ctx.vkGetRayTracingShaderGroupHandlesKHR = (PFN_vkGetRayTracingShaderGroupHandlesKHR)vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR");
-    ctx.vkCmdTraceRaysKHR = (PFN_vkCmdTraceRaysKHR)vkGetDeviceProcAddr(device, "vkCmdTraceRaysKHR");
     ctx.vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
 }
 

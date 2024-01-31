@@ -102,6 +102,7 @@ namespace Layout {
 struct BufferResource;
 struct ImageResource;
 struct PipelineResource;
+struct TLASResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
@@ -184,9 +185,23 @@ struct PipelineDesc {
     Format depthFormat;
 };
 
+struct BLASDesc {
+    Buffer vertexBuffer;
+    Buffer indexBuffer;
+    glm::mat4 modelMat;
+    uint32_t vertexStride;
+    uint32_t indexCount;
+    uint32_t vertexCount;
+};
+
+struct TLAS {
+    std::shared_ptr<TLASResource> resource;
+};
+
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
 Image CreateImage(const ImageDesc& desc);
 Pipeline CreatePipeline(const PipelineDesc& desc);
+TLAS CreateTLAS(TLAS& tlas, const std::vector<BLASDesc>& blas, const std::string& name);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -347,6 +362,12 @@ struct Context {
     VkSampler CreateSampler(float maxLod);
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+    PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
+    PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
+    PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
+    PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
+    PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
+    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
 };
 
 // todo: move to private
