@@ -71,8 +71,9 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {
     ModelBlock models[MAX_MODELS];
 } modelsBuffers[];
 
-layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlas;
+layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 
+#define tlas tlasBuffer[1]
 #define scene sceneBuffers[sceneBufferIndex]
 #define model modelsBuffers[modelBufferIndex].models[modelID]
 #define GET_MODEL(id) modelsBuffer[modelBufferIndex].models[(id)]

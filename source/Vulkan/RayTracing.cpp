@@ -53,6 +53,7 @@ struct RayTracingContext {
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
 
     vkw::TLAS vkwTlas;
+    std::vector<vkw::BLAS> vkwBlases;
 };
 
 RayTracingContext ctx;
@@ -205,6 +206,26 @@ void CreateBLAS(std::vector<RID>& meshes) {
         ctx.BLAS.emplace_back(b.as);
     }
     scratchBuffer = {};
+
+    int lastBuiltBlas = ctx.vkwBlases.size();
+    for (RID meshID : meshes) {
+        MeshResource& mesh = AssetManager::meshes[meshID];
+        ctx.vkwBlases.push_back(vkw::CreateBLAS({
+            .vertexBuffer = mesh.vertexBuffer,
+            .indexBuffer = mesh.indexBuffer,
+            .vertexCount = mesh.vertexCount,
+            .indexCount = mesh.indexCount,
+            .vertexStride = sizeof(MeshVertex),
+            .name = "Mesh " + std::to_string(meshID)
+        }));
+    }
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    for (int i = lastBuiltBlas; i < ctx.vkwBlases.size(); i++) {
+        vkw::CmdBuildBLAS(ctx.vkwBlases[i]);
+    }
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
+
 
     LOG_INFO("Created BLAS.");
 }
@@ -373,6 +394,19 @@ void CreateTLAS() {
     vkw::WaitQueue(vkw::Graphics);
     scratchBuffer = {};
     instancesBuffer = {};
+
+    std::vector<vkw::BLASInstance> vkwInstances(models.size());
+    for (int i = 0; i < models.size(); i++) {
+        vkwInstances[i] = {
+            .blas = ctx.vkwBlases[models[i]->mesh],
+            .modelMat = models[i]->transform.GetMatrix(),
+            .customIndex = models[i]->id,
+        };
+    }
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    vkw::CmdBuildTLAS(ctx.vkwTlas, vkwInstances);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
 }
 
 void Create() {
@@ -384,7 +418,7 @@ void Create() {
     ctx.vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
     ctx.vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
 
-    //ctx.vkwTlas = vkw::CreateTLAS(1024, "mainTLAS");
+    ctx.vkwTlas = vkw::CreateTLAS(1024, "mainTLAS");
 }
 
 void Destroy() {
@@ -399,6 +433,7 @@ void Destroy() {
     ctx.TLAS.accel = VK_NULL_HANDLE;
 
     ctx.vkwTlas = {};
+    ctx.vkwBlases.clear();
 }
 
 void OnImgui() {

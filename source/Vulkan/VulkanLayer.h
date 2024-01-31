@@ -103,6 +103,7 @@ struct BufferResource;
 struct ImageResource;
 struct PipelineResource;
 struct TLASResource;
+struct BLASResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
@@ -185,13 +186,24 @@ struct PipelineDesc {
     Format depthFormat;
 };
 
+
+struct BLAS {
+    std::shared_ptr<BLASResource> resource;
+};
+
+struct BLASInstance {
+    BLAS blas;
+    glm::mat4 modelMat;
+    uint32_t customIndex;
+};
+
 struct BLASDesc {
     Buffer vertexBuffer;
     Buffer indexBuffer;
-    glm::mat4 modelMat;
-    uint32_t vertexStride;
-    uint32_t indexCount;
     uint32_t vertexCount;
+    uint32_t indexCount;
+    uint32_t vertexStride;
+    std::string name;
 };
 
 struct TLAS {
@@ -203,6 +215,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = 
 Image CreateImage(const ImageDesc& desc);
 Pipeline CreatePipeline(const PipelineDesc& desc);
 TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
+BLAS CreateBLAS(const BLASDesc& desc);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -214,6 +227,8 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
 void CmdEndRendering();
 void CmdBindPipeline(Pipeline& pipeline);
 void CmdPushConstants(void* data, uint32_t size);
+void CmdBuildBLAS(BLAS& blas);
+void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 
 void BeginCommandBuffer(Queue queue);
 uint64_t EndCommandBuffer();
@@ -320,7 +335,7 @@ struct Context {
 
     uint32_t nextBufferRID = 0;
     uint32_t nextImageRID = 0;
-    uint32_t nextTLASRID = 3;
+    uint32_t nextTLASRID = 1;
     VkSampler genericSampler;
 
     // preferred, warn if not available
@@ -328,6 +343,10 @@ struct Context {
     VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+
+    const uint32_t initialScratchBufferSize = 256*1024*1024;
+    Buffer asScratchBuffer;
+    VkDeviceAddress asScratchAddress;
 
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();
