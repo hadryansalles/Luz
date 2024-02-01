@@ -20,10 +20,9 @@ struct LightConstants {
     int depthRID;
 };
 
-void Setup();
-void Recreate(uint32_t width, uint32_t height);
+void CreateShaders();
+void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
-void ReloadShaders();
 
 void RenderMesh(RID meshId);
 void LightPass(LightConstants constants);

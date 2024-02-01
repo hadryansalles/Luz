@@ -13,8 +13,6 @@
 #// include <stb_image.h>
 #include <tiny_gltf.h>
 
-#include <imgui/imgui_impl_vulkan.h>
-
 void AssetManager::Setup() {
 }
 

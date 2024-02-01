@@ -4,8 +4,6 @@
 #include "AssetManager.hpp"
 #include "VulkanWrapper.h"
 
-#include "imgui/imgui_impl_vulkan.h"
-
 #include "FileManager.hpp"
 
 namespace DeferredShading {
@@ -38,10 +36,47 @@ struct PresentConstant {
 
 Context ctx;
 
-void Setup() {
+void CreateShaders() {
+    if (ctx.albedo.format == 0) {
+        LOG_CRITICAL("CREATE IMAGES BEFORE SHADERS IN DEFERRED RENDERER");
+    }
+    ctx.lightPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "light.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "light.frag"},
+        },
+        .name = "Light Pipeline",
+        .vertexAttributes = {},
+        .colorFormats = {ctx.light.format},
+        .useDepth = false,
+    });
+    ctx.opaquePipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "opaque.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "opaque.frag"},
+        },
+        .name = "Opaque Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
+        .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
+        .useDepth = true,
+        .depthFormat = {ctx.depth.format}
+    });
+    ctx.presentPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "present.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "present.frag"},
+        },
+        .name = "Present Pipeline",
+        .vertexAttributes = {},
+        .colorFormats = {vkw::Format::BGRA8_unorm},
+        .useDepth = false,
+    });
 }
 
-void Recreate(uint32_t width, uint32_t height) {
+void CreateImages(uint32_t width, uint32_t height) {
     ctx.albedo = vkw::CreateImage({
         .width = width,
         .height = height,
@@ -84,51 +119,10 @@ void Recreate(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
         .name = "Depth Attachment"
     });
-    ctx.lightPipeline = vkw::CreatePipeline({
-        .point = vkw::PipelinePoint::Graphics,
-        .stages = {
-            {.stage = vkw::ShaderStage::Vertex, .path = "light.vert"},
-            {.stage = vkw::ShaderStage::Fragment, .path = "light.frag"},
-        },
-        .extent = {width, height},
-        .name = "Light Pipeline",
-        .vertexAttributes = {},
-        .colorFormats = {ctx.light.format},
-        .useDepth = false,
-    });
-    ctx.opaquePipeline = vkw::CreatePipeline({
-        .point = vkw::PipelinePoint::Graphics,
-        .stages = {
-            {.stage = vkw::ShaderStage::Vertex, .path = "opaque.vert"},
-            {.stage = vkw::ShaderStage::Fragment, .path = "opaque.frag"},
-        },
-        .extent = {width, height},
-        .name = "Opaque Pipeline",
-        .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
-        .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
-        .useDepth = true,
-        .depthFormat = {ctx.depth.format}
-    });
-    ctx.presentPipeline = vkw::CreatePipeline({
-        .point = vkw::PipelinePoint::Graphics,
-        .stages = {
-            {.stage = vkw::ShaderStage::Vertex, .path = "present.vert"},
-            {.stage = vkw::ShaderStage::Fragment, .path = "present.frag"},
-        },
-        .extent = {width, height},
-        .name = "Present Pipeline",
-        .vertexAttributes = {},
-        .colorFormats = {vkw::Format::BGRA8_unorm},
-        .useDepth = false,
-    });
 }
 
 void Destroy() {
     ctx = {};
-}
-
-void ReloadShaders() {
-    // todo: reload
 }
 
 void RenderMesh(RID meshId) {

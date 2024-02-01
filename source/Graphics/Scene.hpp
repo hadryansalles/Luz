@@ -6,9 +6,6 @@
 #include "Camera.hpp"
 #include "VulkanWrapper.h"
 
-// todo: move to some proper place
-#include "imgui/imgui_impl_vulkan.h"
-
 #define MAX_TEXTURES 4096
 #define MAX_MODELS 4096
 #define MAX_LIGHTS 16

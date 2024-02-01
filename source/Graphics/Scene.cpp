@@ -136,7 +136,8 @@ void UpdateResources() {
         Light* light = lightEntities[i];
         light->id = id;
         models[id].model = light->transform.GetMatrix();
-        models[id].material.color = glm::vec4(0, 0, 0, lightGizmosOpacity);
+        models[id].material.colorMap = whiteTexture.rid;
+        models[id].material.color = glm::vec4(0, 0, 0, 1);
         models[id].material.emission = light->block.color * light->block.intensity;
         models[id].material.emissionMap = whiteTexture.rid;
         scene.lights[scene.numLights] = light->block;

@@ -10,18 +10,17 @@
 
 #include <stb_image.h>
 
-#include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_stdlib.h>
+
 #ifdef _DEBUG
 #define IMGUI_VULKAN_DEBUG_REPORT
 #endif
 
-
 class LuzApplication {
 public:
     void run() {
-        // WaitToInit(4);
         Setup();
         Create();
         MainLoop();
@@ -45,7 +44,6 @@ private:
 
     void Setup() {
         LUZ_PROFILE_FUNC();
-        DeferredShading::Setup();
         AssetManager::Setup();
         SetupImgui();
         Scene::Setup();
@@ -62,7 +60,8 @@ private:
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DEBUG_TRACE("Finish creating SwapChain.");
         CreateImgui();
-        DeferredShading::Recreate(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateShaders();
         AssetManager::Create();
         Scene::CreateResources();
         createUniformProjection();
@@ -101,7 +100,7 @@ private:
             }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
                 vkw::WaitIdle();
-                DeferredShading::ReloadShaders();
+                DeferredShading::CreateShaders();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
             } else if (Window::IsDirty()) {
@@ -236,7 +235,7 @@ private:
         vkw::WaitIdle();
         Window::UpdateFramebufferSize();
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
-        DeferredShading::Recreate(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         createUniformProjection();
     }
 

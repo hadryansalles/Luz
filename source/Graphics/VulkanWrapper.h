@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <memory>
 #include <stdint.h>
 #include <string>
@@ -172,14 +173,12 @@ struct Pipeline {
 struct PipelineDesc {
     PipelinePoint::Point point;
     std::vector<Pipeline::Stage> stages;
-    glm::ivec2 extent = { 0, 0 };
     std::string name = "";
     std::vector<Format> vertexAttributes;
     std::vector<Format> colorFormats;
     bool useDepth = false;
     Format depthFormat;
 };
-
 
 struct BLAS {
     std::shared_ptr<BLASResource> resource;
@@ -242,6 +241,5 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void InitImGui();
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
-
 
 }

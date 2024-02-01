@@ -14,8 +14,6 @@ struct Context {
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
     void CmdBarrier();
-    void CmdBeginRendering();
-    void CmdEndRendering();
 
     void LoadShaders(Pipeline& pipeline);
     std::vector<char> CompileShader(const std::filesystem::path& path);
@@ -132,9 +130,6 @@ struct Context {
 
     uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
     bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-
-    uint32_t Acquire();
-    void SubmitAndPresent(uint32_t imageIndex);
 
     inline Image& GetCurrentSwapChainImage() {
         return swapChainImages[currentImageIndex];
@@ -264,7 +259,6 @@ void InitImGui() {
     initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
     ImGui_ImplVulkan_Init(&initInfo, nullptr);
     ImGui_ImplVulkan_CreateFontsTexture();
-
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
@@ -778,25 +772,22 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     // with this parameter true we can break up lines and triangles in _STRIP topology modes
     inputAssembly.primitiveRestartEnable = VK_FALSE;
+    
+    std::vector<VkDynamicState> dynamicStates;
+    dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+    dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float> (_ctx.swapChainExtent.width);
-    viewport.height = static_cast<float> (_ctx.swapChainExtent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor{};
-    scissor.offset = { 0, 0 };
-    scissor.extent = _ctx.swapChainExtent;
+    VkPipelineDynamicStateCreateInfo dynamicCreate = {};
+    dynamicCreate.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicCreate.pDynamicStates = dynamicStates.data();
+    dynamicCreate.dynamicStateCount = dynamicStates.size();
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewportState.viewportCount = 1;
-    viewportState.pViewports = &viewport;
+    viewportState.pViewports = nullptr;
     viewportState.scissorCount = 1;
-    viewportState.pScissors = &scissor;
+    viewportState.pScissors = nullptr;
 
     std::vector<VkDescriptorSetLayout> layouts;
     layouts.push_back(bindlessDescriptorLayout);
@@ -855,7 +846,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlendState;
-    pipelineInfo.pDynamicState = nullptr;
+    pipelineInfo.pDynamicState = &dynamicCreate;
     pipelineInfo.layout = pipeline.resource->layout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     // pipelineInfo.renderPass = SwapChain::GetRenderPass();
@@ -923,6 +914,7 @@ void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& blasInstances) {
     VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {instances.size(), 0, 0, 0};
     const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
     _ctx.vkCmdBuildAccelerationStructuresKHR(cmd.buffer, 1, &res->buildInfo, &pBuildOffsetInfo);
+    // todo: keep eye on this... maybe doesn't work when adding new blases
     res->buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR; // after first build, set update moded
 }
 
@@ -991,6 +983,22 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         renderingInfo.pDepthAttachment = &depthAttachInfo;
     }
 
+    if (colorAttachs.size() > 0) {
+        VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(colorAttachs[0].width);
+        viewport.height = static_cast<float>(colorAttachs[0].height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        VkRect2D scissor = {};
+        scissor.offset = { 0, 0 };
+        scissor.extent.width = colorAttachs[0].width;
+        scissor.extent.height = colorAttachs[0].height;
+        vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
+        vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
+    }
+
     vkCmdBeginRendering(cmd.buffer, &renderingInfo);
 }
 
@@ -1029,6 +1037,7 @@ void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
     vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+
     _ctx.currentPipeline = pipeline.resource;
 }
 
@@ -1469,11 +1478,6 @@ void Context::CreateDevice() {
     sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
     sync2Features.synchronization2 = VK_TRUE;
     sync2Features.pNext = &dynamicRenderingFeatures;
-
-    //VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachFeature{};
-    //unusedAttachFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
-    //unusedAttachFeature.dynamicRenderingUnusedAttachments = VK_TRUE;
-    //unusedAttachFeature.pNext = &sync2Features;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
