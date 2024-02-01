@@ -87,7 +87,7 @@ void AssetManager::UpdateResources() {
         InitializeMesh(rid);
     }
     if (toInitialize.size()) {
-        vkw::BeginCommandBuffer(vkw::Graphics);
+        vkw::BeginCommandBuffer(vkw::Compute);
         for (RID meshID : toInitialize) {
             MeshResource& mesh = meshes[meshID];
             mesh.blas = vkw::CreateBLAS ({
@@ -101,7 +101,7 @@ void AssetManager::UpdateResources() {
             vkw::CmdBuildBLAS(mesh.blas);
         }
         vkw::EndCommandBuffer();
-        vkw::WaitQueue(vkw::Graphics);
+        vkw::WaitQueue(vkw::Compute);
     }
 
     // initialize new textures

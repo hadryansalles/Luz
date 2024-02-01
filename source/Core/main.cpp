@@ -110,7 +110,6 @@ private:
         vkw::WaitIdle();
     }
 
-
     bool DirtyFrameResources() {
         bool dirty = false;
         dirty |= vkw::GetSwapChainDirty();
@@ -163,6 +162,16 @@ private:
         }
         ImGui::End();
 
+        if (ImGui::Begin("Profiler")) {
+            std::vector<std::string> names;
+            std::vector<float> times;
+            vkw::GetTimeStamps(names, times);
+            for (int i = 0; i < names.size(); i++) {
+                ImGui::Text("%s: %.3f", names[i].c_str(), times[i]);
+            }
+        }
+        ImGui::End();
+
         DeferredShading::OnImgui(0);
 
         ImGui::ShowDemoWindow();
@@ -179,6 +188,7 @@ private:
         vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
         vkw::CmdBarrier();
 
+        vkw::CmdWriteTimeStamp("OpaquePass");
         DeferredShading::BeginOpaquePass();
 
         DeferredShading::OpaqueConstants constants;
@@ -201,11 +211,13 @@ private:
 
         DeferredShading::EndPass();
 
+        vkw::CmdWriteTimeStamp("LightPass");
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(lightPassConstants);
 
+        vkw::CmdWriteTimeStamp("PresentPass");
         DeferredShading::BeginPresentPass();
         if (drawUi) {
             vkw::CmdDrawImGui(imguiDrawData);

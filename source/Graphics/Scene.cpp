@@ -163,10 +163,11 @@ void UpdateResources() {
             .customIndex = modelEntities[i]->id,
         };
     }
-    vkw::BeginCommandBuffer(vkw::Graphics);
+    vkw::BeginCommandBuffer(vkw::Compute);
+    vkw::CmdWriteTimeStamp("BuildTLAS");
     vkw::CmdBuildTLAS(tlas, vkwInstances);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Graphics);
+    vkw::WaitQueue(vkw::Compute);
 }
 
 void DestroyResources() {

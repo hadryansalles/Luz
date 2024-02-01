@@ -14,6 +14,7 @@ struct Context {
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
     void CmdBarrier();
+    void EndCommandBuffer(VkSubmitInfo submitInfo);
 
     void LoadShaders(Pipeline& pipeline);
     std::vector<char> CompileShader(const std::filesystem::path& path);
@@ -65,6 +66,7 @@ struct Context {
 
     VkDevice device = VK_NULL_HANDLE;
 
+    const uint32_t timeStampPerPool = 32;
     struct CommandResources {
         u8* stagingCpu = nullptr;
         uint32_t stagingOffset = 0;
@@ -72,6 +74,9 @@ struct Context {
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer buffer = VK_NULL_HANDLE;
         VkFence fence = VK_NULL_HANDLE;
+        VkQueryPool queryPool;
+        std::vector<std::string> timeStampNames;
+        std::vector<uint64_t> timeStamps;
     };
     struct InternalQueue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -914,8 +919,7 @@ void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& blasInstances) {
     VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {instances.size(), 0, 0, 0};
     const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
     _ctx.vkCmdBuildAccelerationStructuresKHR(cmd.buffer, 1, &res->buildInfo, &pBuildOffsetInfo);
-    // todo: keep eye on this... maybe doesn't work when adding new blases
-    res->buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR; // after first build, set update moded
+    // todo: hash and only update mode if nothing changed
 }
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
@@ -1038,6 +1042,16 @@ void CmdDrawImGui(ImDrawData* data) {
     ImGui_ImplVulkan_RenderDrawData(data, _ctx.GetCurrentCommandResources().buffer);
 }
 
+void CmdWriteTimeStamp(const std::string& name) {
+    DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Write Time Stamp not supported in Transfer queue");
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    if (cmd.timeStampNames.size() > 0) {
+        vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, 2 * (cmd.timeStampNames.size() - 1) + 1);
+    }
+    vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, cmd.queryPool, 2 * (cmd.timeStampNames.size() - 1) + 2);
+    cmd.timeStampNames.push_back(name);
+}
+
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
@@ -1053,35 +1067,49 @@ void CmdPushConstants(void* data, uint32_t size) {
 
 void BeginCommandBuffer(Queue queue) {
     ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
-
     _ctx.currentQueue = queue;
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
     vkResetFences(_ctx.device, 1, &cmd.fence);
 
     Context::InternalQueue& iqueue = _ctx.queues[queue];
-    vkResetCommandPool(_ctx.device, iqueue.commands[_ctx.currentImageIndex].pool, 0);
-    iqueue.commands[_ctx.currentImageIndex].stagingOffset = 0;
+    vkResetCommandPool(_ctx.device, cmd.pool, 0);
+    cmd.stagingOffset = 0;
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(_ctx.queues[queue].commands[_ctx.currentImageIndex].buffer, &beginInfo);
+    vkBeginCommandBuffer(cmd.buffer, &beginInfo);
+    
+    if (queue != Queue::Transfer) {
+        if (cmd.timeStampNames.size() > 0) {
+            vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, _ctx.timeStampPerPool, cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), 2 * sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+        }
+        vkCmdResetQueryPool(cmd.buffer, cmd.queryPool, 0, _ctx.timeStampPerPool);
+    }
+    cmd.timeStampNames.clear();
 }
 
-uint64_t EndCommandBuffer() {
-    auto& cmd = _ctx.GetCurrentCommandResources();
+void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
+    auto& cmd = GetCurrentCommandResources();
+
+    if (cmd.timeStampNames.size() > 0) {
+        vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, 2 * (cmd.timeStampNames.size() - 1) + 1);
+    }
+
     vkEndCommandBuffer(cmd.buffer);
 
-    VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmd.buffer;
 
-    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
+    auto res = vkQueueSubmit(queues[currentQueue].queue, 1, &submitInfo, cmd.fence);
     DEBUG_VK(res, "Failed to submit command buffer");
+}
+
+void EndCommandBuffer() {
+    _ctx.EndCommandBuffer({});
     _ctx.currentQueue = vkw::Queue::Count;
     _ctx.currentPipeline = {};
-    return 0;
 }
 
 void WaitQueue(Queue queue) {
@@ -1809,6 +1837,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = 1;
 
+
         for (int q = 0; q < Queue::Count; q++) {
             InternalQueue& queue = queues[q];
             poolInfo.queueFamilyIndex = queue.family;
@@ -1828,6 +1857,15 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
                 fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
                 fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
                 vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
+
+                VkQueryPoolCreateInfo queryPoolInfo{};
+                queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+                queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+                queryPoolInfo.queryCount = timeStampPerPool;
+                res = vkCreateQueryPool(device, &queryPoolInfo, allocator, &queue.commands[i].queryPool);
+                DEBUG_VK(res, "failed to create query pool");
+
+                queue.commands[i].timeStamps.resize(2 * timeStampPerPool);
             }
         }
     }
@@ -1851,6 +1889,7 @@ void Context::DestroySwapChain() {
             queues[q].commands[i].staging = {};
             queues[q].commands[i].stagingCpu = nullptr;
             vkDestroyFence(device, queues[q].commands[i].fence, allocator);
+            vkDestroyQueryPool(device, queues[q].commands[i].queryPool, allocator);
         }
     }
 
@@ -1878,6 +1917,26 @@ void AcquireImage() {
 
 bool GetSwapChainDirty() {
     return _ctx.swapChainDirty;
+}
+
+void GetTimeStamps(std::vector<std::string>& names, std::vector<float>& times) {
+    names.clear();
+    times.clear();
+    for (int q = 0; q < Queue::Count; q++) {
+        for (int f = 0; f < _ctx.framesInFlight; f++) {
+            auto& cmd = _ctx.queues[q].commands[f];
+            for (int i = 0; i < cmd.timeStampNames.size() && i < _ctx.timeStampPerPool; i++) {
+                uint32_t begin_idx = 2 * 2 * i;
+                uint32_t end_idx = 2 * (2 * i + 1);
+                if (cmd.timeStamps[begin_idx + 1] == 1 && cmd.timeStamps[end_idx + 1] == 1) {
+                    names.push_back(cmd.timeStampNames[i]);
+                    uint64_t begin = cmd.timeStamps[begin_idx];
+                    uint64_t end = cmd.timeStamps[end_idx];
+                    times.push_back(float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f);
+                }
+            }
+        }
+    }
 }
 
 void SubmitAndPresent() {
@@ -1911,12 +1970,12 @@ void SubmitAndPresent() {
     presentInfo.pImageIndices = &_ctx.currentImageIndex;
     presentInfo.pResults = nullptr;
 
-    vkEndCommandBuffer(cmd.buffer);
+    //vkEndCommandBuffer(cmd.buffer);
+    //auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
+    //DEBUG_VK(res, "Failed to submit command buffer");
+    _ctx.EndCommandBuffer(submitInfo);
 
-    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
-    DEBUG_VK(res, "Failed to submit command buffer");
-
-    res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
+    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
     _ctx.currentQueue = Queue::Count;
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {

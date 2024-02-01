@@ -213,6 +213,7 @@ BLAS CreateBLAS(const BLASDesc& desc);
 void AcquireImage();
 void SubmitAndPresent();
 bool GetSwapChainDirty();
+void GetTimeStamps(std::vector<std::string>& names, std::vector<float>& times);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -231,9 +232,10 @@ void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
 void CmdDrawPassThrough();
 void CmdDrawImGui(ImDrawData* data);
+void CmdWriteTimeStamp(const std::string& name);
 
 void BeginCommandBuffer(Queue queue);
-uint64_t EndCommandBuffer();
+void EndCommandBuffer();
 void WaitQueue(Queue queue);
 void WaitIdle();
 
