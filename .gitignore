@@ -6,6 +6,7 @@ assets/ignore/
 *.spv
 *.log
 *.ini
+!imgui.ini
 .vs
 .vscode
 assets/*
