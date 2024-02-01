@@ -132,6 +132,7 @@ private:
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
         if (ImGui::Begin("Luz Engine")) {
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
@@ -149,6 +150,7 @@ private:
         }
         ImGui::End();
 
+        bool sceneOpen = true;
         if (ImGui::Begin("Scene")) {
             Scene::OnImgui();
         }
@@ -254,6 +256,8 @@ private:
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        //ImGui::Dock
         {
             constexpr auto ColorFromBytes = [](uint8_t r, uint8_t g, uint8_t b)
             {
@@ -275,10 +279,10 @@ private:
             const ImVec4 textDisabledColor = ColorFromBytes(151, 151, 151);
             const ImVec4 borderColor       = ColorFromBytes(78, 78, 78);
 
+            colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, 0.25f);
             colors[ImGuiCol_Text]                 = textColor;
             colors[ImGuiCol_TextDisabled]         = textDisabledColor;
             colors[ImGuiCol_TextSelectedBg]       = panelActiveColor;
-            colors[ImGuiCol_WindowBg]             = bgColor;
             colors[ImGuiCol_ChildBg]              = bgColor;
             colors[ImGuiCol_PopupBg]              = bgColor;
             colors[ImGuiCol_Border]               = borderColor;
@@ -313,10 +317,9 @@ private:
             colors[ImGuiCol_PlotLinesHovered]     = panelHoverColor;
             colors[ImGuiCol_PlotHistogram]        = panelActiveColor;
             colors[ImGuiCol_PlotHistogramHovered] = panelHoverColor;
-            // colors[ImGuiCol_ModalWindowDarkening] = bgColor;
             colors[ImGuiCol_DragDropTarget]       = bgColor;
             colors[ImGuiCol_NavHighlight]         = bgColor;
-            // colors[ImGuiCol_DockingPreview]       = panelActiveColor;
+            colors[ImGuiCol_DockingPreview]       = panelActiveColor;
             colors[ImGuiCol_Tab]                  = bgColor;
             colors[ImGuiCol_TabActive]            = panelActiveColor;
             colors[ImGuiCol_TabUnfocused]         = bgColor;

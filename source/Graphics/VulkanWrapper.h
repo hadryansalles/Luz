@@ -220,7 +220,7 @@ void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, const glm::ivec2& extent = { 0, 0 }, const glm::ivec2& offset = { 0, 0 });
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {});
 void CmdEndRendering();
 void CmdBeginPresent();
 void CmdEndPresent();
