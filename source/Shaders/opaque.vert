@@ -6,7 +6,6 @@ layout(push_constant) uniform ConstantsBlock {
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
-    int frame;
 };
 
 #include "base.glsl"

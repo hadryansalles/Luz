@@ -1,17 +1,15 @@
 #include "Luzpch.hpp"
 #include "Scene.hpp"
 #include "AssetManager.hpp"
-#include "GraphicsPipelineManager.hpp"
 #include "Window.hpp"
-#include "RayTracing.hpp"
-#include "SwapChain.hpp"
+#include "VulkanWrapper.h"
 
 #include <imgui/imgui_stdlib.h>
 
 namespace Scene {
 
 void AcceptMeshPayload();
-void AcceptTexturePayload(RID& textureID);
+void AcceptTexturePayload(int& textureID);
 
 void Setup() {
     LUZ_PROFILE_FUNC();
@@ -37,6 +35,8 @@ void Setup() {
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
 
+    //AssetManager::LoadModels("assets/corvette_stingray.glb");
+
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
 
@@ -54,41 +54,81 @@ void Setup() {
 
 void CreateResources() {
     LUZ_PROFILE_FUNC();
-    BufferManager::CreateStorageBuffer(Scene::sceneBuffer, sizeof(Scene::scene));
-    BufferManager::CreateStorageBuffer(Scene::modelsBuffer, sizeof(Scene::models));
-    GraphicsPipelineManager::WriteStorage(Scene::sceneBuffer, SCENE_BUFFER_INDEX);
-    GraphicsPipelineManager::WriteStorage(Scene::modelsBuffer, MODELS_BUFFER_INDEX);
+    sceneBuffer = vkw::CreateBuffer(sizeof(Scene::scene), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+    modelsBuffer = vkw::CreateBuffer(sizeof(Scene::models), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+    u8* whiteTextureData = new u8[4];
+    whiteTextureData[0] = 255;
+    whiteTextureData[1] = 255;
+    whiteTextureData[2] = 255;
+    whiteTextureData[3] = 255;
+    u8* blackTextureData = new u8[4];
+    blackTextureData[0] = 0;
+    blackTextureData[1] = 0;
+    blackTextureData[2] = 0;
+    blackTextureData[3] = 255;
+    whiteTexture = vkw::CreateImage({
+        .width = 1,
+        .height = 1,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "white texture"
+    });
+    blackTexture = vkw::CreateImage({
+        .width = 1,
+        .height = 1,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "black texture"
+    });
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+    vkw::CmdBarrier(whiteTexture, vkw::Layout::TransferDst);
+    vkw::CmdBarrier(blackTexture, vkw::Layout::TransferDst);
+    vkw::CmdCopy(whiteTexture, whiteTextureData, 4);
+    vkw::CmdCopy(blackTexture, blackTextureData, 4);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Graphics);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+    vkw::CmdBarrier(whiteTexture, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(blackTexture, vkw::Layout::ShaderRead);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Graphics);
+    tlas = vkw::CreateTLAS(1024, "mainTLAS");
 }
 
-void UpdateBuffers(int numFrame) {
+void UpdateResources() {
     LUZ_PROFILE_FUNC();
-    BufferManager::UpdateStorage(sceneBuffer, numFrame, &scene);
-    BufferManager::UpdateStorage(modelsBuffer, numFrame, &models);
-}
-
-void UpdateResources(int numFrame) {
-    LUZ_PROFILE_FUNC();
+    scene.whiteTexture = whiteTexture.rid;
+    scene.blackTexture = blackTexture.rid;
     scene.numLights = 0;
-    scene.viewSize = glm::vec2(SwapChain::GetExtent().width, SwapChain::GetExtent().height);
     for (int i = 0; i < modelEntities.size(); i++) {
         Model* model = modelEntities[i];
         model->id = i;
         models[i] = model->block;
         models[i].model = model->transform.GetMatrix();
-        if (!model->useColorMap) {
-            models[i].material.colorMap = 0;
+        if (!model->useColorMap || model->block.material.colorMap == -1) {
+            models[i].material.colorMap = whiteTexture.rid;
+        } else {
+            models[i].material.colorMap = AssetManager::images[model->block.material.colorMap].rid;
         }
-        if (!model->useNormalMap) {
-            models[i].material.normalMap = 0;
+        if (!model->useNormalMap || model->block.material.normalMap == -1) {
+            models[i].material.normalMap = whiteTexture.rid;
+        } else {
+            models[i].material.normalMap = AssetManager::images[model->block.material.normalMap].rid;
         }
-        if (!model->useMetallicRoughnessMap) {
-            models[i].material.metallicRoughnessMap = 0;
+        if (!model->useMetallicRoughnessMap || model->block.material.metallicRoughnessMap == -1) {
+            models[i].material.metallicRoughnessMap = whiteTexture.rid;
+        } else {
+            models[i].material.metallicRoughnessMap = AssetManager::images[model->block.material.metallicRoughnessMap].rid;
         }
-        if (!model->useEmissionMap) {
-            models[i].material.emissionMap = 0;
+        if (!model->useEmissionMap || model->block.material.emissionMap == -1) {
+            models[i].material.emissionMap = blackTexture.rid;
+        } else {
+            models[i].material.emissionMap = AssetManager::images[model->block.material.emissionMap].rid;
         }
-        if (!model->useAoMap) {
-            models[i].material.aoMap = 0;
+        if (!model->useAoMap || model->block.material.aoMap == -1) {
+            models[i].material.aoMap = whiteTexture.rid;
+        } else {
+            models[i].material.aoMap = AssetManager::images[model->block.material.aoMap].rid;
         }
     }
     for (int i = 0; i < lightEntities.size(); i++) {
@@ -96,9 +136,10 @@ void UpdateResources(int numFrame) {
         Light* light = lightEntities[i];
         light->id = id;
         models[id].model = light->transform.GetMatrix();
-        models[id].material.color = glm::vec4(0, 0, 0, lightGizmosOpacity);
+        models[id].material.colorMap = whiteTexture.rid;
+        models[id].material.color = glm::vec4(0, 0, 0, 1);
         models[id].material.emission = light->block.color * light->block.intensity;
-        models[id].material.emissionMap = 0;
+        models[id].material.emissionMap = whiteTexture.rid;
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
@@ -111,13 +152,29 @@ void UpdateResources(int numFrame) {
     scene.projView = camera.GetProj() * camera.GetView();
     scene.inverseProj = glm::inverse(camera.GetProj());
     scene.inverseView = glm::inverse(camera.GetView());
-    UpdateBuffers(numFrame);
-    RayTracing::CreateTLAS();
+    scene.tlasRid = tlas.rid;
+
+    std::vector<vkw::BLASInstance> vkwInstances(modelEntities.size());
+    for (int i = 0; i < modelEntities.size(); i++) {
+        MeshResource& mesh = AssetManager::meshes[modelEntities[i]->mesh];
+        vkwInstances[i] = {
+            .blas = mesh.blas,
+            .modelMat = modelEntities[i]->transform.GetMatrix(),
+            .customIndex = modelEntities[i]->id,
+        };
+    }
+    vkw::BeginCommandBuffer(vkw::Graphics);
+    vkw::CmdBuildTLAS(tlas, vkwInstances);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Graphics);
 }
 
 void DestroyResources() {
-    BufferManager::DestroyStorageBuffer(sceneBuffer);
-    BufferManager::DestroyStorageBuffer(modelsBuffer);
+    sceneBuffer = {};
+    modelsBuffer = {};
+    whiteTexture = {};
+    blackTexture = {};
+    tlas = {};
 }
 
 Model* CreateModel() {
@@ -128,7 +185,6 @@ Model* CreateModel() {
     entities.push_back(model);
     modelEntities.push_back(model);
     SetCollection(model, rootCollection);
-    RayTracing::SetRecreateTLAS();
     return model;
 }
 
@@ -149,7 +205,6 @@ Model* CreateModel(Model* copy) {
     entity->useEmissionMap = copy->useEmissionMap;
     entity->useMetallicRoughnessMap = copy->useMetallicRoughnessMap;
     modelEntities.push_back(entity);
-    RayTracing::SetRecreateTLAS();
     return entity;
 }
 
@@ -236,7 +291,6 @@ void DeleteEntity(Entity* entity) {
     if (entity->entityType == EntityType::Collection) {
         DeleteCollection((Collection*)entity);
     } else if (entity->entityType == EntityType::Model) {
-        RayTracing::SetRecreateTLAS();
         auto it = std::find(modelEntities.begin(), modelEntities.end(), (Model*)entity);
         DEBUG_ASSERT(it != modelEntities.end(), "Model isn't on the vector of models.");
         modelEntities.erase(it);
@@ -372,13 +426,13 @@ void InspectModel(Model* model) {
         if (ImGui::TreeNode("Color")) {
             ImGui::ColorEdit3("Color", glm::value_ptr(model->block.material.color));
             ImGui::Checkbox("Use texture", &model->useColorMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.colorMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.colorMap]);
             AcceptTexturePayload(model->block.material.colorMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Normal")) {
             ImGui::Checkbox("Use texture", &model->useNormalMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.normalMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.normalMap]);
             AcceptTexturePayload(model->block.material.normalMap);
             ImGui::TreePop();
         }
@@ -386,20 +440,20 @@ void InspectModel(Model* model) {
             ImGui::DragFloat("Metallic", &model->block.material.metallic, 0.001, 0, 1);
             ImGui::DragFloat("Roughness", &model->block.material.roughness, 0.001, 0, 1);
             ImGui::Checkbox("Use texture", &model->useMetallicRoughnessMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.metallicRoughnessMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.metallicRoughnessMap]);
             AcceptTexturePayload(model->block.material.metallicRoughnessMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Emission")) {
             ImGui::ColorEdit3("Emission", glm::value_ptr( model->block.material.emission));
             ImGui::Checkbox("Use texture", &model->useEmissionMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.emissionMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.emissionMap]);
             AcceptTexturePayload(model->block.material.emissionMap);
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Ambient Occlusion")) {
             ImGui::Checkbox("Use texture", &model->useAoMap);
-            DrawTextureOnImgui(AssetManager::textures[model->block.material.aoMap]);
+            DrawTextureOnImgui(AssetManager::images[model->block.material.aoMap]);
             AcceptTexturePayload(model->block.material.aoMap);
             ImGui::TreePop();
         }
@@ -516,7 +570,7 @@ void AcceptMeshPayload() {
     }
 }
 
-void AcceptTexturePayload(RID& textureID) {
+void AcceptTexturePayload(int& textureID) {
     if (ImGui::BeginDragDropTarget()) {
         const ImGuiPayload* payloadTexture = ImGui::AcceptDragDropPayload("texture");
         if (payloadTexture) {
@@ -525,7 +579,7 @@ void AcceptTexturePayload(RID& textureID) {
         }
         const ImGuiPayload* payloadTextureID = ImGui::AcceptDragDropPayload("textureID");
         if (payloadTextureID) {
-            textureID = *(RID*)payloadTextureID->Data;
+            textureID = *(int*)payloadTextureID->Data;
         }
     }
 }

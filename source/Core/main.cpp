@@ -1,43 +1,26 @@
 #include "Luzpch.hpp" 
 
-#include "ImageManager.hpp"
 #include "Window.hpp"
-#include "SwapChain.hpp"
 #include "Camera.hpp"
-#include "Shader.hpp"
-#include "GraphicsPipelineManager.hpp"
-#include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
-#include "BufferManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
-#include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 #include <stb_image.h>
 
-#include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_stdlib.h>
+
 #ifdef _DEBUG
 #define IMGUI_VULKAN_DEBUG_REPORT
 #endif
 
-void CheckVulkanResult(VkResult res) {
-    if (res == 0) {
-        return;
-    }
-    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
-    if (res < 0) {
-        throw std::runtime_error("");
-    }
-}
-
 class LuzApplication {
 public:
     void run() {
-        // WaitToInit(4);
         Setup();
         Create();
         MainLoop();
@@ -61,8 +44,6 @@ private:
 
     void Setup() {
         LUZ_PROFILE_FUNC();
-        PBRGraphicsPipeline::Setup();
-        DeferredShading::Setup();
         AssetManager::Setup();
         SetupImgui();
         Scene::Setup();
@@ -76,17 +57,11 @@ private:
     void CreateVulkan() {
         LUZ_PROFILE_FUNC();
         Window::Create();
-        vkw::Init(Window::GetGLFWwindow());
-        // Instance::Create();
-        // PhysicalDevice::Create();
-        //LogicalDevice::Create();
-        SwapChain::Create();
+        vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DEBUG_TRACE("Finish creating SwapChain.");
-        GraphicsPipelineManager::Create();
-        PBRGraphicsPipeline::Create();
         CreateImgui();
-        RayTracing::Create();
-        DeferredShading::Create();
+        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateShaders();
         AssetManager::Create();
         Scene::CreateResources();
         createUniformProjection();
@@ -101,27 +76,12 @@ private:
 
     void DestroyVulkan() {
         LUZ_PROFILE_FUNC();
-        DestroyFrameResources();
-        RayTracing::Destroy();
-        GraphicsPipelineManager::Destroy();
+        DestroyImgui();
+        Scene::DestroyResources();
+        DeferredShading::Destroy();
         AssetManager::Destroy();
         vkw::Destroy();
-        //LogicalDevice::Destroy();
-        //PhysicalDevice::Destroy();
-        //Instance::Destroy();
         Window::Destroy();
-    }
-
-    void DestroyFrameResources() {
-        LUZ_PROFILE_FUNC();
-        PBRGraphicsPipeline::Destroy();
-        Scene::DestroyResources();
-        
-        DestroyImgui();
-        DeferredShading::Destroy();
-
-        SwapChain::Destroy();
-        LOG_INFO("Destroyed SwapChain.");
     }
 
     void MainLoop() {
@@ -139,37 +99,21 @@ private:
                 drawUi = !drawUi;
             }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
-                vkDeviceWaitIdle(vkw::ctx().device);
-                DeferredShading::ReloadShaders();
-            }
-            if (DirtyGlobalResources()) {
-                vkDeviceWaitIdle(vkw::ctx().device);
-                DestroyVulkan();
-                CreateVulkan();
+                vkw::WaitIdle();
+                DeferredShading::CreateShaders();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
-            } else if (PBRGraphicsPipeline::IsDirty()) {
-                vkDeviceWaitIdle(vkw::ctx().device);
-                PBRGraphicsPipeline::Destroy();
-                PBRGraphicsPipeline::Create();
             } else if (Window::IsDirty()) {
                 Window::ApplyChanges();
             }
         }
-        vkDeviceWaitIdle(vkw::ctx().device);
+        vkw::WaitIdle();
     }
 
-    bool DirtyGlobalResources() {
-        bool dirty = false;
-        // dirty |= Instance::IsDirty();
-        //dirty |= PhysicalDevice::IsDirty();
-        //dirty |= LogicalDevice::IsDirty();
-        return dirty;
-    }
 
     bool DirtyFrameResources() {
         bool dirty = false;
-        dirty |= SwapChain::IsDirty();
+        dirty |= vkw::GetSwapChainDirty();
         dirty |= Window::GetFramebufferResized();
         return dirty;
     }
@@ -177,16 +121,14 @@ private:
     ImVec2 ToScreenSpace(glm::vec3 position) {
         glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
-        auto ext = SwapChain::GetExtent();
-        screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
-        screenSpace.y = (screenSpace.y + 1.0) * ext.height/2.0;
+        glm::ivec2 ext = { Window::GetWidth(), Window::GetHeight() };
+        screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
+        screenSpace.y = (screenSpace.y + 1.0) * ext.y/2.0;
         return screenSpace;
     }
 
     void imguiDrawFrame() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        auto instance = vkw::ctx().instance;
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -195,11 +137,6 @@ private:
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
                 if (ImGui::BeginTabItem("Configuration")) {
                     Window::OnImgui();
-                    //Instance::OnImgui();
-                    //PhysicalDevice::OnImgui();
-                    //LogicalDevice::OnImgui();
-                    SwapChain::OnImgui();
-                    PBRGraphicsPipeline::OnImgui();
                     Scene::camera.OnImgui();
                     ImGui::EndTabItem();
                 }
@@ -224,7 +161,6 @@ private:
         }
         ImGui::End();
 
-        RayTracing::OnImgui();
         DeferredShading::OnImgui(0);
 
         ImGui::ShowDemoWindow();
@@ -233,111 +169,85 @@ private:
         imguiDrawData = ImGui::GetDrawData();
     }
 
-    void updateCommandBuffer(size_t frameIndex) {
+    void updateCommandBuffer() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        auto instance = vkw::ctx().instance;
-        auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
+        vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;
-        beginInfo.pInheritanceInfo = nullptr;
+        vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
+        vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
+        vkw::CmdBarrier();
 
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
-
-        DeferredShading::BeginOpaquePass(commandBuffer);
+        DeferredShading::BeginOpaquePass();
 
         DeferredShading::OpaqueConstants constants;
-        constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
-        constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+        constants.sceneBufferIndex = Scene::sceneBuffer.rid;
+        constants.modelBufferIndex = Scene::modelsBuffer.rid;
 
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;
-            DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-            DeferredShading::RenderMesh(commandBuffer, model->mesh);
+            vkw::CmdPushConstants(&constants, sizeof(constants));
+            DeferredShading::RenderMesh(model->mesh);
         }
 
         if (Scene::renderLightGizmos) {
             for (Light* light : Scene::lightEntities) {
                 constants.modelID = light->id;
-                DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-                DeferredShading::RenderMesh(commandBuffer, Scene::lightMeshes[light->block.type]);
+                vkw::CmdPushConstants(&constants, sizeof(constants));
+                DeferredShading::RenderMesh(Scene::lightMeshes[light->block.type]);
             }
         }
 
-        DeferredShading::EndPass(commandBuffer);
+        DeferredShading::EndPass();
 
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
-        DeferredShading::LightPass(commandBuffer, lightPassConstants);
+        DeferredShading::LightPass(lightPassConstants);
 
-        DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
+        DeferredShading::BeginPresentPass();
         if (drawUi) {
-            ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
+            vkw::CmdDrawImGui(imguiDrawData);
         }
-        DeferredShading::EndPresentPass(commandBuffer, frameIndex);
-
-        // vkCmdEndRenderPass(commandBuffer);
-
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
+        DeferredShading::EndPresentPass();
     }
 
     void drawFrame() {
         LUZ_PROFILE_FUNC();
         imguiDrawFrame();
-
-        auto image = SwapChain::Acquire(); 
-
-        if (SwapChain::IsDirty()) {
+        vkw::AcquireImage();
+        if (vkw::GetSwapChainDirty()) {
             return;
         }
-
-        updateUniformBuffer(image);
-        updateCommandBuffer(image);
-
-        SwapChain::SubmitAndPresent(image);
+        updateUniformBuffer();
+        updateCommandBuffer();
+        vkw::SubmitAndPresent();
 
         frameCount = (frameCount + 1) % (1 << 15);
     }
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        //auto instance = vkw::ctx().instance;
-        vkDeviceWaitIdle(device);
+        vkw::WaitIdle();
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
         }
+        vkw::WaitIdle();
         Window::UpdateFramebufferSize();
-        vkDeviceWaitIdle(device);
-        DestroyFrameResources();
-        vkw::ctx().OnSurfaceUpdate();
-        //PhysicalDevice::OnSurfaceUpdate();
-        SwapChain::Create();
-        PBRGraphicsPipeline::Create();
-        Scene::CreateResources();
-        CreateImgui();
-        DeferredShading::Create();
+        vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         createUniformProjection();
     }
 
     void createUniformProjection() {
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
-        auto ext = SwapChain::GetExtent();
-        Scene::camera.SetExtent(ext.width, ext.height);
+        Scene::camera.SetExtent(Window::GetWidth(), Window::GetHeight());
     }
 
-    void updateUniformBuffer(uint32_t currentImage) {
+    void updateUniformBuffer() {
         LUZ_PROFILE_FUNC();
-        Scene::UpdateResources(currentImage);
+        Scene::UpdateResources();
     }
 
     void SetupImgui() {
@@ -425,32 +335,8 @@ private:
 
     void CreateImgui() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        auto instance = vkw::ctx().instance;
-
         ImGui_ImplGlfw_InitForVulkan(Window::GetGLFWwindow(), true);
-
-        ImGui_ImplVulkan_InitInfo initInfo{};
-        initInfo.Instance = instance;
-        initInfo.PhysicalDevice = vkw::ctx().physicalDevice;
-        initInfo.Device = device;
-        initInfo.QueueFamily = vkw::ctx().graphicsFamily;
-        initInfo.Queue = vkw::ctx().graphicsQueue;
-        initInfo.PipelineCache = VK_NULL_HANDLE;
-        initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
-        initInfo.MinImageCount = 2;
-        initInfo.ImageCount = (uint32_t)SwapChain::GetNumFrames();
-        initInfo.MSAASamples = SwapChain::GetNumSamples();
-        initInfo.Allocator = VK_NULL_HANDLE;
-        initInfo.CheckVkResultFn = CheckVulkanResult;
-        initInfo.UseDynamicRendering = true;
-        initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
-        ImGui_ImplVulkan_Init(&initInfo, nullptr);
-        ImGui_ImplVulkan_CreateFontsTexture();
-        //auto commandBuffer = vkw::ctx().BeginSingleTimeCommands();
-        //ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
-        //vkw::ctx().EndSingleTimeCommands(commandBuffer);
-        //ImGui_ImplVulkan_DestroyFontUploadObjects();
+        vkw::InitImGui();
     }
 
     void DestroyImgui() {

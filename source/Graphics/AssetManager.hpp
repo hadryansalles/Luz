@@ -3,8 +3,15 @@
 #include <filesystem>
 #include <mutex>
 
-#include "Texture.hpp"
 #include "Scene.hpp"
+#include "VulkanWrapper.h"
+
+struct TextureDesc {
+    std::filesystem::path path = "";
+    void* data                 = nullptr;
+    uint32_t width             = 0;
+    uint32_t height            = 0;
+};
 
 struct MeshVertex {
     glm::vec3 pos;
@@ -72,17 +79,17 @@ struct MeshDesc {
 };
 
 struct MeshResource {
-    BufferResource vertexBuffer;
-    BufferResource indexBuffer;
+    vkw::Buffer vertexBuffer;
+    vkw::Buffer indexBuffer;
     u32 vertexCount;
     u32 indexCount;
+    vkw::BLAS blas;
 };
 
 #define MAX_MESHES 2048
 #define MAX_TEXTURES 2048
 
 class AssetManager {
-    static inline RID nextMeshRID = 0;
     static inline std::vector<RID> unintializedMeshes;
     static inline std::mutex meshesLock;
 
@@ -108,11 +115,14 @@ class AssetManager {
     static bool IsGLTF(std::filesystem::path path);
 
 public:
+    static inline RID nextMeshRID = 0;
+
     static inline MeshDesc meshDescs[MAX_MESHES];
     static inline MeshResource meshes[MAX_MESHES];
 
     static inline TextureDesc textureDescs[MAX_TEXTURES];
-    static inline TextureResource textures[MAX_TEXTURES];
+
+    static inline vkw::Image images[MAX_TEXTURES];
 
     static void Setup();
     static void Create();

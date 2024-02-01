@@ -1,10 +1,8 @@
 #include "Luzpch.hpp"
 
 #include "AssetManager.hpp"
-#include "GraphicsPipelineManager.hpp"
 //#include "LogicalDevice.hpp"
-#include "VulkanLayer.h"
-#include "RayTracing.hpp"
+#include "VulkanWrapper.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -15,22 +13,7 @@
 #// include <stb_image.h>
 #include <tiny_gltf.h>
 
-#include <imgui/imgui_impl_vulkan.h>
-
 void AssetManager::Setup() {
-    u8* whiteTexture = new u8[4];
-    whiteTexture[0] = 255;
-    whiteTexture[1] = 255;
-    whiteTexture[2] = 255;
-    whiteTexture[3] = 255;
-    u8* blackTexture = new u8[4];
-    blackTexture[0] = 0;
-    blackTexture[1] = 0;
-    blackTexture[2] = 0;
-    blackTexture[3] = 255;
-    CreateTexture("White", whiteTexture, 1, 1);
-    CreateTexture("Black", blackTexture, 1, 1);
-    LoadTexture("assets/blue_noise.png");
 }
 
 void AssetManager::Create() {
@@ -41,14 +24,15 @@ void AssetManager::Create() {
 void AssetManager::Destroy() {
     meshesLock.lock();
     for (RID i = 0; i < nextMeshRID; i++) {
-        BufferManager::Destroy(meshes[i].vertexBuffer);
-        BufferManager::Destroy(meshes[i].indexBuffer);
+        meshes[i].vertexBuffer = {};
+        meshes[i].indexBuffer = {};
+        meshes[i].blas = {};
         unintializedMeshes.push_back(i);
     }
     meshesLock.unlock();
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
-        DestroyTextureResource(textures[i]);
+        images[i] = {};
         unintializedTextures.push_back(i);
     }
     texturesLock.unlock();
@@ -103,7 +87,21 @@ void AssetManager::UpdateResources() {
         InitializeMesh(rid);
     }
     if (toInitialize.size()) {
-        RayTracing::CreateBLAS(toInitialize);
+        vkw::BeginCommandBuffer(vkw::Graphics);
+        for (RID meshID : toInitialize) {
+            MeshResource& mesh = meshes[meshID];
+            mesh.blas = vkw::CreateBLAS ({
+                .vertexBuffer = mesh.vertexBuffer,
+                .indexBuffer = mesh.indexBuffer,
+                .vertexCount = mesh.vertexCount,
+                .indexCount = mesh.indexCount,
+                .vertexStride = sizeof(MeshVertex),
+                .name = "Mesh " + std::to_string(meshID)
+            });;
+            vkw::CmdBuildBLAS(mesh.blas);
+        }
+        vkw::EndCommandBuffer();
+        vkw::WaitQueue(vkw::Graphics);
     }
 
     // initialize new textures
@@ -113,41 +111,6 @@ void AssetManager::UpdateResources() {
     for (RID rid : toInitialize) {
         InitializeTexture(rid);
     }
-    UpdateTexturesDescriptor(toInitialize);
-}
-
-void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
-    LUZ_PROFILE_FUNC();
-    if (rids.empty()) {
-        return;
-    }
-    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    const RID count = rids.size();
-    std::vector<VkDescriptorImageInfo> imageInfos(count);
-    std::vector<VkWriteDescriptorSet> writes(count);
-
-    VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
-
-    for (int i = 0; i < count; i++) {
-        RID rid = rids[i];
-        DEBUG_ASSERT(textures[rid].sampler != VK_NULL_HANDLE, "Texture not loaded!");
-        textures[rid].imguiRID = ImGui_ImplVulkan_AddTexture(textures[rid].sampler, textures[rid].image.view, layout);
-
-        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[i].imageView = textures[rid].image.view;
-        imageInfos[i].sampler = textures[rid].sampler;
-
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = bindlessDescriptorSet;
-        writes[i].dstBinding = 0;
-        writes[i].dstArrayElement = rid;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[i].descriptorCount = 1;
-        writes[i].pImageInfo = &imageInfos[i];
-    }
-    vkUpdateDescriptorSets(vkw::ctx().device, count, writes.data(), 0, nullptr);
-    DEBUG_TRACE("Update descriptor sets in UpdateTexturesDescriptor!");
 }
 
 void AssetManager::InitializeMesh(RID rid) {
@@ -155,8 +118,23 @@ void AssetManager::InitializeMesh(RID rid) {
     MeshDesc& desc = meshDescs[rid];
     res.vertexCount = desc.vertices.size();
     res.indexCount = desc.indices.size();
-    BufferManager::CreateVertexBuffer(res.vertexBuffer, desc.vertices.data(), sizeof(desc.vertices[0]) * desc.vertices.size());
-    BufferManager::CreateIndexBuffer(res.indexBuffer, desc.indices.data(), sizeof(desc.indices[0]) * desc.indices.size());
+    res.vertexBuffer = vkw::CreateBuffer(
+        sizeof(MeshVertex) * desc.vertices.size(),
+        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::Memory::GPU,
+        ("VertexBuffer" + std::to_string(rid))
+    );
+    res.indexBuffer = vkw::CreateBuffer(
+        sizeof(uint32_t) * desc.indices.size(),
+        vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::Memory::GPU,
+        ("IndexBuffer" + std::to_string(rid))
+    );
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::CmdCopy(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
+    vkw::CmdCopy(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
 void AssetManager::RecenterMesh(RID rid) {
@@ -198,9 +176,21 @@ void AssetManager::RecenterMesh(RID rid) {
 }
 
 void AssetManager::InitializeTexture(RID id) {
-    TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
-    CreateTextureResource(desc, res);
+
+    images[id] = vkw::CreateImage({
+        .width = desc.width,
+        .height = desc.height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "Texture " + std::to_string(id),
+    });
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+    vkw::CmdBarrier(images[id], vkw::Layout::TransferDst);
+    vkw::CmdCopy(images[id], desc.data, desc.width * desc.height * 4);
+    vkw::CmdBarrier(images[id], vkw::Layout::ShaderRead);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Graphics);
 }
 
 bool AssetManager::IsModel(std::filesystem::path path) {
@@ -744,13 +734,13 @@ void AssetManager::OnImgui() {
             if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
-                DrawTextureOnImgui(textures[rid]);
+                DrawTextureOnImgui(images[rid]);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
                 ImGui::TreePop();
