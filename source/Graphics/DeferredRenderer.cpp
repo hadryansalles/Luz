@@ -136,7 +136,7 @@ void BeginOpaquePass() {
         vkw::CmdBarrier(attach, vkw::Layout::ColorAttachment);
     }
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthAttachment);
-    vkw::CmdBeginRendering(attachs, ctx.depth, { ctx.albedo.width, ctx.albedo.height });
+    vkw::CmdBeginRendering(attachs, ctx.depth);
     vkw::CmdBindPipeline(ctx.opaquePipeline);
 }
 
@@ -158,7 +158,7 @@ void LightPass(LightConstants constants) {
     constants.emissionRID = ctx.emission.rid;
     constants.depthRID = ctx.depth.rid;
 
-    vkw::CmdBeginRendering({ctx.light}, {}, {ctx.light.width, ctx.light.height});
+    vkw::CmdBeginRendering({ ctx.light }, {});
     vkw::CmdBindPipeline(ctx.lightPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();

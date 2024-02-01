@@ -942,8 +942,15 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, const glm::ivec2& extent, const glm::ivec2& offset) {
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach) {
     auto& cmd = _ctx.GetCurrentCommandResources();
+
+    glm::ivec2 extent = { 0, 0 };
+    glm::ivec2 offset = { 0, 0 };
+    if (colorAttachs.size() > 0) {
+        extent.x = colorAttachs[0].width;
+        extent.y = colorAttachs[0].height;
+    }
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
@@ -983,21 +990,19 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         renderingInfo.pDepthAttachment = &depthAttachInfo;
     }
 
-    if (colorAttachs.size() > 0) {
-        VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(colorAttachs[0].width);
-        viewport.height = static_cast<float>(colorAttachs[0].height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        VkRect2D scissor = {};
-        scissor.offset = { 0, 0 };
-        scissor.extent.width = colorAttachs[0].width;
-        scissor.extent.height = colorAttachs[0].height;
-        vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
-        vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
-    }
+    VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(extent.x);
+    viewport.height = static_cast<float>(extent.y);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor = {};
+    scissor.offset = { 0, 0 };
+    scissor.extent.width = extent.x;
+    scissor.extent.height = extent.y;
+    vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
+    vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
 
     vkCmdBeginRendering(cmd.buffer, &renderingInfo);
 }
@@ -1009,7 +1014,7 @@ void CmdEndRendering() {
 
 void CmdBeginPresent() {
     vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {}, { _ctx.swapChainExtent.width, _ctx.swapChainExtent.height });
+    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
 }
 
 void CmdEndPresent() {
