@@ -2,7 +2,7 @@
 
 #include "AssetManager.hpp"
 //#include "LogicalDevice.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>

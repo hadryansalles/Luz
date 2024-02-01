@@ -4,7 +4,7 @@
 #include <mutex>
 
 #include "Scene.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 struct TextureDesc {
     std::filesystem::path path = "";

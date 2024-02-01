@@ -1,6 +1,5 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
 #include "Base.hpp"
 
 namespace DeferredShading {
@@ -26,15 +25,12 @@ void Recreate(uint32_t width, uint32_t height);
 void Destroy();
 void ReloadShaders();
 
-void RenderMesh(VkCommandBuffer commandBuffer, RID meshId);
-
-void LightPass(VkCommandBuffer commandBuffer, LightConstants constants);
-
-void BeginOpaquePass(VkCommandBuffer commandBuffer);
-void EndPass(VkCommandBuffer commandBuffer);
-
-void BeginPresentPass(VkCommandBuffer commandBuffer);
-void EndPresentPass(VkCommandBuffer commandBuffer);
+void RenderMesh(RID meshId);
+void LightPass(LightConstants constants);
+void BeginOpaquePass();
+void EndPass();
+void BeginPresentPass();
+void EndPresentPass();
 void OnImgui(int numFrame);
 
 }

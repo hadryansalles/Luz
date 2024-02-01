@@ -59,13 +59,10 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBlock {
     float aoPower;
     int aoNumSamples;
 
-    ivec2 viewSize;
     int useBlueNoise;
     int whiteTexture;
-
     int blackTexture;
     int tlasRid; 
-    int pad[2];
 } sceneBuffers[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {

@@ -1,11 +1,161 @@
 #include "Luzpch.hpp"
 
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 #include "common.h"
 #include "imgui/imgui_impl_vulkan.h"
 
 namespace vkw {
+
+struct Context {
+    void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
+    void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+    void CmdCopy(Image& dst, void* data, uint32_t size);
+    void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
+    void CmdBarrier(Image& img, Layout::ImageLayout layout);
+    void CmdBarrier();
+    void CmdBeginRendering();
+    void CmdEndRendering();
+
+    void LoadShaders(Pipeline& pipeline);
+    std::vector<char> CompileShader(const std::filesystem::path& path);
+    void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
+
+    VkInstance instance = VK_NULL_HANDLE;
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+    std::string applicationName = "Luz";
+    std::string engineName = "Luz";
+
+    uint32_t apiVersion;
+    std::vector<bool> activeLayers;
+    std::vector<const char*> activeLayersNames;
+    std::vector<VkLayerProperties> layers;
+    std::vector<bool> activeExtensions;
+    std::vector<const char*> activeExtensionsNames;
+    std::vector<VkExtensionProperties> instanceExtensions;
+
+    bool enableValidationLayers = true;
+
+    std::vector<const char*> requiredExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_RAY_QUERY_EXTENSION_NAME,
+    };
+
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
+    VkSampleCountFlags sampleCounts;
+
+    VkPhysicalDeviceFeatures physicalFeatures{};
+    VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+    VkPhysicalDeviceProperties physicalProperties{};
+
+    std::vector<VkPresentModeKHR> availablePresentModes;
+    std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+    std::vector<VkExtensionProperties> availableExtensions;
+    std::vector<VkQueueFamilyProperties> availableFamilies;
+
+    // bindless resources
+    VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
+    VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+
+    VkDevice device = VK_NULL_HANDLE;
+
+    struct CommandResources {
+        u8* stagingCpu = nullptr;
+        uint32_t stagingOffset = 0;
+        Buffer staging;
+        VkCommandPool pool = VK_NULL_HANDLE;
+        VkCommandBuffer buffer = VK_NULL_HANDLE;
+        VkFence fence = VK_NULL_HANDLE;
+    };
+    struct InternalQueue {
+        VkQueue queue = VK_NULL_HANDLE;
+        int family = -1;
+        std::vector<CommandResources> commands;
+    };
+    InternalQueue queues[Queue::Count];
+    Queue currentQueue = Queue::Count;
+    std::shared_ptr<PipelineResource> currentPipeline;
+    const uint32_t stagingBufferSize = 64 * 1024 * 1024;
+
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+
+    VkSwapchainKHR swapChain = VK_NULL_HANDLE;
+    std::vector<Image> swapChainImages;
+    std::vector<VkImage> swapChainImageResources;
+    std::vector<VkImageView> swapChainViews;
+    std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+
+    uint32_t additionalImages = 0;
+    uint32_t framesInFlight = 3;
+    VkFormat depthFormat;
+    VkExtent2D swapChainExtent;
+    uint32_t swapChainCurrentFrame;
+    bool swapChainDirty = true;
+    uint32_t currentImageIndex = 0;
+
+    uint32_t nextBufferRID = 0;
+    uint32_t nextImageRID = 0;
+    uint32_t nextTLASRID = 0;
+    VkSampler genericSampler;
+
+    // preferred, warn if not available
+    VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+
+    const uint32_t initialScratchBufferSize = 64*1024*1024;
+    Buffer asScratchBuffer;
+    VkDeviceAddress asScratchAddress;
+
+    void CreateInstance(GLFWwindow* window);
+    void DestroyInstance();
+
+    void CreatePhysicalDevice();
+
+    void CreateDevice();
+    void DestroyDevice();
+
+    void CreateSurfaceFormats();
+
+    void CreateSwapChain(uint32_t width, uint32_t height);
+    void DestroySwapChain();
+
+    uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
+    bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
+
+    uint32_t Acquire();
+    void SubmitAndPresent(uint32_t imageIndex);
+
+    inline Image& GetCurrentSwapChainImage() {
+        return swapChainImages[currentImageIndex];
+    }
+    inline CommandResources& GetCurrentCommandResources() {
+        return queues[currentQueue].commands[currentImageIndex];
+    }
+
+    VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
+    VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+    VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+    VkSampler CreateSampler(float maxLod);
+
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+    PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
+    PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
+    PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
+    PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
+    PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
+    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+};
 
 static Context _ctx;
 
@@ -86,6 +236,37 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     _ctx.CreateSwapChain(width, height);
 }
 
+void ImGuiCheckVulkanResult(VkResult res) {
+    if (res == 0) {
+        return;
+    }
+    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
+    if (res < 0) {
+        throw std::runtime_error("");
+    }
+}
+
+void InitImGui() {
+    ImGui_ImplVulkan_InitInfo initInfo{};
+    initInfo.Instance = _ctx.instance;
+    initInfo.PhysicalDevice = _ctx.physicalDevice;
+    initInfo.Device = _ctx.device;
+    initInfo.QueueFamily = _ctx.queues[vkw::Queue::Graphics].family;
+    initInfo.Queue = _ctx.queues[vkw::Queue::Graphics].queue;
+    initInfo.PipelineCache = VK_NULL_HANDLE;
+    initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
+    initInfo.MinImageCount = 2;
+    initInfo.ImageCount = (uint32_t)_ctx.swapChainImages.size();
+    initInfo.MSAASamples = _ctx.numSamples;
+    initInfo.Allocator = _ctx.allocator;
+    initInfo.CheckVkResultFn = ImGuiCheckVulkanResult;
+    initInfo.UseDynamicRendering = true;
+    initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    ImGui_ImplVulkan_Init(&initInfo, nullptr);
+    ImGui_ImplVulkan_CreateFontsTexture();
+
+}
+
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
     _ctx.DestroySwapChain();
     _ctx.CreateSurfaceFormats();
@@ -157,7 +338,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         descriptorInfo.offset = 0;
         descriptorInfo.range = size;
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = vkw::ctx().bindlessDescriptorSet;
+        write.dstSet = _ctx.bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_BUFFER;
         write.dstArrayElement = buffer.rid;
         write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -262,7 +443,7 @@ Image CreateImage(const ImageDesc& desc) {
         };
         VkWriteDescriptorSet write = {};
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = vkw::ctx().bindlessDescriptorSet;
+        write.dstSet = _ctx.bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_TEXTURE;
         write.dstArrayElement = image.rid;
         write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -601,14 +782,14 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float> (vkw::ctx().swapChainExtent.width);
-    viewport.height = static_cast<float> (vkw::ctx().swapChainExtent.height);
+    viewport.width = static_cast<float> (_ctx.swapChainExtent.width);
+    viewport.height = static_cast<float> (_ctx.swapChainExtent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkRect2D scissor{};
     scissor.offset = { 0, 0 };
-    scissor.extent = vkw::ctx().swapChainExtent;
+    scissor.extent = _ctx.swapChainExtent;
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -691,14 +872,6 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
     for (int i = 0; i < shaderModules.size(); i++) {
         vkDestroyShaderModule(device, shaderModules[i], allocator);
     }
-}
-
-VkImageView Image::GetView() {
-    return resource->view;
-}
-
-VkImage Image::GetImage() {
-    return resource->image;
 }
 
 void CmdBuildBLAS(BLAS& blas) {
@@ -826,6 +999,32 @@ void CmdEndRendering() {
     vkCmdEndRendering(cmd.buffer);
 }
 
+void CmdBeginPresent() {
+    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {}, { _ctx.swapChainExtent.width, _ctx.swapChainExtent.height });
+}
+
+void CmdEndPresent() {
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
+}
+
+void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
+    vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd.buffer, indexCount, 1, 0, 0, 0);
+}
+
+void CmdDrawPassThrough() {
+    vkCmdDraw(_ctx.GetCurrentCommandResources().buffer, 6, 1, 0, 0);
+}
+
+void CmdDrawImGui(ImDrawData* data) {
+    ImGui_ImplVulkan_RenderDrawData(data, _ctx.GetCurrentCommandResources().buffer);
+}
+
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
@@ -877,18 +1076,9 @@ void WaitQueue(Queue queue) {
     DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
-//void CmdBeginPresent(/*swapchain*/);
-//void CmdEndPresent();
-    // BeginCommandBuffer(Queue::Transfer);
-    // CmdCopy(buffer, data, size, dstOffset);
-    // EndCommandBuffer(Queue::Transfer);
-    // WaitQueue(Queue::Transfer);
-
-VkBuffer Buffer::GetBuffer() {
-    if (resource) {
-        return resource->buffer;
-    }
-    return nullptr;
+void WaitIdle() {
+    auto res = vkDeviceWaitIdle(_ctx.device);
+    DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
 // vulkan debug callbacks
@@ -1224,8 +1414,8 @@ void Context::CreateDevice() {
     if (supportedFeatures.wideLines)         { features.wideLines         = VK_TRUE; }
     if (supportedFeatures.depthClamp)        { features.depthClamp        = VK_TRUE; }
 
-    auto requiredExtensions = vkw::ctx().requiredExtensions;
-    auto allExtensions = vkw::ctx().availableExtensions;
+    auto requiredExtensions = _ctx.requiredExtensions;
+    auto allExtensions = _ctx.availableExtensions;
     for (auto req : requiredExtensions) {
         bool available = false;
         for (size_t i = 0; i < allExtensions.size(); i++) {
@@ -1280,6 +1470,11 @@ void Context::CreateDevice() {
     sync2Features.synchronization2 = VK_TRUE;
     sync2Features.pNext = &dynamicRenderingFeatures;
 
+    //VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachFeature{};
+    //unusedAttachFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
+    //unusedAttachFeature.dynamicRenderingUnusedAttachments = VK_TRUE;
+    //unusedAttachFeature.pNext = &sync2Features;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -1290,7 +1485,7 @@ void Context::CreateDevice() {
     createInfo.pNext = &sync2Features;
 
     // specify the required layers to the device 
-    if (vkw::ctx().enableValidationLayers) {
+    if (_ctx.enableValidationLayers) {
         auto& layers = activeLayersNames;
         createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
         createInfo.ppEnabledLayerNames = layers.data();
@@ -1424,7 +1619,7 @@ void Context::DestroyDevice() {
 }
 
 void Context::CreateSurfaceFormats() {
-    auto surface = vkw::ctx().surface;
+    auto surface = _ctx.surface;
 
     // get capabilities
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
@@ -1488,7 +1683,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 
         VkSwapchainCreateInfoKHR createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = vkw::ctx().surface;
+        createInfo.surface = _ctx.surface;
         createInfo.minImageCount = imageCount;
         createInfo.imageFormat = surfaceFormat.format;
         createInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -1657,37 +1852,42 @@ void Context::DestroySwapChain() {
     swapChain = VK_NULL_HANDLE;
 }
 
-uint32_t Context::Acquire() {
+void AcquireImage() {
     LUZ_PROFILE_FUNC();
 
     uint32_t imageIndex;
-    auto res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[swapChainCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+    auto res = vkAcquireNextImageKHR(_ctx.device, _ctx.swapChain, UINT64_MAX, _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR) {
-        swapChainDirty = true;
+        _ctx.swapChainDirty = true;
     } else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
         DEBUG_VK(res, "Failed to acquire swap chain image!");
     }
 
-    currentImageIndex = imageIndex;
-    return imageIndex;
+    _ctx.currentImageIndex = imageIndex;
 }
 
-void Context::SubmitAndPresent(uint32_t imageIndex) {
+bool GetSwapChainDirty() {
+    return _ctx.swapChainDirty;
+}
+
+void SubmitAndPresent() {
     LUZ_PROFILE_FUNC();
+
+    auto& cmd = _ctx.GetCurrentCommandResources();
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[swapChainCurrentFrame] };
+    VkSemaphore waitSemaphores[] = { _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &(queues[currentQueue].commands[imageIndex].buffer);
+    submitInfo.pCommandBuffers = &(cmd.buffer);
 
-    VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[swapChainCurrentFrame] };
+    VkSemaphore signalSemaphores[] = { _ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame] };
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -1696,30 +1896,29 @@ void Context::SubmitAndPresent(uint32_t imageIndex) {
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = signalSemaphores;
 
-    VkSwapchainKHR swapChains[] = { swapChain };
+    VkSwapchainKHR swapChains[] = { _ctx.swapChain };
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pImageIndices = &_ctx.currentImageIndex;
     presentInfo.pResults = nullptr;
 
-    auto& cmd = _ctx.GetCurrentCommandResources();
     vkEndCommandBuffer(cmd.buffer);
 
     auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
     DEBUG_VK(res, "Failed to submit command buffer");
 
-    res = vkQueuePresentKHR(queues[currentQueue].queue, &presentInfo);
-    currentQueue = Queue::Count;
+    res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
+    _ctx.currentQueue = Queue::Count;
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
-        swapChainDirty = true;
+        _ctx.swapChainDirty = true;
         return;
     }
     else if (res != VK_SUCCESS) {
         DEBUG_VK(res, "Failed to present swap chain image!");
     }
 
-    swapChainCurrentFrame = (swapChainCurrentFrame + 1) % framesInFlight;
+    _ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
 }
 
 uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
@@ -1788,10 +1987,6 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 
         return actualExtent;
     }
-}
-
-Context& ctx() {
-    return _ctx;
 }
 
 void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
@@ -1884,7 +2079,7 @@ void Context::CmdBarrier() {
         .memoryBarrierCount = 1,
         .pMemoryBarriers = &barrier,
     };
-    vkCmdPipelineBarrier2(GetCurrentCommandBuffer(), &dependency);
+    vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
 
 VkSampler Context::CreateSampler(f32 maxLod) {

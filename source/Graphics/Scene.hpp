@@ -4,7 +4,7 @@
 
 #include "Transform.hpp"
 #include "Camera.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 // todo: move to some proper place
 #include "imgui/imgui_impl_vulkan.h"
@@ -44,13 +44,10 @@ struct SceneBlock {
     float aoPower = 1.45;
     u32 aoNumSamples = 1;
 
-    glm::ivec2 viewSize;
     u32 useBlueNoise = 0;
     u32 whiteTexture = 0;
-
     u32 blackTexture = 0;
     u32 tlasRid = 0;
-    u32 pad[2];
 };
 
 struct MaterialBlock {

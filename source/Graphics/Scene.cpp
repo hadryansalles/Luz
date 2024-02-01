@@ -2,7 +2,7 @@
 #include "Scene.hpp"
 #include "AssetManager.hpp"
 #include "Window.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 #include <imgui/imgui_stdlib.h>
 
@@ -100,7 +100,6 @@ void UpdateResources() {
     scene.whiteTexture = whiteTexture.rid;
     scene.blackTexture = blackTexture.rid;
     scene.numLights = 0;
-    scene.viewSize = glm::vec2(vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height);
     for (int i = 0; i < modelEntities.size(); i++) {
         Model* model = modelEntities[i];
         model->id = i;

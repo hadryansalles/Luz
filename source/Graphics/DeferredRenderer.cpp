@@ -2,7 +2,7 @@
 
 #include "DeferredRenderer.hpp"
 #include "AssetManager.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 #include "imgui/imgui_impl_vulkan.h"
 
@@ -118,7 +118,7 @@ void Recreate(uint32_t width, uint32_t height) {
         .extent = {width, height},
         .name = "Present Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {(vkw::Format)vkw::ctx().colorFormat},
+        .colorFormats = {vkw::Format::BGRA8_unorm},
         .useDepth = false,
     });
 }
@@ -131,30 +131,26 @@ void ReloadShaders() {
     // todo: reload
 }
 
-void RenderMesh(VkCommandBuffer commandBuffer, RID meshId) {
+void RenderMesh(RID meshId) {
     MeshResource& mesh = AssetManager::meshes[meshId];
-    VkBuffer vertexBuffers[] = { mesh.vertexBuffer.GetBuffer()};
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer.GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
+    vkw::CmdDrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
 }
 
-void BeginOpaquePass(VkCommandBuffer commandBuffer) {
+void BeginOpaquePass() {
     std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
     for (auto& attach : attachs) {
         vkw::CmdBarrier(attach, vkw::Layout::ColorAttachment);
     }
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthAttachment);
-    vkw::CmdBeginRendering(attachs, ctx.depth, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
+    vkw::CmdBeginRendering(attachs, ctx.depth, { ctx.albedo.width, ctx.albedo.height });
     vkw::CmdBindPipeline(ctx.opaquePipeline);
 }
 
-void EndPass(VkCommandBuffer commandBuffer) {
+void EndPass() {
     vkw::CmdEndRendering();
 }
 
-void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
+void LightPass(LightConstants constants) {
     std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
     for (auto& attach : attachs) {
         vkw::CmdBarrier(attach, vkw::Layout::ShaderRead);
@@ -168,14 +164,14 @@ void LightPass(VkCommandBuffer commandBuffer, LightConstants constants) {
     constants.emissionRID = ctx.emission.rid;
     constants.depthRID = ctx.depth.rid;
 
-    vkw::CmdBeginRendering({ctx.light}, {}, {vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height});
+    vkw::CmdBeginRendering({ctx.light}, {}, {ctx.light.width, ctx.light.height});
     vkw::CmdBindPipeline(ctx.lightPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-    vkCmdEndRendering(commandBuffer);
+    vkw::CmdDrawPassThrough();
+    vkw::CmdEndRendering();
 }
 
-void BeginPresentPass(VkCommandBuffer commandBuffer) {
+void BeginPresentPass() {
     vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 
     PresentConstant constants;
@@ -187,16 +183,14 @@ void BeginPresentPass(VkCommandBuffer commandBuffer) {
     constants.depthRID = ctx.depth.rid;
     constants.imageType = ctx.presentType;
 
-    vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-    vkw::CmdBeginRendering({ vkw::ctx().GetCurrentSwapChainImage() }, {}, { vkw::ctx().swapChainExtent.width, vkw::ctx().swapChainExtent.height });
+    vkw::CmdBeginPresent();
     vkw::CmdBindPipeline(ctx.presentPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+    vkw::CmdDrawPassThrough();
 }
 
-void EndPresentPass(VkCommandBuffer commandBuffer) {
-    vkw::CmdEndRendering();
-    vkw::CmdBarrier(vkw::ctx().GetCurrentSwapChainImage(), vkw::Layout::Present);
+void EndPresentPass() {
+    vkw::CmdEndPresent();
 }
 
 void OnImgui(int numFrame) {

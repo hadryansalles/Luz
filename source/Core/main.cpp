@@ -6,7 +6,7 @@
 #include "AssetManager.hpp"
 #include "Scene.hpp"
 #include "DeferredRenderer.hpp"
-#include "VulkanLayer.h"
+#include "VulkanWrapper.h"
 
 #include <stb_image.h>
 
@@ -17,15 +17,6 @@
 #define IMGUI_VULKAN_DEBUG_REPORT
 #endif
 
-void CheckVulkanResult(VkResult res) {
-    if (res == 0) {
-        return;
-    }
-    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
-    if (res < 0) {
-        throw std::runtime_error("");
-    }
-}
 
 class LuzApplication {
 public:
@@ -109,7 +100,7 @@ private:
                 drawUi = !drawUi;
             }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
-                vkDeviceWaitIdle(vkw::ctx().device);
+                vkw::WaitIdle();
                 DeferredShading::ReloadShaders();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
@@ -117,13 +108,13 @@ private:
                 Window::ApplyChanges();
             }
         }
-        vkDeviceWaitIdle(vkw::ctx().device);
+        vkw::WaitIdle();
     }
 
 
     bool DirtyFrameResources() {
         bool dirty = false;
-        dirty |= vkw::ctx().swapChainDirty;
+        dirty |= vkw::GetSwapChainDirty();
         dirty |= Window::GetFramebufferResized();
         return dirty;
     }
@@ -131,16 +122,14 @@ private:
     ImVec2 ToScreenSpace(glm::vec3 position) {
         glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
-        const auto ext = vkw::ctx().swapChainExtent;
-        screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
-        screenSpace.y = (screenSpace.y + 1.0) * ext.height/2.0;
+        glm::ivec2 ext = { Window::GetWidth(), Window::GetHeight() };
+        screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
+        screenSpace.y = (screenSpace.y + 1.0) * ext.y/2.0;
         return screenSpace;
     }
 
     void imguiDrawFrame() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        auto instance = vkw::ctx().instance;
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -183,17 +172,13 @@ private:
 
     void updateCommandBuffer() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        auto instance = vkw::ctx().instance;
-
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
-        auto commandBuffer = vkw::ctx().GetCurrentCommandBuffer();
 
         vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
         vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
         vkw::CmdBarrier();
 
-        DeferredShading::BeginOpaquePass(commandBuffer);
+        DeferredShading::BeginOpaquePass();
 
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = Scene::sceneBuffer.rid;
@@ -202,73 +187,63 @@ private:
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;
             vkw::CmdPushConstants(&constants, sizeof(constants));
-            //DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-            DeferredShading::RenderMesh(commandBuffer, model->mesh);
+            DeferredShading::RenderMesh(model->mesh);
         }
 
         if (Scene::renderLightGizmos) {
             for (Light* light : Scene::lightEntities) {
                 constants.modelID = light->id;
                 vkw::CmdPushConstants(&constants, sizeof(constants));
-                //DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-                DeferredShading::RenderMesh(commandBuffer, Scene::lightMeshes[light->block.type]);
+                DeferredShading::RenderMesh(Scene::lightMeshes[light->block.type]);
             }
         }
 
-        DeferredShading::EndPass(commandBuffer);
+        DeferredShading::EndPass();
 
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
-        DeferredShading::LightPass(commandBuffer, lightPassConstants);
+        DeferredShading::LightPass(lightPassConstants);
 
-        DeferredShading::BeginPresentPass(commandBuffer);
+        DeferredShading::BeginPresentPass();
         if (drawUi) {
-            ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
+            vkw::CmdDrawImGui(imguiDrawData);
         }
-        DeferredShading::EndPresentPass(commandBuffer);
+        DeferredShading::EndPresentPass();
     }
 
     void drawFrame() {
         LUZ_PROFILE_FUNC();
         imguiDrawFrame();
-
-        auto image = vkw::ctx().Acquire();
-
-        if (vkw::ctx().swapChainDirty) {
+        vkw::AcquireImage();
+        if (vkw::GetSwapChainDirty()) {
             return;
         }
-
         updateUniformBuffer();
         updateCommandBuffer();
-
-        vkw::ctx().SubmitAndPresent(image);
+        vkw::SubmitAndPresent();
 
         frameCount = (frameCount + 1) % (1 << 15);
     }
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        vkDeviceWaitIdle(device);
+        vkw::WaitIdle();
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
         }
+        vkw::WaitIdle();
         Window::UpdateFramebufferSize();
-        vkDeviceWaitIdle(device);
         vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
-        vkDeviceWaitIdle(device);
         DeferredShading::Recreate(Window::GetWidth(), Window::GetHeight());
-        vkDeviceWaitIdle(device);
         createUniformProjection();
     }
 
     void createUniformProjection() {
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
-        auto ext = vkw::ctx().swapChainExtent;
-        Scene::camera.SetExtent(ext.width, ext.height);
+        Scene::camera.SetExtent(Window::GetWidth(), Window::GetHeight());
     }
 
     void updateUniformBuffer() {
@@ -361,28 +336,8 @@ private:
 
     void CreateImgui() {
         LUZ_PROFILE_FUNC();
-        auto device = vkw::ctx().device;
-        auto instance = vkw::ctx().instance;
-
         ImGui_ImplGlfw_InitForVulkan(Window::GetGLFWwindow(), true);
-
-        ImGui_ImplVulkan_InitInfo initInfo{};
-        initInfo.Instance = instance;
-        initInfo.PhysicalDevice = vkw::ctx().physicalDevice;
-        initInfo.Device = device;
-        initInfo.QueueFamily = vkw::ctx().queues[vkw::Queue::Graphics].family;
-        initInfo.Queue = vkw::ctx().queues[vkw::Queue::Graphics].queue;
-        initInfo.PipelineCache = VK_NULL_HANDLE;
-        initInfo.DescriptorPool = vkw::ctx().imguiDescriptorPool;
-        initInfo.MinImageCount = 2;
-        initInfo.ImageCount = (uint32_t)vkw::ctx().swapChainImages.size();
-        initInfo.MSAASamples = vkw::ctx().numSamples;
-        initInfo.Allocator = VK_NULL_HANDLE;
-        initInfo.CheckVkResultFn = CheckVulkanResult;
-        initInfo.UseDynamicRendering = true;
-        initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
-        ImGui_ImplVulkan_Init(&initInfo, nullptr);
-        ImGui_ImplVulkan_CreateFontsTexture();
+        vkw::InitImGui();
     }
 
     void DestroyImgui() {
