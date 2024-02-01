@@ -64,8 +64,8 @@ void main() {
         imageRID = emissionRID;
     } else if(imageType == 5) {
         imageRID = depthRID;
-    }
-    vec4 value = texture(imageAttachs[imageRID], fragCoord);
+    }    
+    vec4 value = texture(textures[imageRID], fragCoord);
     if(imageType == 2) {
         value = (value + 1.0)/2.0;
     } else if(imageType == 5) {

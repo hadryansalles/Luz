@@ -4,16 +4,12 @@
 
 #include "Transform.hpp"
 #include "Camera.hpp"
-#include "BufferManager.hpp"
-#include "Texture.hpp"
+#include "VulkanWrapper.h"
 
 #define MAX_TEXTURES 4096
 #define MAX_MODELS 4096
 #define MAX_LIGHTS 16
 #define MAX_MESHES 2048
-
-#define SCENE_BUFFER_INDEX 0
-#define MODELS_BUFFER_INDEX 1
 
 struct LightBlock {
     glm::vec3 color = glm::vec3(1.0f);
@@ -32,17 +28,23 @@ struct SceneBlock {
     LightBlock lights[MAX_LIGHTS];
     glm::vec3 ambientLightColor = glm::vec3(1.0f);
     f32 ambientLightIntensity = 0.03f;
+
     glm::mat4 projView = glm::mat4(1.0f);
     glm::mat4 inverseProj = glm::mat4(1.0f);
     glm::mat4 inverseView = glm::mat4(1.0f);
+
     glm::vec3 camPos = glm::vec3(.0f, .0f, .0f);
     u32 numLights = 0;
-    u32 aoNumSamples = 1;
+
     float aoMin = 0.001;
     float aoMax = 0.1;
     float aoPower = 1.45;
-    glm::ivec2 viewSize;
+    u32 aoNumSamples = 1;
+
     u32 useBlueNoise = 0;
+    u32 whiteTexture = 0;
+    u32 blackTexture = 0;
+    u32 tlasRid = 0;
 };
 
 struct MaterialBlock {
@@ -50,11 +52,11 @@ struct MaterialBlock {
     glm::vec3 emission = glm::vec3(1.0f);
     f32 metallic    = 1;
     f32 roughness   = 1;
-    RID aoMap       = 0;
-    RID colorMap    = 0;
-    RID normalMap   = 0;
-    RID emissionMap = 1;
-    RID metallicRoughnessMap = 0;
+    int aoMap       = -1;
+    int colorMap    = -1;
+    int normalMap   = -1;
+    int emissionMap = -1;
+    int metallicRoughnessMap = -1;
     u32 PADDING[2];
 };
 
@@ -64,29 +66,23 @@ struct ModelBlock {
 };
 
 enum class EntityType {
-    Entity,
+    Invalid,
     Model,
+    Collection,
     Light
 };
 
 struct Entity {
     std::string name = "Entity";
     Transform transform;
-    EntityType entityType = EntityType::Entity;
-    Entity* parent = nullptr;
-    std::vector<Entity*> children;
+    EntityType entityType = EntityType::Invalid;
+    struct Collection* parent = nullptr;
 };
 
 enum LightType {
     Point,
     Directional,
     Spot
-};
-
-enum class ShadowType {
-    Disabled,
-    RayTraced,
-    ShadowMap,
 };
 
 struct Model : Entity {
@@ -104,56 +100,48 @@ struct Light : Entity {
     RID id = 0;
     LightBlock block;
     bool shadows = true;
-    ShadowType shadowType = ShadowType::RayTraced;
-    glm::vec3 p0 = { -10.0, 10.0, 0.0 };
-    glm::vec3 p1 = { 10.0, -10.0, 2000.0 };
-
-    glm::mat4 GetShadowViewProjection() {
-        if (block.type == LightType::Directional) {
-            glm::mat4 view = glm::lookAt(transform.position, transform.position + transform.GetGlobalFront(), glm::vec3(.0f, 1.0f, .0f));
-            glm::mat4 proj = glm::ortho(p0.x, p1.x, p0.y, p1.y, p0.z, p1.z);
-            return proj * view;
-        } else {
-            return glm::mat4(1);
-        }
-    }
 };
 
-struct Scene {
-    SceneBlock scene;
-    ModelBlock models[MAX_MODELS];
-    RID textures[MAX_TEXTURES];
-    StorageBuffer sceneBuffer;
-    StorageBuffer modelsBuffer;
-    std::vector<RID> freeTextureRIDs;
-    std::vector<RID> freeModelRIDs;
+struct Collection : Entity {
+    std::vector<Entity*> children;
+};
 
-    Camera camera;
-    std::vector<Entity*> entities;
-    std::vector<Model*> modelEntities;
-    std::vector<Light*> lightEntities;
-    Entity* selectedEntity = nullptr;
-    Entity* copiedEntity = nullptr;
+namespace Scene {
+    inline SceneBlock scene;
+    inline ModelBlock models[MAX_MODELS];
+    inline RID textures[MAX_TEXTURES];
+    inline vkw::Buffer sceneBuffer;
+    inline vkw::Buffer modelsBuffer;
+    inline std::vector<RID> freeTextureRIDs;
+    inline std::vector<RID> freeModelRIDs; 
 
-    u32 shadowMapSize = 1024;
-    TextureResource shadowMaps[MAX_LIGHTS];
+    inline Camera camera;
+    inline Collection* rootCollection = nullptr;
+    inline std::vector<Entity*> entities;
+    inline std::vector<Model*> modelEntities;
+    inline std::vector<Light*> lightEntities;
+    inline Entity* selectedEntity = nullptr;
+    inline Entity* copiedEntity = nullptr;
 
-    bool renderLightGizmos = true;
-    float lightGizmosOpacity = 1.0f;
+    inline bool renderLightGizmos = true;
+    inline float lightGizmosOpacity = 1.0f;
 
-    bool aoActive = true;
-    int aoNumSamples = 1;
+    inline bool aoActive = true;
+    inline int aoNumSamples = 1;
 
-    RID lightMeshes[3];
+    inline RID lightMeshes[3];
+
+    inline vkw::Image whiteTexture;
+    inline vkw::Image blackTexture;
+    inline vkw::TLAS tlas;
 
     void Setup();
     void CreateResources();
-    void UpdateResources(int numFrame);
-    void UpdateBuffers(int numFrame);
+    void UpdateResources();
     void DestroyResources();
 
-    Entity* CreateEntity();
     Entity* CreateEntity(Entity* copy);
+    void DeleteEntity(Entity* entity);
 
     Model* CreateModel();
     Model* CreateModel(Model* copy);
@@ -161,22 +149,26 @@ struct Scene {
     Light* CreateLight();
     Light* CreateLight(Light* copy);
 
-    void DeleteEntity(Entity* entity);
-    void DeleteModel(Model* mdoel);
+    Collection* CreateCollection();
+    Collection* CreateCollection(Collection* copy);
 
-    void RemoveFromParent(Entity* entity);
-    void SetParent(Entity* entity, Entity* parent);
+    void RemoveFromCollection(Entity* entity);
+    void SetCollection(Entity* entity, Collection* collection);
 
     void OnImgui();
-    void OnImgui(Entity* entity);
+    void OnImgui(Collection* collection, bool root = false);
 
     void InspectModel(Model* model);
     void InspectLight(Light* light);
     void InspectEntity(Entity* entity);
 
     void RenderTransformGizmo(Transform& transform);
-    void AcceptMeshPayload();
+}
 
-    void Save(const std::string& filename);
-    bool Read(const std::string& filename);
-};
+inline void DrawTextureOnImgui(vkw::Image& img) {
+    float hSpace = ImGui::GetContentRegionAvail().x/2.5f;
+    f32 maxSize = std::max(img.width, img.height);
+    ImVec2 size = ImVec2((f32)img.width/maxSize, (f32)img.height/maxSize);
+    size = ImVec2(size.x*hSpace, size.y * hSpace);
+    ImGui::Image(img.imguiRID, size);
+}

@@ -1,48 +1,26 @@
 #include "Luzpch.hpp" 
 
-#include "PhysicalDevice.hpp"
-#include "LogicalDevice.hpp"
-#include "Instance.hpp"
-#include "ImageManager.hpp"
 #include "Window.hpp"
-#include "SwapChain.hpp"
 #include "Camera.hpp"
-#include "Shader.hpp"
-#include "GraphicsPipelineManager.hpp"
-#include "PBRGraphicsPipeline.hpp"
 #include "FileManager.hpp"
-#include "BufferManager.hpp"
 #include "AssetManager.hpp"
 #include "Scene.hpp"
-#include "RayTracing.hpp"
 #include "DeferredRenderer.hpp"
-#include "AssetManager2.hpp"
-#include "AssetIO.hpp"
-#include "Managers.hpp"
+#include "VulkanWrapper.h"
 
 #include <stb_image.h>
 
-#include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_stdlib.h>
+
 #ifdef _DEBUG
 #define IMGUI_VULKAN_DEBUG_REPORT
 #endif
 
-void CheckVulkanResult(VkResult res) {
-    if (res == 0) {
-        return;
-    }
-    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
-    if (res < 0) {
-        throw std::runtime_error("");
-    }
-}
-
 class LuzApplication {
 public:
     void run() {
-        // WaitToInit(4);
         Setup();
         Create();
         MainLoop();
@@ -53,8 +31,6 @@ private:
     u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
     bool drawUi = true;
-    Scene scene;
-    Ref<Camera> mainCamera;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -68,12 +44,9 @@ private:
 
     void Setup() {
         LUZ_PROFILE_FUNC();
-        PBRGraphicsPipeline::Setup();
-        DeferredShading::Setup();
         AssetManager::Setup();
         SetupImgui();
-        scene.Setup();
-        mainCamera = std::make_shared<Camera>();
+        Scene::Setup();
     }
 
     void Create() {
@@ -83,23 +56,14 @@ private:
 
     void CreateVulkan() {
         LUZ_PROFILE_FUNC();
-        Managers::assets.LoadProject("assets/project.luz");
         Window::Create();
-        Instance::Create();
-        PhysicalDevice::Create();
-        LogicalDevice::Create();
-        SwapChain::Create();
+        vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DEBUG_TRACE("Finish creating SwapChain.");
-        GraphicsPipelineManager::Create();
-        PBRGraphicsPipeline::Create();
         CreateImgui();
-        RayTracing::Create();
-        DeferredShading::Create();
+        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateShaders();
         AssetManager::Create();
-        scene.CreateResources();
-        Managers::gpuScene.SetScene(Managers::assets.GetInitialScene());
-        Managers::gpuScene.SetCamera(mainCamera);
-        Managers::gpuScene.CreateResources();
+        Scene::CreateResources();
         createUniformProjection();
     }
 
@@ -112,96 +76,59 @@ private:
 
     void DestroyVulkan() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-
-        DestroyFrameResources();
-        RayTracing::Destroy();
-        GraphicsPipelineManager::Destroy();
-        AssetManager::Destroy();
-        LogicalDevice::Destroy();
-        PhysicalDevice::Destroy();
-        Instance::Destroy();
-        Window::Destroy();
-    }
-
-    void DestroyFrameResources() {
-        LUZ_PROFILE_FUNC();
-        PBRGraphicsPipeline::Destroy();
-        scene.DestroyResources();
-        Managers::gpuScene.DestroyResources();
-        
         DestroyImgui();
+        Scene::DestroyResources();
         DeferredShading::Destroy();
-
-        SwapChain::Destroy();
-        LOG_INFO("Destroyed SwapChain.");
+        AssetManager::Destroy();
+        vkw::Destroy();
+        Window::Destroy();
     }
 
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
             Window::Update();
-            AssetManager::UpdateResources(scene);
+            AssetManager::UpdateResources();
             Transform* selectedTransform = nullptr;
-            if (scene.selectedEntity != nullptr) {
-                selectedTransform = &scene.selectedEntity->transform;
+            if (Scene::selectedEntity != nullptr) {
+                selectedTransform = &Scene::selectedEntity->transform;
             }
-            scene.camera.Update(selectedTransform);
-            mainCamera->Update(selectedTransform);
+            Scene::camera.Update(selectedTransform);
             drawFrame();
             if (Window::IsKeyPressed(GLFW_KEY_F1)) {
                 drawUi = !drawUi;
             }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-                DeferredShading::ReloadShaders();
-            }
-            if (DirtyGlobalResources()) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-                DestroyVulkan();
-                CreateVulkan();
+                vkw::WaitIdle();
+                DeferredShading::CreateShaders();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
-            } else if (PBRGraphicsPipeline::IsDirty()) {
-                vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
-                PBRGraphicsPipeline::Destroy();
-                PBRGraphicsPipeline::Create();
             } else if (Window::IsDirty()) {
                 Window::ApplyChanges();
             }
         }
-        vkDeviceWaitIdle(LogicalDevice::GetVkDevice());
+        vkw::WaitIdle();
     }
 
-    bool DirtyGlobalResources() {
-        bool dirty = false;
-        // dirty |= Instance::IsDirty();
-        dirty |= PhysicalDevice::IsDirty();
-        dirty |= LogicalDevice::IsDirty();
-        return dirty;
-    }
 
     bool DirtyFrameResources() {
         bool dirty = false;
-        dirty |= SwapChain::IsDirty();
+        dirty |= vkw::GetSwapChainDirty();
         dirty |= Window::GetFramebufferResized();
         return dirty;
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = scene.camera.GetProj() * scene.camera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
-        auto ext = SwapChain::GetExtent();
-        screenSpace.x = (screenSpace.x + 1.0) * ext.width/2.0;
-        screenSpace.y = (screenSpace.y + 1.0) * ext.height/2.0;
+        glm::ivec2 ext = { Window::GetWidth(), Window::GetHeight() };
+        screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
+        screenSpace.y = (screenSpace.y + 1.0) * ext.y/2.0;
         return screenSpace;
     }
 
     void imguiDrawFrame() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -210,13 +137,7 @@ private:
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
                 if (ImGui::BeginTabItem("Configuration")) {
                     Window::OnImgui();
-                    Instance::OnImgui();
-                    PhysicalDevice::OnImgui();
-                    LogicalDevice::OnImgui();
-                    SwapChain::OnImgui();
-                    PBRGraphicsPipeline::OnImgui();
-                    AssetManager2::Instance().OnImgui();
-                    scene.camera.OnImgui();
+                    Scene::camera.OnImgui();
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Assets")) {
@@ -229,18 +150,17 @@ private:
         ImGui::End();
 
         if (ImGui::Begin("Scene")) {
-            scene.OnImgui();
+            Scene::OnImgui();
         }
         ImGui::End();
 
         if (ImGui::Begin("Inspector")) {
-            if (scene.selectedEntity != nullptr) {
-                scene.InspectEntity(scene.selectedEntity);
+            if (Scene::selectedEntity != nullptr) {
+                Scene::InspectEntity(Scene::selectedEntity);
             }
         }
         ImGui::End();
 
-        RayTracing::OnImgui();
         DeferredShading::OnImgui(0);
 
         ImGui::ShowDemoWindow();
@@ -249,131 +169,85 @@ private:
         imguiDrawData = ImGui::GetDrawData();
     }
 
-    void updateCommandBuffer(size_t frameIndex) {
+    void updateCommandBuffer() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-        auto commandBuffer = SwapChain::GetCommandBuffer(frameIndex);
+        vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;
-        beginInfo.pInheritanceInfo = nullptr;
+        vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
+        vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
+        vkw::CmdBarrier();
 
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
-
-        DeferredShading::BeginOpaquePass(commandBuffer);
+        DeferredShading::BeginOpaquePass();
 
         DeferredShading::OpaqueConstants constants;
-        constants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
-        constants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
+        constants.sceneBufferIndex = Scene::sceneBuffer.rid;
+        constants.modelBufferIndex = Scene::modelsBuffer.rid;
 
-        for (Model* model : scene.modelEntities) {
+        for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;
-            DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-            DeferredShading::RenderMesh(commandBuffer, model->mesh);
+            vkw::CmdPushConstants(&constants, sizeof(constants));
+            DeferredShading::RenderMesh(model->mesh);
         }
 
-        if (scene.renderLightGizmos) {
-            for (Light* light : scene.lightEntities) {
+        if (Scene::renderLightGizmos) {
+            for (Light* light : Scene::lightEntities) {
                 constants.modelID = light->id;
-                DeferredShading::BindConstants(commandBuffer, DeferredShading::opaquePass, &constants, sizeof(constants));
-                DeferredShading::RenderMesh(commandBuffer, scene.lightMeshes[light->block.type]);
+                vkw::CmdPushConstants(&constants, sizeof(constants));
+                DeferredShading::RenderMesh(Scene::lightMeshes[light->block.type]);
             }
         }
 
-        DeferredShading::EndPass(commandBuffer);
-
-        DeferredShading::ShadowMapConstants shadowConstants;
-        shadowConstants.modelBufferIndex = SwapChain::GetNumFrames() * MODELS_BUFFER_INDEX + frameIndex;
-        shadowConstants.sceneBufferIndex = SwapChain::GetNumFrames() * SCENE_BUFFER_INDEX + frameIndex;
-        for (Light* light : scene.lightEntities) {
-            if (!light->shadows || light->shadowType != ShadowType::ShadowMap) {
-                continue;
-            }
-            shadowConstants.lightProj = light->GetShadowViewProjection();
-            DeferredShading::BeginShadowMapPass(commandBuffer, scene.shadowMaps[light->id]);
-            for (Model* model : scene.modelEntities) {
-                shadowConstants.modelId = model->id;
-                DeferredShading::BindConstants(commandBuffer, DeferredShading::shadowPass, &shadowConstants, sizeof(shadowConstants));
-                DeferredShading::RenderMesh(commandBuffer, model->mesh);
-            }
-            DeferredShading::EndPass(commandBuffer);
-            ImageManager::BarrierDepthAttachmentToRead(commandBuffer, scene.shadowMaps[light->id].image.image);
-        }
+        DeferredShading::EndPass();
 
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
-        DeferredShading::LightPass(commandBuffer, lightPassConstants);
+        DeferredShading::LightPass(lightPassConstants);
 
-        DeferredShading::BeginPresentPass(commandBuffer, frameIndex);
+        DeferredShading::BeginPresentPass();
         if (drawUi) {
-            ImGui_ImplVulkan_RenderDrawData(imguiDrawData, commandBuffer);
+            vkw::CmdDrawImGui(imguiDrawData);
         }
-        DeferredShading::EndPresentPass(commandBuffer, frameIndex);
-
-        // vkCmdEndRenderPass(commandBuffer);
-
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
+        DeferredShading::EndPresentPass();
     }
 
     void drawFrame() {
         LUZ_PROFILE_FUNC();
         imguiDrawFrame();
-
-        auto image = SwapChain::Acquire(); 
-
-        if (SwapChain::IsDirty()) {
+        vkw::AcquireImage();
+        if (vkw::GetSwapChainDirty()) {
             return;
         }
-
-        updateUniformBuffer(image);
-        updateCommandBuffer(image);
-
-        SwapChain::SubmitAndPresent(image);
+        updateUniformBuffer();
+        updateCommandBuffer();
+        vkw::SubmitAndPresent();
 
         frameCount = (frameCount + 1) % (1 << 15);
     }
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-        vkDeviceWaitIdle(device);
+        vkw::WaitIdle();
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
         }
+        vkw::WaitIdle();
         Window::UpdateFramebufferSize();
-        vkDeviceWaitIdle(device);
-        DestroyFrameResources();
-        PhysicalDevice::OnSurfaceUpdate();
-        SwapChain::Create();
-        PBRGraphicsPipeline::Create();
-        scene.CreateResources();
-        Managers::gpuScene.CreateResources();
-        CreateImgui();
-        DeferredShading::Create();
+        vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
+        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         createUniformProjection();
     }
 
     void createUniformProjection() {
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
-        auto ext = SwapChain::GetExtent();
-        scene.camera.SetExtent(ext.width, ext.height);
-        mainCamera->SetExtent(ext.width, ext.height);
+        Scene::camera.SetExtent(Window::GetWidth(), Window::GetHeight());
     }
 
-    void updateUniformBuffer(uint32_t currentImage) {
+    void updateUniformBuffer() {
         LUZ_PROFILE_FUNC();
-        scene.UpdateResources(currentImage);
-        Managers::gpuScene.UpdateResources(currentImage);
+        Scene::UpdateResources();
     }
 
     void SetupImgui() {
@@ -461,28 +335,8 @@ private:
 
     void CreateImgui() {
         LUZ_PROFILE_FUNC();
-        auto device = LogicalDevice::GetVkDevice();
-        auto instance = Instance::GetVkInstance();
-
         ImGui_ImplGlfw_InitForVulkan(Window::GetGLFWwindow(), true);
-
-        ImGui_ImplVulkan_InitInfo initInfo{};
-        initInfo.Instance = instance;
-        initInfo.PhysicalDevice = PhysicalDevice::GetVkPhysicalDevice();
-        initInfo.Device = device;
-        initInfo.QueueFamily = PhysicalDevice::GetGraphicsFamily();
-        initInfo.Queue = LogicalDevice::GetGraphicsQueue();
-        initInfo.PipelineCache = VK_NULL_HANDLE;
-        initInfo.DescriptorPool = GraphicsPipelineManager::GetImguiDescriptorPool();
-        initInfo.MinImageCount = 2;
-        initInfo.ImageCount = (uint32_t)SwapChain::GetNumFrames();
-        initInfo.MSAASamples = SwapChain::GetNumSamples();
-        initInfo.Allocator = VK_NULL_HANDLE;
-        initInfo.CheckVkResultFn = CheckVulkanResult;
-        initInfo.UseDynamicRendering = true;
-        initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
-        ImGui_ImplVulkan_Init(&initInfo, VK_NULL_HANDLE);
-        ImGui_ImplVulkan_CreateFontsTexture();
+        vkw::InitImGui();
     }
 
     void DestroyImgui() {

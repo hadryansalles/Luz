@@ -1,48 +1,38 @@
 #include "Luzpch.hpp"
 
 #include "AssetManager.hpp"
-#include "GraphicsPipelineManager.hpp"
-#include "LogicalDevice.hpp"
-#include "RayTracing.hpp"
+//#include "LogicalDevice.hpp"
+#include "VulkanWrapper.h"
 
+#define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-#include <stb_image.h>
+
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#// include <stb_image.h>
 #include <tiny_gltf.h>
 
-#include <imgui/imgui_impl_vulkan.h>
-
 void AssetManager::Setup() {
-    u8* whiteTexture = new u8[4];
-    whiteTexture[0] = 255;
-    whiteTexture[1] = 255;
-    whiteTexture[2] = 255;
-    whiteTexture[3] = 255;
-    u8* blackTexture = new u8[4];
-    blackTexture[0] = 0;
-    blackTexture[1] = 0;
-    blackTexture[2] = 0;
-    blackTexture[3] = 255;
-    CreateTexture("White", whiteTexture, 1, 1);
-    CreateTexture("Black", blackTexture, 1, 1);
-    LoadTexture("assets/blue_noise.png");
 }
 
 void AssetManager::Create() {
     LUZ_PROFILE_FUNC();
-    //UpdateResources();
+    UpdateResources();
 }
 
 void AssetManager::Destroy() {
     meshesLock.lock();
     for (RID i = 0; i < nextMeshRID; i++) {
-        BufferManager::Destroy(meshes[i].vertexBuffer);
-        BufferManager::Destroy(meshes[i].indexBuffer);
+        meshes[i].vertexBuffer = {};
+        meshes[i].indexBuffer = {};
+        meshes[i].blas = {};
         unintializedMeshes.push_back(i);
     }
     meshesLock.unlock();
     texturesLock.lock();
     for (RID i = 0; i < nextTextureRID; i++) {
-        DestroyTextureResource(textures[i]);
+        images[i] = {};
         unintializedTextures.push_back(i);
     }
     texturesLock.unlock();
@@ -82,8 +72,11 @@ RID AssetManager::NewTexture() {
     return rid;
 }
 
-void AssetManager::UpdateResources(Scene& scene) {
+void AssetManager::UpdateResources() {
     LUZ_PROFILE_FUNC();
+
+    // add new loaded models to scene
+    GetLoadedModels();
 
     // initialize new meshes
     meshesLock.lock();
@@ -94,7 +87,21 @@ void AssetManager::UpdateResources(Scene& scene) {
         InitializeMesh(rid);
     }
     if (toInitialize.size()) {
-        RayTracing::CreateBLAS(toInitialize);
+        vkw::BeginCommandBuffer(vkw::Graphics);
+        for (RID meshID : toInitialize) {
+            MeshResource& mesh = meshes[meshID];
+            mesh.blas = vkw::CreateBLAS ({
+                .vertexBuffer = mesh.vertexBuffer,
+                .indexBuffer = mesh.indexBuffer,
+                .vertexCount = mesh.vertexCount,
+                .indexCount = mesh.indexCount,
+                .vertexStride = sizeof(MeshVertex),
+                .name = "Mesh " + std::to_string(meshID)
+            });;
+            vkw::CmdBuildBLAS(mesh.blas);
+        }
+        vkw::EndCommandBuffer();
+        vkw::WaitQueue(vkw::Graphics);
     }
 
     // initialize new textures
@@ -104,41 +111,6 @@ void AssetManager::UpdateResources(Scene& scene) {
     for (RID rid : toInitialize) {
         InitializeTexture(rid);
     }
-    UpdateTexturesDescriptor(toInitialize);
-}
-
-void AssetManager::UpdateTexturesDescriptor(std::vector<RID>& rids) {
-    LUZ_PROFILE_FUNC();
-    if (rids.empty()) {
-        return;
-    }
-    const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    const RID count = rids.size();
-    std::vector<VkDescriptorImageInfo> imageInfos(count);
-    std::vector<VkWriteDescriptorSet> writes(count);
-
-    VkDescriptorSet bindlessDescriptorSet = GraphicsPipelineManager::GetBindlessDescriptorSet();
-    DEBUG_ASSERT(bindlessDescriptorSet != VK_NULL_HANDLE, "Null bindless descriptor set!");
-
-    for (int i = 0; i < count; i++) {
-        RID rid = rids[i];
-        DEBUG_ASSERT(textures[rid].sampler != VK_NULL_HANDLE, "Texture not loaded!");
-        textures[rid].imguiRID = ImGui_ImplVulkan_AddTexture(textures[rid].sampler, textures[rid].image.view, layout);
-
-        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[i].imageView = textures[rid].image.view;
-        imageInfos[i].sampler = textures[rid].sampler;
-
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = bindlessDescriptorSet;
-        writes[i].dstBinding = 0;
-        writes[i].dstArrayElement = rid;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[i].descriptorCount = 1;
-        writes[i].pImageInfo = &imageInfos[i];
-    }
-    vkUpdateDescriptorSets(LogicalDevice::GetVkDevice(), count, writes.data(), 0, nullptr);
-    DEBUG_TRACE("Update descriptor sets in UpdateTexturesDescriptor!");
 }
 
 void AssetManager::InitializeMesh(RID rid) {
@@ -146,8 +118,23 @@ void AssetManager::InitializeMesh(RID rid) {
     MeshDesc& desc = meshDescs[rid];
     res.vertexCount = desc.vertices.size();
     res.indexCount = desc.indices.size();
-    BufferManager::CreateVertexBuffer(res.vertexBuffer, desc.vertices.data(), sizeof(desc.vertices[0]) * desc.vertices.size());
-    BufferManager::CreateIndexBuffer(res.indexBuffer, desc.indices.data(), sizeof(desc.indices[0]) * desc.indices.size());
+    res.vertexBuffer = vkw::CreateBuffer(
+        sizeof(MeshVertex) * desc.vertices.size(),
+        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::Memory::GPU,
+        ("VertexBuffer" + std::to_string(rid))
+    );
+    res.indexBuffer = vkw::CreateBuffer(
+        sizeof(uint32_t) * desc.indices.size(),
+        vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::Memory::GPU,
+        ("IndexBuffer" + std::to_string(rid))
+    );
+    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::CmdCopy(res.vertexBuffer, desc.vertices.data(), res.vertexBuffer.size);
+    vkw::CmdCopy(res.indexBuffer, desc.indices.data(), res.indexBuffer.size);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Transfer);
 }
 
 void AssetManager::RecenterMesh(RID rid) {
@@ -189,9 +176,21 @@ void AssetManager::RecenterMesh(RID rid) {
 }
 
 void AssetManager::InitializeTexture(RID id) {
-    TextureResource& res = textures[id];
     TextureDesc& desc = textureDescs[id];
-    CreateTextureResource(desc, res);
+
+    images[id] = vkw::CreateImage({
+        .width = desc.width,
+        .height = desc.height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+        .name = "Texture " + std::to_string(id),
+    });
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+    vkw::CmdBarrier(images[id], vkw::Layout::TransferDst);
+    vkw::CmdCopy(images[id], desc.data, desc.width * desc.height * 4);
+    vkw::CmdBarrier(images[id], vkw::Layout::ShaderRead);
+    vkw::EndCommandBuffer();
+    vkw::WaitQueue(vkw::Queue::Graphics);
 }
 
 bool AssetManager::IsModel(std::filesystem::path path) {
@@ -203,14 +202,14 @@ bool AssetManager::IsTexture(std::filesystem::path path) {
     return extension == ".JPG" || extension == ".jpg" || extension == ".png" || extension == ".tga";
 }
 
-Entity* AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
+void AssetManager::LoadOBJ(std::filesystem::path path) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
     std::filesystem::path parentPath = path.parent_path();
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str(), parentPath.string().c_str(), true)) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(), parentPath.string().c_str())) {
         LOG_ERROR("{} {}", warn, err);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
@@ -235,9 +234,9 @@ Entity* AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
         LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
-    Entity* collection = nullptr;
+    Collection* collection = nullptr;
     if (shapes.size() > 1) {
-        collection = scene.CreateEntity();
+        collection = Scene::CreateCollection();
         collection->name = path.stem().string();
     }
     for (size_t i = 0; i < shapes.size(); i++) {
@@ -308,10 +307,9 @@ Entity* AssetManager::LoadOBJ(std::filesystem::path path, Scene& scene) {
             }
         }
     }
-    return collection;
 }
 
-Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
+void AssetManager::LoadGLTF(std::filesystem::path path) {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
@@ -335,12 +333,12 @@ Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
 
     if (!ret) {
       LOG_ERROR("Failed to parse glTF");
-      return nullptr;
+      return;
     }
 
+    const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     const auto getBuffer = [&](auto& accessor, auto& view) { return &model.buffers[view.buffer].data[view.byteOffset + accessor.byteOffset]; };
 
-    // load textures
     std::vector<RID> loadedTextures(model.textures.size());
     for (int i = 0; i < model.textures.size(); i++) {
 
@@ -369,8 +367,8 @@ Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
         desc.path = texture.name;
     }
 
-    // load materials
     std::vector<MaterialBlock> materials(model.materials.size());
+
     for (int i = 0; i < materials.size(); i++) {
         auto& mat = model.materials[i];
         // pbr
@@ -404,12 +402,26 @@ Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
         }
     }
 
-    // load meshes
-    std::vector<std::vector<RID>> loadedMeshes;
-    loadedMeshes.reserve(model.meshes.size());
-    for (const tinygltf::Mesh& mesh : model.meshes) {
-        std::vector<RID>& loadedPrimitives = loadedMeshes.emplace_back();
-        loadedPrimitives.reserve(mesh.primitives.size());
+    Collection* sceneCollection = nullptr;
+    if (model.meshes.size() > 1) {
+        sceneCollection = Scene::CreateCollection();
+        sceneCollection->name = path.stem().string();
+    }
+    for (const tinygltf::Mesh & mesh : model.meshes) {
+        Collection* collection = nullptr;
+        if (mesh.primitives.size() > 1) {
+            collection = Scene::CreateCollection();
+            if (model.nodes.size() > 0) {
+                if (model.nodes[0].scale.size() == 3) {
+                    glm::vec3 scale(model.nodes[0].scale[0], model.nodes[0].scale[1], model.nodes[0].scale[2]);
+                    collection->transform.SetScale(scale);
+                }
+            }
+            if (sceneCollection) {
+                Scene::SetCollection(collection, sceneCollection);
+            }
+            collection->name = mesh.name != "" ? mesh.name : path.stem().string();
+        }
         for (int i = 0; i < mesh.primitives.size(); i++) {
             const tinygltf::Primitive& primitive = mesh.primitives[i];
             MeshDesc desc{};
@@ -494,7 +506,7 @@ Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
                     for (u32 i = 0; i < indexCount; i++) {
                         desc.indices.push_back(bufferIndex[i]);
                     }
-                    };
+                };
                 switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
                     pushIndices((u32*)getBuffer(accessor, bufferView));
@@ -512,7 +524,7 @@ Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
 
             // calculate tangents
             if (!bufferTangents) {
-                glm::vec3* tan1 = new glm::vec3[desc.vertices.size() * 2];
+                glm::vec3* tan1 = new glm::vec3[desc.vertices.size()*2];
                 glm::vec3* tan2 = tan1 + vertexCount;
                 for (int indexID = 0; indexID < desc.indices.size(); indexID += 3) {
                     int index1 = desc.indices[indexID + 0];
@@ -545,184 +557,23 @@ Entity* AssetManager::LoadGLTF(std::filesystem::path path, Scene& scene) {
                 delete[] tan1;
             }
 
-            RID newMesh = NewMesh();
-            loadedPrimitives.push_back(newMesh);
-            desc.materialIndex = primitive.material;
-            meshDescs[newMesh] = std::move(desc);
-        }
-    }
-
-    // just load the assets
-    if (model.scenes.size() == 0 || model.defaultScene == -1 || model.defaultScene >= model.scenes.size()) {
-        return nullptr;
-    }
-
-    Entity* rootEntity = scene.CreateEntity();
-    std::vector<Entity*> newEntities;
-    // create models and intermediary entities
-    for (tinygltf::Node& node : model.nodes) {
-        Entity* ent = scene.CreateEntity();
-        newEntities.push_back(ent);
-        if (node.mesh != -1) {
-            const tinygltf::Mesh& mesh = model.meshes[node.mesh];
-            for (int i = 0; i < mesh.primitives.size(); i++) {
-                Model* modelEntity = scene.CreateModel();
-                scene.SetParent(modelEntity, ent);
-                modelEntity->name = mesh.name + "_" + std::to_string(i);
-                modelEntity->mesh = loadedMeshes[node.mesh][i];
-                modelEntity->block.material = materials[meshDescs[modelEntity->mesh].materialIndex];
+            RID meshID = NewMesh();
+            Model model;
+            model.name = desc.name;
+            model.mesh = meshID;
+            model.parent = collection;
+            if (!collection) {
+                model.parent = sceneCollection;
             }
-        }
-        ent->name = node.name;
-        if (node.translation.size()) {
-            ent->transform.position = { node.translation[0], node.translation[1], node.translation[2] };
-        }
-        if (node.scale.size()) {
-            ent->transform.scale = { node.scale[0], node.scale[1], node.scale[2] };
-        }
-        if (node.rotation.size()) {
-            glm::quat quat = { (float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3] };
-            glm::vec3 euler = glm::eulerAngles(quat);
-            ent->transform.rotation = { euler[0], euler[1], euler[2] };
+            if (primitive.material > -1) {
+                model.block.material = materials[primitive.material];
+            }
+            loadedModelsLock.lock();
+            loadedModels.push_back(model);
+            loadedModelsLock.unlock();
+            meshDescs[meshID] = std::move(desc);
         }
     }
-
-    // add root entities
-    tinygltf::Scene& defaultScene = model.scenes[model.defaultScene];
-    for (int i = 0; i < defaultScene.nodes.size(); i++) {
-        i32 nodeId = defaultScene.nodes[i];
-        scene.SetParent(newEntities[nodeId], rootEntity);
-    }
-
-    // connect node hierarchy
-    for (int i = 0; i < model.nodes.size(); i++) {
-        tinygltf::Node& node = model.nodes[i];
-        for (int j = 0; j < node.children.size(); j++) {
-            scene.SetParent(newEntities[node.children[j]], newEntities[i]);
-        }
-    }
-
-    return rootEntity;
-}
-
-void AssetManager::SaveGLTF(const std::filesystem::path& path, const Scene& scene) {
-    tinygltf::Model gltf;
-    tinygltf::Node node;
-
-    for (int i = 0; i < nextMeshRID; i++) {
-        MeshDesc& desc = meshDescs[i];
-
-        tinygltf::Mesh& m = gltf.meshes.emplace_back();
-        tinygltf::Primitive& p = m.primitives.emplace_back();
-        p.mode = TINYGLTF_MODE_TRIANGLES;
-
-        tinygltf::Buffer& vbuffer = gltf.buffers.emplace_back();
-        vbuffer.data.resize(desc.vertices.size() * sizeof(MeshVertex));
-        memcpy(vbuffer.data.data(), desc.vertices.data(), desc.vertices.size() * sizeof(MeshVertex));
-
-        {
-            // position
-            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
-            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
-            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-            accessor.count = desc.vertices.size();
-            accessor.type = TINYGLTF_TYPE_VEC3;
-            bufferView.buffer = gltf.buffers.size() - 1;
-            bufferView.byteOffset = offsetof(MeshVertex, pos);
-            bufferView.byteStride = sizeof(MeshVertex);
-            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
-            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-            accessor.bufferView = gltf.bufferViews.size() - 1;
-            p.attributes["POSITION"] = gltf.accessors.size() - 1;
-        }
-        {
-            // normal
-            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
-            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
-            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-            accessor.count = desc.vertices.size();
-            accessor.type = TINYGLTF_TYPE_VEC3;
-            bufferView.buffer = gltf.buffers.size() - 1;
-            bufferView.byteOffset = offsetof(MeshVertex, normal);
-            bufferView.byteStride = sizeof(MeshVertex);
-            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
-            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-            accessor.bufferView = gltf.bufferViews.size() - 1;
-            p.attributes["NORMAL"] = gltf.accessors.size() - 1;
-        }
-        {
-            // tangent
-            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
-            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
-            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-            accessor.count = desc.vertices.size();
-            accessor.type = TINYGLTF_TYPE_VEC3;
-            bufferView.buffer = gltf.buffers.size() - 1;
-            bufferView.byteOffset = offsetof(MeshVertex, tangent);
-            bufferView.byteStride = sizeof(MeshVertex);
-            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
-            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-            accessor.bufferView = gltf.bufferViews.size() - 1;
-            p.attributes["TANGENT"] = gltf.accessors.size() - 1;
-        }
-        {
-            // uvs
-            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
-            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
-            accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-            accessor.count = desc.vertices.size();
-            accessor.type = TINYGLTF_TYPE_VEC2;
-            bufferView.buffer = gltf.buffers.size() - 1;
-            bufferView.byteOffset = offsetof(MeshVertex, texCoord);
-            bufferView.byteStride = sizeof(MeshVertex);
-            bufferView.byteLength = desc.vertices.size() * sizeof(MeshVertex);
-            bufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-            accessor.bufferView = gltf.bufferViews.size() - 1;
-            p.attributes["TEXCOORD_0"] = gltf.accessors.size() - 1;
-        }
-
-        tinygltf::Buffer& ibuffer = gltf.buffers.emplace_back();
-        ibuffer.data.resize(desc.indices.size() * sizeof(u32));
-        memcpy(ibuffer.data.data(), desc.indices.data(), desc.indices.size() * sizeof(u32));
-
-        {
-            // indices
-            tinygltf::Accessor& accessor = gltf.accessors.emplace_back();
-            tinygltf::BufferView& bufferView = gltf.bufferViews.emplace_back();
-            accessor.componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT;
-            accessor.count = desc.indices.size();
-            accessor.type = TINYGLTF_TYPE_SCALAR;
-            bufferView.buffer = gltf.buffers.size() - 1;
-            bufferView.byteStride = 0;
-            bufferView.byteOffset = 0;
-            bufferView.byteLength = desc.indices.size() * sizeof(u32);
-            bufferView.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
-            accessor.bufferView = gltf.bufferViews.size() - 1;
-            p.indices = gltf.accessors.size() - 1;
-        }
-    }
-
-    tinygltf::Scene& s = gltf.scenes.emplace_back();
-    gltf.defaultScene = 0;
-
-    for (Model* model : scene.modelEntities) {
-        tinygltf::Node& node = gltf.nodes.emplace_back();
-        node.mesh = model->mesh;
-
-        glm::vec3 pos = model->transform.position;
-        node.translation = { pos.x, pos.y, pos.z };
-
-        glm::vec3 scl = model->transform.scale;
-        node.scale = { scl.x, scl.y, scl.z };
-
-        glm::quat rot = glm::quat(model->transform.rotation);
-        node.rotation = { rot.x, rot.y, rot.z, rot.w };
-
-        s.nodes.push_back(gltf.nodes.size() - 1);
-    }
-
-    tinygltf::TinyGLTF exporter;
-    exporter.WriteGltfSceneToFile(&gltf, path.string(), true, true, true, false);
 }
 
 RID AssetManager::CreateTexture(std::string name, u8* data, u32 width, u32 height) {
@@ -774,9 +625,31 @@ RID AssetManager::LoadTexture(std::filesystem::path path) {
     return rid;
 }
 
-Entity* AssetManager::LoadModel(std::filesystem::path path, Scene& scene) {
-    if (IsOBJ(path)) { return LoadOBJ(path, scene); }
-    else if (IsGLTF(path)) { return LoadGLTF(path, scene); }
+Model* AssetManager::LoadModel(std::filesystem::path path) {
+    auto models = LoadModels(path);
+    ASSERT(models.size() == 1, "LoadModel loaded more than one model.");
+    return models[0];
+}
+
+std::vector<Model*> AssetManager::LoadModels(std::filesystem::path path) {
+    if (loadedModels.size() != 0) {
+        LOG_WARN("Sync load models with loaded models waiting to fetch...");
+    }
+    if (IsOBJ(path)) { LoadOBJ(path); }
+    else if (IsGLTF(path)) { LoadGLTF(path); }
+    return GetLoadedModels();
+}
+
+std::vector<Model*> AssetManager::GetLoadedModels() {
+    loadedModelsLock.lock();
+    std::vector<Model> models = std::move(loadedModels);
+    loadedModels.clear();
+    loadedModelsLock.unlock();
+    std::vector<Model*> newModels(models.size());
+    for (int i = 0; i < models.size(); i++) {
+        newModels[i] = Scene::CreateModel(&models[i]);
+    }
+    return newModels;
 }
 
 bool AssetManager::IsOBJ(std::filesystem::path path) {
@@ -785,6 +658,11 @@ bool AssetManager::IsOBJ(std::filesystem::path path) {
 
 bool AssetManager::IsGLTF(std::filesystem::path path) {
     return path.extension() == ".gltf" || path.extension() == ".glb";
+}
+
+void AssetManager::AsyncLoadModels(std::filesystem::path path) {
+    if (IsOBJ(path)) { std::thread(LoadOBJ, path).detach(); }
+    else if (IsGLTF(path)) { std::thread(LoadGLTF, path).detach(); }
 }
 
 void DirOnImgui(std::filesystem::path path) {
@@ -822,7 +700,7 @@ void DirOnImgui(std::filesystem::path path) {
 
 void AssetManager::OnImgui() {
     const float totalWidth = ImGui::GetContentRegionAvail().x;
-    const float leftSpacing = totalWidth*1.0f/3.0f;
+    const float leftSpacing = ImGui::GetContentRegionAvail().x*1.0f/3.0f;
     if (ImGui::CollapsingHeader("Files", ImGuiTreeNodeFlags_DefaultOpen)) { 
         DirOnImgui(std::filesystem::path("assets"));
     }
@@ -856,13 +734,13 @@ void AssetManager::OnImgui() {
             if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
-                DrawTextureOnImgui(textures[rid]);
+                DrawTextureOnImgui(images[rid]);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(textures[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
                 ImGui::TreePop();
