@@ -112,7 +112,7 @@ struct Buffer {
     uint32_t size;
     BufferUsageFlags usage;
     MemoryFlags memory;
-    uint32_t rid;
+    uint32_t RID();
 };
 
 struct Image {
@@ -123,8 +123,8 @@ struct Image {
     Format format;
     Layout::ImageLayout layout;
     AspectFlags aspect;
-    uint32_t rid;
-    ImTextureID imguiRID;
+    uint32_t RID();
+    ImTextureID ImGuiRID();
 };
 
 enum Queue {
@@ -202,7 +202,7 @@ struct BLASDesc {
 
 struct TLAS {
     std::shared_ptr<TLASResource> resource;
-    uint32_t rid;
+    uint32_t RID();
 };
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");

@@ -160,11 +160,11 @@ void LightPass(LightConstants constants) {
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
     vkw::CmdBarrier(ctx.light, vkw::Layout::ColorAttachment);
 
-    constants.albedoRID = ctx.albedo.rid;
-    constants.normalRID = ctx.normal.rid;
-    constants.materialRID = ctx.material.rid;
-    constants.emissionRID = ctx.emission.rid;
-    constants.depthRID = ctx.depth.rid;
+    constants.albedoRID = ctx.albedo.RID();
+    constants.normalRID = ctx.normal.RID();
+    constants.materialRID = ctx.material.RID();
+    constants.emissionRID = ctx.emission.RID();
+    constants.depthRID = ctx.depth.RID();
 
     vkw::CmdBeginRendering({ ctx.light }, {});
     vkw::CmdBindPipeline(ctx.lightPipeline);
@@ -178,12 +178,12 @@ void ComposePass() {
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
 
     ComposeConstant constants;
-    constants.lightRID = ctx.light.rid;
-    constants.albedoRID = ctx.albedo.rid;
-    constants.normalRID = ctx.normal.rid;
-    constants.materialRID = ctx.material.rid;
-    constants.emissionRID = ctx.emission.rid;
-    constants.depthRID = ctx.depth.rid;
+    constants.lightRID = ctx.light.RID();
+    constants.albedoRID = ctx.albedo.RID();
+    constants.normalRID = ctx.normal.RID();
+    constants.materialRID = ctx.material.RID();
+    constants.emissionRID = ctx.emission.RID();
+    constants.depthRID = ctx.depth.RID();
     constants.imageType = ctx.presentType;
 
     vkw::CmdBeginRendering({ ctx.compose });
@@ -219,8 +219,7 @@ void OnImgui(int numFrame) {
 }
 
 void ViewportOnImGui() {
-    DEBUG_TRACE("compose rid = {} imguirid = {}", ctx.compose.rid, ctx.compose.imguiRID);
-    ImGui::Image(ctx.compose.imguiRID, ImGui::GetWindowSize());
+    ImGui::Image(ctx.compose.ImGuiRID(), ImGui::GetWindowSize());
 
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);

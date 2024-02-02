@@ -98,8 +98,8 @@ void CreateResources() {
 
 void UpdateResources() {
     LUZ_PROFILE_FUNC();
-    scene.whiteTexture = whiteTexture.rid;
-    scene.blackTexture = blackTexture.rid;
+    scene.whiteTexture = whiteTexture.RID();
+    scene.blackTexture = blackTexture.RID();
     scene.numLights = 0;
     for (int i = 0; i < modelEntities.size(); i++) {
         Model* model = modelEntities[i];
@@ -107,29 +107,29 @@ void UpdateResources() {
         models[i] = model->block;
         models[i].model = model->transform.GetMatrix();
         if (!model->useColorMap || model->block.material.colorMap == -1) {
-            models[i].material.colorMap = whiteTexture.rid;
+            models[i].material.colorMap = whiteTexture.RID();
         } else {
-            models[i].material.colorMap = AssetManager::images[model->block.material.colorMap].rid;
+            models[i].material.colorMap = AssetManager::images[model->block.material.colorMap].RID();
         }
         if (!model->useNormalMap || model->block.material.normalMap == -1) {
-            models[i].material.normalMap = whiteTexture.rid;
+            models[i].material.normalMap = whiteTexture.RID();
         } else {
-            models[i].material.normalMap = AssetManager::images[model->block.material.normalMap].rid;
+            models[i].material.normalMap = AssetManager::images[model->block.material.normalMap].RID();
         }
         if (!model->useMetallicRoughnessMap || model->block.material.metallicRoughnessMap == -1) {
-            models[i].material.metallicRoughnessMap = whiteTexture.rid;
+            models[i].material.metallicRoughnessMap = whiteTexture.RID();
         } else {
-            models[i].material.metallicRoughnessMap = AssetManager::images[model->block.material.metallicRoughnessMap].rid;
+            models[i].material.metallicRoughnessMap = AssetManager::images[model->block.material.metallicRoughnessMap].RID();
         }
         if (!model->useEmissionMap || model->block.material.emissionMap == -1) {
-            models[i].material.emissionMap = blackTexture.rid;
+            models[i].material.emissionMap = blackTexture.RID();
         } else {
-            models[i].material.emissionMap = AssetManager::images[model->block.material.emissionMap].rid;
+            models[i].material.emissionMap = AssetManager::images[model->block.material.emissionMap].RID();
         }
         if (!model->useAoMap || model->block.material.aoMap == -1) {
-            models[i].material.aoMap = whiteTexture.rid;
+            models[i].material.aoMap = whiteTexture.RID();
         } else {
-            models[i].material.aoMap = AssetManager::images[model->block.material.aoMap].rid;
+            models[i].material.aoMap = AssetManager::images[model->block.material.aoMap].RID();
         }
     }
     for (int i = 0; i < lightEntities.size(); i++) {
@@ -137,10 +137,10 @@ void UpdateResources() {
         Light* light = lightEntities[i];
         light->id = id;
         models[id].model = light->transform.GetMatrix();
-        models[id].material.colorMap = whiteTexture.rid;
+        models[id].material.colorMap = whiteTexture.RID();
         models[id].material.color = glm::vec4(0, 0, 0, 1);
         models[id].material.emission = light->block.color * light->block.intensity;
-        models[id].material.emissionMap = whiteTexture.rid;
+        models[id].material.emissionMap = whiteTexture.RID();
         scene.lights[scene.numLights] = light->block;
         scene.lights[scene.numLights].position = light->transform.position;
         scene.lights[scene.numLights].direction = light->transform.GetGlobalFront();
@@ -153,7 +153,7 @@ void UpdateResources() {
     scene.projView = camera.GetProj() * camera.GetView();
     scene.inverseProj = glm::inverse(camera.GetProj());
     scene.inverseView = glm::inverse(camera.GetView());
-    scene.tlasRid = tlas.rid;
+    scene.tlasRid = tlas.RID();
 }
 
 void DestroyResources() {

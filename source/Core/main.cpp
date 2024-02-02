@@ -82,10 +82,10 @@ private:
 
     void DestroyVulkan() {
         LUZ_PROFILE_FUNC();
-        DestroyImgui();
         Scene::DestroyResources();
         DeferredShading::Destroy();
         AssetManager::Destroy();
+        DestroyImgui();
         vkw::Destroy();
         Window::Destroy();
     }
@@ -224,8 +224,8 @@ private:
         DeferredShading::BeginOpaquePass();
 
         DeferredShading::OpaqueConstants constants;
-        constants.sceneBufferIndex = Scene::sceneBuffer.rid;
-        constants.modelBufferIndex = Scene::modelsBuffer.rid;
+        constants.sceneBufferIndex = Scene::sceneBuffer.RID();
+        constants.modelBufferIndex = Scene::modelsBuffer.RID();
 
         for (Model* model : Scene::modelEntities) {
             constants.modelID = model->id;

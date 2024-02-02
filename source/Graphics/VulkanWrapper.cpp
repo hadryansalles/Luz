@@ -151,7 +151,7 @@ struct Context {
     InternalQueue queues[Queue::Count];
     Queue currentQueue = Queue::Count;
     std::shared_ptr<PipelineResource> currentPipeline;
-    const uint32_t stagingBufferSize = 64 * 1024 * 1024;
+    const uint32_t stagingBufferSize = 256 * 1024 * 1024;
 
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -170,9 +170,9 @@ struct Context {
     bool swapChainDirty = true;
     uint32_t currentImageIndex = 0;
 
-    uint32_t nextBufferRID = 0;
-    uint32_t nextImageRID = 0;
-    uint32_t nextTLASRID = 0;
+    std::vector<int32_t> availableBufferRID;
+    std::vector<int32_t> availableImageRID;
+    std::vector<int32_t> availableTLASRID;
     VkSampler genericSampler;
 
     // preferred, warn if not available
@@ -228,6 +228,7 @@ static Context _ctx;
 
 struct Resource {
     std::string name;
+    int32_t rid = -1;
     virtual ~Resource() {};
 };
 
@@ -246,12 +247,19 @@ struct ImageResource : Resource {
     VkImageView view;
     VkDeviceMemory memory;
     bool fromSwapchain = false;
+    ImTextureID imguiRID = nullptr;
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
             vkDestroyImageView(_ctx.device, view, _ctx.allocator);
             vkDestroyImage(_ctx.device, image, _ctx.allocator);
             vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+            if (rid >= 0) {
+                _ctx.availableImageRID.push_back(rid);
+                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+                rid = -1;
+                imguiRID = nullptr;
+            }
         }
     }
 };
@@ -294,6 +302,28 @@ struct BLASResource : Resource {
         buffer = {};
     }
 };
+
+uint32_t Buffer::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid buffer rid");
+    return uint32_t(resource->rid);
+}
+
+uint32_t TLAS::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid tlas rid");
+    return uint32_t(resource->rid);
+}
+
+uint32_t Image::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid image rid");
+    return uint32_t(resource->rid);
+}
+
+ImTextureID Image::ImGuiRID() {
+    if (!resource || resource->rid == -1) {
+        return nullptr;
+    }
+    return resource->imguiRID;
+}
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     _ctx.CreateInstance(window);
@@ -393,11 +423,11 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         .size = size,
         .usage = usage,
         .memory = memory,
-        .rid = 0
     };
 
     if (usage & BufferUsage::Storage) {
-        buffer.rid = _ctx.nextBufferRID++;
+        res->rid = _ctx.availableBufferRID.back();
+        _ctx.availableBufferRID.pop_back();
         VkDescriptorBufferInfo descriptorInfo = {};
         VkWriteDescriptorSet write = {};
         descriptorInfo.buffer = res->buffer;
@@ -406,7 +436,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = _ctx.bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_BUFFER;
-        write.dstArrayElement = buffer.rid;
+        write.dstArrayElement = buffer.RID();
         write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         write.descriptorCount = 1;
         write.pBufferInfo = &descriptorInfo;
@@ -490,7 +520,6 @@ Image CreateImage(const ImageDesc& desc) {
         .format = desc.format,
         .layout = Layout::Undefined,
         .aspect = aspect,
-        .rid = _ctx.nextImageRID++,
     };
 
     if (desc.usage & ImageUsage::Sampled) {
@@ -500,7 +529,9 @@ Image CreateImage(const ImageDesc& desc) {
         } else if (aspect == Aspect::Depth) {
             newLayout = Layout::DepthRead;
         }
-        image.imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        res->imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        res->rid = _ctx.availableImageRID.back();
+        _ctx.availableImageRID.pop_back();
 
         VkDescriptorImageInfo descriptorInfo = {
             .sampler = _ctx.genericSampler,
@@ -511,7 +542,7 @@ Image CreateImage(const ImageDesc& desc) {
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = _ctx.bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_TEXTURE;
-        write.dstArrayElement = image.rid;
+        write.dstArrayElement = image.RID();
         write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         write.descriptorCount = 1;
         write.pImageInfo = &descriptorInfo;
@@ -550,8 +581,9 @@ TLAS CreateTLAS(uint32_t maxInstances, const std::string& name) {
     TLAS tlas;
     tlas.resource = std::make_shared<TLASResource>();
     tlas.resource->name = name;
-    tlas.rid = _ctx.nextTLASRID++;
     std::shared_ptr<TLASResource>& tlasRes = tlas.resource;
+    tlasRes->rid = _ctx.availableTLASRID.back();
+    _ctx.availableTLASRID.pop_back();
     auto& device = _ctx.device;
 
     tlasRes->instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * maxInstances, vkw::BufferUsage::AccelerationStructureInput, vkw::Memory::GPU);
@@ -608,7 +640,7 @@ TLAS CreateTLAS(uint32_t maxInstances, const std::string& name) {
     writeBindlessAccelerationStructure.pNext = &descriptorAccelerationStructure;
     writeBindlessAccelerationStructure.dstSet = _ctx.bindlessDescriptorSet;
     writeBindlessAccelerationStructure.dstBinding = LUZ_BINDING_TLAS;
-    writeBindlessAccelerationStructure.dstArrayElement = tlas.rid;
+    writeBindlessAccelerationStructure.dstArrayElement = tlas.RID();
     writeBindlessAccelerationStructure.descriptorCount = 1;
     writeBindlessAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     writes.push_back(writeBindlessAccelerationStructure);
@@ -1510,6 +1542,8 @@ void Context::CreatePhysicalDevice() {
 
 void Context::CreateDevice() {
     LUZ_PROFILE_FUNC();
+
+
     std::set<uint32_t> uniqueFamilies;
     for (int q = 0; q < Queue::Count; q++) {
         uniqueFamilies.emplace(queues[q].family);
@@ -1644,6 +1678,16 @@ void Context::CreateDevice() {
         const u32 MAX_STORAGE = physicalProperties.limits.maxPerStageDescriptorStorageBuffers;
         const u32 MAX_SAMPLEDIMAGES = physicalProperties.limits.maxPerStageDescriptorSampledImages;
         const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+
+        for (int i = 0; i < MAX_STORAGE; i++) {
+            availableBufferRID.push_back(i);
+        }
+        for (int i = 0; i < MAX_SAMPLEDIMAGES; i++) {
+            availableImageRID.push_back(i);
+        }
+        for (int i = 0; i < MAX_ACCELERATIONSTRUCTURE; i++) {
+            availableTLASRID.push_back(i);
+        }
 
         // create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
