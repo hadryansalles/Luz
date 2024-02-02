@@ -66,7 +66,7 @@ struct Context {
 
     VkDevice device = VK_NULL_HANDLE;
 
-    const uint32_t timeStampPerPool = 32;
+    const uint32_t timeStampPerPool = 64;
     struct CommandResources {
         u8* stagingCpu = nullptr;
         uint32_t stagingOffset = 0;
@@ -119,6 +119,8 @@ struct Context {
     const uint32_t initialScratchBufferSize = 64*1024*1024;
     Buffer asScratchBuffer;
     VkDeviceAddress asScratchAddress;
+
+    std::map<std::string, float> timeStampTable;
 
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();
@@ -1042,14 +1044,26 @@ void CmdDrawImGui(ImDrawData* data) {
     ImGui_ImplVulkan_RenderDrawData(data, _ctx.GetCurrentCommandResources().buffer);
 }
 
-void CmdWriteTimeStamp(const std::string& name) {
-    DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Write Time Stamp not supported in Transfer queue");
+int CmdBeginTimeStamp(const std::string& name) {
+    DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
     auto& cmd = _ctx.GetCurrentCommandResources();
-    if (cmd.timeStampNames.size() > 0) {
-        vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, 2 * (cmd.timeStampNames.size() - 1) + 1);
+    int id = cmd.timeStamps.size();
+    if (id >= _ctx.timeStampPerPool - 1) {
+        LOG_WARN("Maximum number of time stamp per pool exceeded. Ignoring Time stamp {}", name.c_str());
+        return -1;
     }
-    vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, cmd.queryPool, 2 * (cmd.timeStampNames.size() - 1) + 2);
+    vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, cmd.queryPool, id);
+    cmd.timeStamps.push_back(0);
+    cmd.timeStamps.push_back(0);
     cmd.timeStampNames.push_back(name);
+    return id;
+}
+
+void CmdEndTimeStamp(int timeStampIndex) {
+    if (timeStampIndex >= 0 && timeStampIndex < _ctx.timeStampPerPool - 1) {
+        auto& cmd = _ctx.GetCurrentCommandResources();
+        vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, timeStampIndex + 1);
+    }
 }
 
 void CmdBindPipeline(Pipeline& pipeline) {
@@ -1072,6 +1086,17 @@ void BeginCommandBuffer(Queue queue) {
     vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
     vkResetFences(_ctx.device, 1, &cmd.fence);
 
+    if (cmd.timeStamps.size() > 0) {
+        vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, cmd.timeStamps.size(), cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+        for (int i = 0; i < cmd.timeStampNames.size(); i++) {
+            const uint64_t begin = cmd.timeStamps[2 * i];
+            const uint64_t end = cmd.timeStamps[2 * i + 1];
+            _ctx.timeStampTable[cmd.timeStampNames[i]] = float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f;
+        }
+        cmd.timeStamps.clear();
+        cmd.timeStampNames.clear();
+    }
+
     Context::InternalQueue& iqueue = _ctx.queues[queue];
     vkResetCommandPool(_ctx.device, cmd.pool, 0);
     cmd.stagingOffset = 0;
@@ -1079,22 +1104,14 @@ void BeginCommandBuffer(Queue queue) {
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(cmd.buffer, &beginInfo);
-    
+
     if (queue != Queue::Transfer) {
-        if (cmd.timeStampNames.size() > 0) {
-            vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, _ctx.timeStampPerPool, cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), 2 * sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
-        }
         vkCmdResetQueryPool(cmd.buffer, cmd.queryPool, 0, _ctx.timeStampPerPool);
     }
-    cmd.timeStampNames.clear();
 }
 
 void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
     auto& cmd = GetCurrentCommandResources();
-
-    if (cmd.timeStampNames.size() > 0) {
-        vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, 2 * (cmd.timeStampNames.size() - 1) + 1);
-    }
 
     vkEndCommandBuffer(cmd.buffer);
 
@@ -1865,7 +1882,8 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
                 res = vkCreateQueryPool(device, &queryPoolInfo, allocator, &queue.commands[i].queryPool);
                 DEBUG_VK(res, "failed to create query pool");
 
-                queue.commands[i].timeStamps.resize(2 * timeStampPerPool);
+                queue.commands[i].timeStamps.clear();
+                queue.commands[i].timeStampNames.clear();
             }
         }
     }
@@ -1919,24 +1937,8 @@ bool GetSwapChainDirty() {
     return _ctx.swapChainDirty;
 }
 
-void GetTimeStamps(std::vector<std::string>& names, std::vector<float>& times) {
-    names.clear();
-    times.clear();
-    for (int q = 0; q < Queue::Count; q++) {
-        for (int f = 0; f < _ctx.framesInFlight; f++) {
-            auto& cmd = _ctx.queues[q].commands[f];
-            for (int i = 0; i < cmd.timeStampNames.size() && i < _ctx.timeStampPerPool; i++) {
-                uint32_t begin_idx = 2 * 2 * i;
-                uint32_t end_idx = 2 * (2 * i + 1);
-                if (cmd.timeStamps[begin_idx + 1] == 1 && cmd.timeStamps[end_idx + 1] == 1) {
-                    names.push_back(cmd.timeStampNames[i]);
-                    uint64_t begin = cmd.timeStamps[begin_idx];
-                    uint64_t end = cmd.timeStamps[end_idx];
-                    times.push_back(float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f);
-                }
-            }
-        }
-    }
+void GetTimeStamps(std::map<std::string, float>& timeTable) {
+    timeTable = _ctx.timeStampTable;
 }
 
 void SubmitAndPresent() {

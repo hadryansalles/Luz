@@ -153,21 +153,6 @@ void UpdateResources() {
     scene.inverseProj = glm::inverse(camera.GetProj());
     scene.inverseView = glm::inverse(camera.GetView());
     scene.tlasRid = tlas.rid;
-
-    std::vector<vkw::BLASInstance> vkwInstances(modelEntities.size());
-    for (int i = 0; i < modelEntities.size(); i++) {
-        MeshResource& mesh = AssetManager::meshes[modelEntities[i]->mesh];
-        vkwInstances[i] = {
-            .blas = mesh.blas,
-            .modelMat = modelEntities[i]->transform.GetMatrix(),
-            .customIndex = modelEntities[i]->id,
-        };
-    }
-    vkw::BeginCommandBuffer(vkw::Compute);
-    vkw::CmdWriteTimeStamp("BuildTLAS");
-    vkw::CmdBuildTLAS(tlas, vkwInstances);
-    vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Compute);
 }
 
 void DestroyResources() {

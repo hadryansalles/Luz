@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string>
 #include <filesystem>
+#include <map>
 
 struct GLFWwindow;
 
@@ -213,7 +214,8 @@ BLAS CreateBLAS(const BLASDesc& desc);
 void AcquireImage();
 void SubmitAndPresent();
 bool GetSwapChainDirty();
-void GetTimeStamps(std::vector<std::string>& names, std::vector<float>& times);
+
+void GetTimeStamps(std::map<std::string, float>& timeTable);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -232,7 +234,9 @@ void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
 void CmdDrawPassThrough();
 void CmdDrawImGui(ImDrawData* data);
-void CmdWriteTimeStamp(const std::string& name);
+
+int CmdBeginTimeStamp(const std::string& name);
+void CmdEndTimeStamp(int timeStampIndex);
 
 void BeginCommandBuffer(Queue queue);
 void EndCommandBuffer();
@@ -243,5 +247,12 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void InitImGui();
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
+
+template<typename T>
+void CmdTimeStamp(const std::string& name, T callback) {
+    int id = CmdBeginTimeStamp(name);
+    callback();
+    CmdEndTimeStamp(id);
+}
 
 }

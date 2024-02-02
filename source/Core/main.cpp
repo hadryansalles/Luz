@@ -163,11 +163,10 @@ private:
         ImGui::End();
 
         if (ImGui::Begin("Profiler")) {
-            std::vector<std::string> names;
-            std::vector<float> times;
-            vkw::GetTimeStamps(names, times);
-            for (int i = 0; i < names.size(); i++) {
-                ImGui::Text("%s: %.3f", names[i].c_str(), times[i]);
+            std::map<std::string, float> timeTable;
+            vkw::GetTimeStamps(timeTable);
+            for (const auto& pair : timeTable) {
+                ImGui::Text("%s: %.3f", pair.first.c_str(), pair.second);
             }
         }
         ImGui::End();
@@ -183,12 +182,25 @@ private:
     void updateCommandBuffer() {
         LUZ_PROFILE_FUNC();
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+        auto totalTS = vkw::CmdBeginTimeStamp("GPU::Total");
 
         vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
         vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
+        vkw::CmdTimeStamp("GPU::BuildTLAS", [&] {
+            std::vector<vkw::BLASInstance> vkwInstances(Scene::modelEntities.size());
+            for (int i = 0; i < Scene::modelEntities.size(); i++) {
+                MeshResource& mesh = AssetManager::meshes[Scene::modelEntities[i]->mesh];
+                vkwInstances[i] = {
+                    .blas = mesh.blas,
+                    .modelMat = Scene::modelEntities[i]->transform.GetMatrix(),
+                    .customIndex = Scene::modelEntities[i]->id,
+                };
+            }
+            vkw::CmdBuildTLAS(Scene::tlas, vkwInstances);
+        });
         vkw::CmdBarrier();
 
-        vkw::CmdWriteTimeStamp("OpaquePass");
+        auto opaqueTS = vkw::CmdBeginTimeStamp("GPU::OpaquePass");
         DeferredShading::BeginOpaquePass();
 
         DeferredShading::OpaqueConstants constants;
@@ -210,19 +222,23 @@ private:
         }
 
         DeferredShading::EndPass();
+        vkw::CmdEndTimeStamp(opaqueTS);
 
-        vkw::CmdWriteTimeStamp("LightPass");
+        auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(lightPassConstants);
+        vkw::CmdEndTimeStamp(lightTS);
 
-        vkw::CmdWriteTimeStamp("PresentPass");
+        auto presentTS = vkw::CmdBeginTimeStamp("PresentPass");
         DeferredShading::BeginPresentPass();
         if (drawUi) {
             vkw::CmdDrawImGui(imguiDrawData);
         }
         DeferredShading::EndPresentPass();
+        vkw::CmdEndTimeStamp(presentTS);
+        vkw::CmdEndTimeStamp(totalTS);
     }
 
     void drawFrame() {
