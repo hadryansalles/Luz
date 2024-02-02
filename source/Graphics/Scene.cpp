@@ -35,7 +35,8 @@ void Setup() {
     defaultLight->transform.SetPosition(glm::vec3(-5, 3, 3));
     defaultLight->block.intensity = 30;
 
-    //AssetManager::LoadModels("assets/corvette_stingray.glb");
+    AssetManager::LoadModels("assets/corvette_stingray.glb");
+    AssetManager::LoadModels("assets/dragon.glb");
 
     // AssetManager::AsyncLoadModels("assets/ignore/sponza_pbr/sponza.glb");
     // AssetManager::LoadModels("assets/ignore/sponza_pbr/sponza.glb");
@@ -492,7 +493,6 @@ void InspectEntity(Entity* entity) {
 }
 
 void RenderTransformGizmo(Transform& transform) {
-    ImGuizmo::BeginFrame();
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
@@ -533,7 +533,6 @@ void RenderTransformGizmo(Transform& transform) {
     guizmoProj[1][1] *= -1;
 
     ImGuiIO& io = ImGui::GetIO();
-    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
     ImGuizmo::Manipulate(glm::value_ptr(camera.GetView()), glm::value_ptr(guizmoProj), currentGizmoOperation,
     currentGizmoMode, glm::value_ptr(modelMat), nullptr, nullptr);
 

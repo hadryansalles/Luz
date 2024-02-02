@@ -20,6 +20,13 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_SOURCE_DIR}/bin/${OUTPUTCONFIG})
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
+if(WIN32)
+    if (CMAKE_GENERATOR MATCHES "Visual Studio")
+        add_compile_options("/MP")
+        # set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+    endif()
+endif()
+
 # project config
 project(Luz)
 
@@ -71,12 +78,6 @@ include_directories("deps/imgui")
 file(GLOB_RECURSE IMGUI_SOURCE "deps/imgui/*.cpp")
 add_library(imgui ${IMGUI_SOURCE})
 target_link_libraries(${PROJECT_NAME} imgui)
-
-# spirv reflect
-include_directories("deps/spirv_reflect")
-file(GLOB_RECURSE SPIRVR_SOURCE "deps/spirv_reflect/*.c")
-add_library(spirvr ${SPIRVR_SOURCE})
-target_link_libraries(${PROJECT_NAME} spirvr)
 
 # other includes
 include_directories("deps/")

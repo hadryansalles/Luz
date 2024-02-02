@@ -51,9 +51,9 @@ void Camera::UpdateProj(){
 }
 
 void Camera::Update(Transform* selectedTransform) {
-    if (!autoOrbit && ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
-        return;
-    }
+    //if (!autoOrbit && ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+    //    return;
+    //}
     bool viewDirty = false;
     bool projDirty = false;
     glm::vec2 drag(.0f);

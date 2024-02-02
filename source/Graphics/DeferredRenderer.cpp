@@ -14,7 +14,7 @@ struct Context {
 
     vkw::Pipeline opaquePipeline;
     vkw::Pipeline lightPipeline;
-    vkw::Pipeline presentPipeline;
+    vkw::Pipeline composePipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -22,9 +22,10 @@ struct Context {
     vkw::Image emission;
     vkw::Image depth;
     vkw::Image light;
+    vkw::Image compose;
 };
 
-struct PresentConstant {
+struct ComposeConstant {
     int imageType;
     int lightRID;
     int albedoRID;
@@ -63,7 +64,7 @@ void CreateShaders() {
         .useDepth = true,
         .depthFormat = {ctx.depth.format}
     });
-    ctx.presentPipeline = vkw::CreatePipeline({
+    ctx.composePipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
             {.stage = vkw::ShaderStage::Vertex, .path = "present.vert"},
@@ -71,7 +72,7 @@ void CreateShaders() {
         },
         .name = "Present Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {vkw::Format::BGRA8_unorm},
+        .colorFormats = {vkw::Format::RGBA8_unorm},
         .useDepth = false,
     });
 }
@@ -119,6 +120,13 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
         .name = "Depth Attachment"
     });
+    ctx.compose = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Compose Attachment"
+    });
 }
 
 void Destroy() {
@@ -165,10 +173,11 @@ void LightPass(LightConstants constants) {
     vkw::CmdEndRendering();
 }
 
-void BeginPresentPass() {
+void ComposePass() {
     vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
 
-    PresentConstant constants;
+    ComposeConstant constants;
     constants.lightRID = ctx.light.rid;
     constants.albedoRID = ctx.albedo.rid;
     constants.normalRID = ctx.normal.rid;
@@ -177,10 +186,17 @@ void BeginPresentPass() {
     constants.depthRID = ctx.depth.rid;
     constants.imageType = ctx.presentType;
 
-    vkw::CmdBeginPresent();
-    vkw::CmdBindPipeline(ctx.presentPipeline);
+    vkw::CmdBeginRendering({ ctx.compose });
+    vkw::CmdBindPipeline(ctx.composePipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();
+    vkw::CmdEndRendering();
+
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
+}
+
+void BeginPresentPass() {
+    vkw::CmdBeginPresent();
 }
 
 void EndPresentPass() {
@@ -200,6 +216,14 @@ void OnImgui(int numFrame) {
         }
     }
     ImGui::End();
+}
+
+void ViewportOnImGui() {
+    DEBUG_TRACE("compose rid = {} imguirid = {}", ctx.compose.rid, ctx.compose.imguiRID);
+    ImGui::Image(ctx.compose.imguiRID, ImGui::GetWindowSize());
+
+    ImGuizmo::SetDrawlist();
+    ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
 }
 
 }

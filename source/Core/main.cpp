@@ -1,4 +1,4 @@
-#include "Luzpch.hpp" 
+#include "Luzpch.hpp"
 
 #include "Window.hpp"
 #include "Camera.hpp"
@@ -13,6 +13,10 @@
 #include <imgui/imgui_impl_vulkan.h>
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_stdlib.h>
+
+// #define GLFW_INCLUDE_VULKAN
+// glfw will include vulkan and its own definitions
+#include <GLFW/glfw3.h>
 
 #ifdef _DEBUG
 #define IMGUI_VULKAN_DEBUG_REPORT
@@ -31,6 +35,8 @@ private:
     u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
     bool drawUi = true;
+    bool viewportResized = false;
+    glm::ivec2 viewportSize = { 64, 48 };
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -112,6 +118,7 @@ private:
 
     bool DirtyFrameResources() {
         bool dirty = false;
+        dirty |= viewportResized;
         dirty |= vkw::GetSwapChainDirty();
         dirty |= Window::GetFramebufferResized();
         return dirty;
@@ -120,7 +127,7 @@ private:
     ImVec2 ToScreenSpace(glm::vec3 position) {
         glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
-        glm::ivec2 ext = { Window::GetWidth(), Window::GetHeight() };
+        glm::ivec2 ext = viewportSize;
         screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
         screenSpace.y = (screenSpace.y + 1.0) * ext.y/2.0;
         return screenSpace;
@@ -131,7 +138,20 @@ private:
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+        //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+
+        if (ImGui::Begin("Viewport", 0)) {
+            ImGui::BeginChild("##ChildViewport");
+            glm::ivec2 newViewportSize = { ImGui::GetWindowSize().x, ImGui::GetWindowSize().y };
+            if (newViewportSize != viewportSize) {
+                viewportResized = true;
+                viewportSize = newViewportSize;
+            }
+            DeferredShading::ViewportOnImGui();
+            ImGui::EndChild();
+        }
+        ImGui::End();
 
         if (ImGui::Begin("Luz Engine")) {
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
@@ -231,13 +251,17 @@ private:
         DeferredShading::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);
 
-        auto presentTS = vkw::CmdBeginTimeStamp("PresentPass");
+        auto composeTS = vkw::CmdBeginTimeStamp("GPU::ComposePass");
+        DeferredShading::ComposePass();
+        vkw::CmdEndTimeStamp(composeTS);
+
         DeferredShading::BeginPresentPass();
+        auto imguiTS = vkw::CmdBeginTimeStamp("GPU::ImGui");
         if (drawUi) {
             vkw::CmdDrawImGui(imguiDrawData);
         }
+        vkw::CmdEndTimeStamp(imguiTS);
         DeferredShading::EndPresentPass();
-        vkw::CmdEndTimeStamp(presentTS);
         vkw::CmdEndTimeStamp(totalTS);
     }
 
@@ -257,22 +281,27 @@ private:
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
-        vkw::WaitIdle();
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
         }
+        if (viewportSize.x == 0 || viewportSize.y == 0) {
+            return;
+        }
         vkw::WaitIdle();
-        Window::UpdateFramebufferSize();
-        vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
-        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
+        if (Window::GetFramebufferResized()) {
+            Window::UpdateFramebufferSize();
+            vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
+        }
+        DeferredShading::CreateImages(viewportSize.x, viewportSize.y);
         createUniformProjection();
+        viewportResized = false;
     }
 
     void createUniformProjection() {
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
-        Scene::camera.SetExtent(Window::GetWidth(), Window::GetHeight());
+        Scene::camera.SetExtent(viewportSize.x, viewportSize.y);
     }
 
     void updateUniformBuffer() {
