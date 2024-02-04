@@ -141,6 +141,8 @@ private:
         //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
+        ImGui::ShowDemoWindow();
+
         if (ImGui::Begin("Viewport", 0)) {
             ImGui::BeginChild("##ChildViewport");
             glm::ivec2 newViewportSize = { ImGui::GetWindowSize().x, ImGui::GetWindowSize().y };
@@ -169,12 +171,6 @@ private:
         }
         ImGui::End();
 
-        bool sceneOpen = true;
-        if (ImGui::Begin("Scene")) {
-            Scene::OnImgui();
-        }
-        ImGui::End();
-
         if (ImGui::Begin("Inspector")) {
             if (Scene::selectedEntity != nullptr) {
                 Scene::InspectEntity(Scene::selectedEntity);
@@ -193,7 +189,11 @@ private:
 
         DeferredShading::OnImgui(0);
 
-        ImGui::ShowDemoWindow();
+        bool sceneOpen = true;
+        if (ImGui::Begin("Scene")) {
+            Scene::OnImgui();
+        }
+        ImGui::End();
 
         ImGui::Render();
         imguiDrawData = ImGui::GetDrawData();
