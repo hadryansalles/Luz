@@ -7,6 +7,7 @@
 #include "Scene.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
+#include "AssetManager2.hpp"
 
 #include <stb_image.h>
 
@@ -31,6 +32,7 @@ private:
     u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
     bool drawUi = true;
+    AssetManager2 assetManager;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -47,6 +49,7 @@ private:
         AssetManager::Setup();
         SetupImgui();
         Scene::Setup();
+        assetManager.LoadProject("assets/scene.luz");
     }
 
     void Create() {
