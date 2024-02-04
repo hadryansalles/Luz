@@ -26,10 +26,13 @@ void Destroy();
 
 void RenderMesh(RID meshId);
 void LightPass(LightConstants constants);
+void ComposePass();
 void BeginOpaquePass();
 void EndPass();
 void BeginPresentPass();
 void EndPresentPass();
 void OnImgui(int numFrame);
+
+void ViewportOnImGui();
 
 }

@@ -170,5 +170,5 @@ inline void DrawTextureOnImgui(vkw::Image& img) {
     f32 maxSize = std::max(img.width, img.height);
     ImVec2 size = ImVec2((f32)img.width/maxSize, (f32)img.height/maxSize);
     size = ImVec2(size.x*hSpace, size.y * hSpace);
-    ImGui::Image(img.imguiRID, size);
+    ImGui::Image(img.ImGuiRID(), size);
 }
