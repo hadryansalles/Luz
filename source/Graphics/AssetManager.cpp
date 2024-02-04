@@ -87,7 +87,7 @@ void AssetManager::UpdateResources() {
         InitializeMesh(rid);
     }
     if (toInitialize.size()) {
-        vkw::BeginCommandBuffer(vkw::Graphics);
+        vkw::BeginCommandBuffer(vkw::Compute);
         for (RID meshID : toInitialize) {
             MeshResource& mesh = meshes[meshID];
             mesh.blas = vkw::CreateBLAS ({
@@ -101,7 +101,7 @@ void AssetManager::UpdateResources() {
             vkw::CmdBuildBLAS(mesh.blas);
         }
         vkw::EndCommandBuffer();
-        vkw::WaitQueue(vkw::Graphics);
+        vkw::WaitQueue(vkw::Compute);
     }
 
     // initialize new textures
@@ -734,13 +734,13 @@ void AssetManager::OnImgui() {
             if (ImGui::TreeNode(textureDescs[rid].path.stem().string().c_str())) {
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].ImGuiRID(), ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
                 DrawTextureOnImgui(images[rid]);
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                     ImGui::SetDragDropPayload("textureID", &rid, sizeof(RID*));
-                    ImGui::Image(images[rid].imguiRID, ImVec2(256, 256));
+                    ImGui::Image(images[rid].ImGuiRID(), ImVec2(256, 256));
                     ImGui::EndDragDropSource();
                 }
                 ImGui::TreePop();
