@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string>
 #include <filesystem>
+#include <map>
 
 struct GLFWwindow;
 
@@ -111,7 +112,7 @@ struct Buffer {
     uint32_t size;
     BufferUsageFlags usage;
     MemoryFlags memory;
-    uint32_t rid;
+    uint32_t RID();
 };
 
 struct Image {
@@ -122,8 +123,8 @@ struct Image {
     Format format;
     Layout::ImageLayout layout;
     AspectFlags aspect;
-    uint32_t rid;
-    ImTextureID imguiRID;
+    uint32_t RID();
+    ImTextureID ImGuiRID();
 };
 
 enum Queue {
@@ -201,7 +202,7 @@ struct BLASDesc {
 
 struct TLAS {
     std::shared_ptr<TLASResource> resource;
-    uint32_t rid;
+    uint32_t RID();
 };
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
@@ -213,6 +214,8 @@ BLAS CreateBLAS(const BLASDesc& desc);
 void AcquireImage();
 void SubmitAndPresent();
 bool GetSwapChainDirty();
+
+void GetTimeStamps(std::map<std::string, float>& timeTable);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -232,8 +235,11 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount)
 void CmdDrawPassThrough();
 void CmdDrawImGui(ImDrawData* data);
 
+int CmdBeginTimeStamp(const std::string& name);
+void CmdEndTimeStamp(int timeStampIndex);
+
 void BeginCommandBuffer(Queue queue);
-uint64_t EndCommandBuffer();
+void EndCommandBuffer();
 void WaitQueue(Queue queue);
 void WaitIdle();
 
@@ -241,5 +247,12 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void InitImGui();
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
+
+template<typename T>
+void CmdTimeStamp(const std::string& name, T callback) {
+    int id = CmdBeginTimeStamp(name);
+    callback();
+    CmdEndTimeStamp(id);
+}
 
 }

@@ -4,6 +4,71 @@
 
 #include "common.h"
 #include "imgui/imgui_impl_vulkan.h"
+#include <GLFW/glfw3.h>
+
+// taken from Sam Lantiga: https://www.libsdl.org/tmp/SDL/test/testvulkan.c
+static const char *VK_ERROR_STRING(VkResult result) {
+    switch((int)result)
+    {
+    case VK_SUCCESS:
+        return "VK_SUCCESS";
+    case VK_NOT_READY:
+        return "VK_NOT_READY";
+    case VK_TIMEOUT:
+        return "VK_TIMEOUT";
+    case VK_EVENT_SET:
+        return "VK_EVENT_SET";
+    case VK_EVENT_RESET:
+        return "VK_EVENT_RESET";
+    case VK_INCOMPLETE:
+        return "VK_INCOMPLETE";
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+        return "VK_ERROR_OUT_OF_HOST_MEMORY";
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+        return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
+    case VK_ERROR_INITIALIZATION_FAILED:
+        return "VK_ERROR_INITIALIZATION_FAILED";
+    case VK_ERROR_DEVICE_LOST:
+        return "VK_ERROR_DEVICE_LOST";
+    case VK_ERROR_MEMORY_MAP_FAILED:
+        return "VK_ERROR_MEMORY_MAP_FAILED";
+    case VK_ERROR_LAYER_NOT_PRESENT:
+        return "VK_ERROR_LAYER_NOT_PRESENT";
+    case VK_ERROR_EXTENSION_NOT_PRESENT:
+        return "VK_ERROR_EXTENSION_NOT_PRESENT";
+    case VK_ERROR_FEATURE_NOT_PRESENT:
+        return "VK_ERROR_FEATURE_NOT_PRESENT";
+    case VK_ERROR_INCOMPATIBLE_DRIVER:
+        return "VK_ERROR_INCOMPATIBLE_DRIVER";
+    case VK_ERROR_TOO_MANY_OBJECTS:
+        return "VK_ERROR_TOO_MANY_OBJECTS";
+    case VK_ERROR_FORMAT_NOT_SUPPORTED:
+        return "VK_ERROR_FORMAT_NOT_SUPPORTED";
+    case VK_ERROR_FRAGMENTED_POOL:
+        return "VK_ERROR_FRAGMENTED_POOL";
+    case VK_ERROR_SURFACE_LOST_KHR:
+        return "VK_ERROR_SURFACE_LOST_KHR";
+    case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
+        return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+    case VK_SUBOPTIMAL_KHR:
+        return "VK_SUBOPTIMAL_KHR";
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        return "VK_ERROR_OUT_OF_DATE_KHR";
+    case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
+        return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
+    case VK_ERROR_VALIDATION_FAILED_EXT:
+        return "VK_ERROR_VALIDATION_FAILED_EXT";
+    case VK_ERROR_OUT_OF_POOL_MEMORY_KHR:
+        return "VK_ERROR_OUT_OF_POOL_MEMORY_KHR";
+    case VK_ERROR_INVALID_SHADER_NV:
+        return "VK_ERROR_INVALID_SHADER_NV";
+    default:
+        break;
+    }
+    if(result < 0)
+        return "VK_ERROR_<Unknown>";
+    return "VK_<Unknown>";
+}
 
 namespace vkw {
 
@@ -14,6 +79,7 @@ struct Context {
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
     void CmdBarrier();
+    void EndCommandBuffer(VkSubmitInfo submitInfo);
 
     void LoadShaders(Pipeline& pipeline);
     std::vector<char> CompileShader(const std::filesystem::path& path);
@@ -65,6 +131,7 @@ struct Context {
 
     VkDevice device = VK_NULL_HANDLE;
 
+    const uint32_t timeStampPerPool = 64;
     struct CommandResources {
         u8* stagingCpu = nullptr;
         uint32_t stagingOffset = 0;
@@ -72,6 +139,9 @@ struct Context {
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer buffer = VK_NULL_HANDLE;
         VkFence fence = VK_NULL_HANDLE;
+        VkQueryPool queryPool;
+        std::vector<std::string> timeStampNames;
+        std::vector<uint64_t> timeStamps;
     };
     struct InternalQueue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -81,7 +151,7 @@ struct Context {
     InternalQueue queues[Queue::Count];
     Queue currentQueue = Queue::Count;
     std::shared_ptr<PipelineResource> currentPipeline;
-    const uint32_t stagingBufferSize = 64 * 1024 * 1024;
+    const uint32_t stagingBufferSize = 256 * 1024 * 1024;
 
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -100,9 +170,9 @@ struct Context {
     bool swapChainDirty = true;
     uint32_t currentImageIndex = 0;
 
-    uint32_t nextBufferRID = 0;
-    uint32_t nextImageRID = 0;
-    uint32_t nextTLASRID = 0;
+    std::vector<int32_t> availableBufferRID;
+    std::vector<int32_t> availableImageRID;
+    std::vector<int32_t> availableTLASRID;
     VkSampler genericSampler;
 
     // preferred, warn if not available
@@ -114,6 +184,8 @@ struct Context {
     const uint32_t initialScratchBufferSize = 64*1024*1024;
     Buffer asScratchBuffer;
     VkDeviceAddress asScratchAddress;
+
+    std::map<std::string, float> timeStampTable;
 
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();
@@ -156,6 +228,7 @@ static Context _ctx;
 
 struct Resource {
     std::string name;
+    int32_t rid = -1;
     virtual ~Resource() {};
 };
 
@@ -174,12 +247,19 @@ struct ImageResource : Resource {
     VkImageView view;
     VkDeviceMemory memory;
     bool fromSwapchain = false;
+    ImTextureID imguiRID = nullptr;
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
             vkDestroyImageView(_ctx.device, view, _ctx.allocator);
             vkDestroyImage(_ctx.device, image, _ctx.allocator);
             vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+            if (rid >= 0) {
+                _ctx.availableImageRID.push_back(rid);
+                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+                rid = -1;
+                imguiRID = nullptr;
+            }
         }
     }
 };
@@ -222,6 +302,28 @@ struct BLASResource : Resource {
         buffer = {};
     }
 };
+
+uint32_t Buffer::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid buffer rid");
+    return uint32_t(resource->rid);
+}
+
+uint32_t TLAS::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid tlas rid");
+    return uint32_t(resource->rid);
+}
+
+uint32_t Image::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid image rid");
+    return uint32_t(resource->rid);
+}
+
+ImTextureID Image::ImGuiRID() {
+    if (!resource || resource->rid == -1) {
+        return nullptr;
+    }
+    return resource->imguiRID;
+}
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     _ctx.CreateInstance(window);
@@ -321,11 +423,11 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         .size = size,
         .usage = usage,
         .memory = memory,
-        .rid = 0
     };
 
     if (usage & BufferUsage::Storage) {
-        buffer.rid = _ctx.nextBufferRID++;
+        res->rid = _ctx.availableBufferRID.back();
+        _ctx.availableBufferRID.pop_back();
         VkDescriptorBufferInfo descriptorInfo = {};
         VkWriteDescriptorSet write = {};
         descriptorInfo.buffer = res->buffer;
@@ -334,7 +436,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = _ctx.bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_BUFFER;
-        write.dstArrayElement = buffer.rid;
+        write.dstArrayElement = buffer.RID();
         write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         write.descriptorCount = 1;
         write.pBufferInfo = &descriptorInfo;
@@ -418,7 +520,6 @@ Image CreateImage(const ImageDesc& desc) {
         .format = desc.format,
         .layout = Layout::Undefined,
         .aspect = aspect,
-        .rid = _ctx.nextImageRID++,
     };
 
     if (desc.usage & ImageUsage::Sampled) {
@@ -428,7 +529,9 @@ Image CreateImage(const ImageDesc& desc) {
         } else if (aspect == Aspect::Depth) {
             newLayout = Layout::DepthRead;
         }
-        image.imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        res->imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        res->rid = _ctx.availableImageRID.back();
+        _ctx.availableImageRID.pop_back();
 
         VkDescriptorImageInfo descriptorInfo = {
             .sampler = _ctx.genericSampler,
@@ -439,7 +542,7 @@ Image CreateImage(const ImageDesc& desc) {
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = _ctx.bindlessDescriptorSet;
         write.dstBinding = LUZ_BINDING_TEXTURE;
-        write.dstArrayElement = image.rid;
+        write.dstArrayElement = image.RID();
         write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         write.descriptorCount = 1;
         write.pImageInfo = &descriptorInfo;
@@ -478,8 +581,9 @@ TLAS CreateTLAS(uint32_t maxInstances, const std::string& name) {
     TLAS tlas;
     tlas.resource = std::make_shared<TLASResource>();
     tlas.resource->name = name;
-    tlas.rid = _ctx.nextTLASRID++;
     std::shared_ptr<TLASResource>& tlasRes = tlas.resource;
+    tlasRes->rid = _ctx.availableTLASRID.back();
+    _ctx.availableTLASRID.pop_back();
     auto& device = _ctx.device;
 
     tlasRes->instancesBuffer = vkw::CreateBuffer(sizeof(VkAccelerationStructureInstanceKHR) * maxInstances, vkw::BufferUsage::AccelerationStructureInput, vkw::Memory::GPU);
@@ -536,7 +640,7 @@ TLAS CreateTLAS(uint32_t maxInstances, const std::string& name) {
     writeBindlessAccelerationStructure.pNext = &descriptorAccelerationStructure;
     writeBindlessAccelerationStructure.dstSet = _ctx.bindlessDescriptorSet;
     writeBindlessAccelerationStructure.dstBinding = LUZ_BINDING_TLAS;
-    writeBindlessAccelerationStructure.dstArrayElement = tlas.rid;
+    writeBindlessAccelerationStructure.dstArrayElement = tlas.RID();
     writeBindlessAccelerationStructure.descriptorCount = 1;
     writeBindlessAccelerationStructure.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     writes.push_back(writeBindlessAccelerationStructure);
@@ -914,8 +1018,7 @@ void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& blasInstances) {
     VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {instances.size(), 0, 0, 0};
     const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
     _ctx.vkCmdBuildAccelerationStructuresKHR(cmd.buffer, 1, &res->buildInfo, &pBuildOffsetInfo);
-    // todo: keep eye on this... maybe doesn't work when adding new blases
-    res->buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR; // after first build, set update moded
+    // todo: hash and only update mode if nothing changed
 }
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
@@ -1038,6 +1141,28 @@ void CmdDrawImGui(ImDrawData* data) {
     ImGui_ImplVulkan_RenderDrawData(data, _ctx.GetCurrentCommandResources().buffer);
 }
 
+int CmdBeginTimeStamp(const std::string& name) {
+    DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    int id = cmd.timeStamps.size();
+    if (id >= _ctx.timeStampPerPool - 1) {
+        LOG_WARN("Maximum number of time stamp per pool exceeded. Ignoring Time stamp {}", name.c_str());
+        return -1;
+    }
+    vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, cmd.queryPool, id);
+    cmd.timeStamps.push_back(0);
+    cmd.timeStamps.push_back(0);
+    cmd.timeStampNames.push_back(name);
+    return id;
+}
+
+void CmdEndTimeStamp(int timeStampIndex) {
+    if (timeStampIndex >= 0 && timeStampIndex < _ctx.timeStampPerPool - 1) {
+        auto& cmd = _ctx.GetCurrentCommandResources();
+        vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, timeStampIndex + 1);
+    }
+}
+
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
@@ -1053,35 +1178,52 @@ void CmdPushConstants(void* data, uint32_t size) {
 
 void BeginCommandBuffer(Queue queue) {
     ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
-
     _ctx.currentQueue = queue;
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
     vkResetFences(_ctx.device, 1, &cmd.fence);
 
+    if (cmd.timeStamps.size() > 0) {
+        vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, cmd.timeStamps.size(), cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+        for (int i = 0; i < cmd.timeStampNames.size(); i++) {
+            const uint64_t begin = cmd.timeStamps[2 * i];
+            const uint64_t end = cmd.timeStamps[2 * i + 1];
+            _ctx.timeStampTable[cmd.timeStampNames[i]] = float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f;
+        }
+        cmd.timeStamps.clear();
+        cmd.timeStampNames.clear();
+    }
+
     Context::InternalQueue& iqueue = _ctx.queues[queue];
-    vkResetCommandPool(_ctx.device, iqueue.commands[_ctx.currentImageIndex].pool, 0);
-    iqueue.commands[_ctx.currentImageIndex].stagingOffset = 0;
+    vkResetCommandPool(_ctx.device, cmd.pool, 0);
+    cmd.stagingOffset = 0;
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(_ctx.queues[queue].commands[_ctx.currentImageIndex].buffer, &beginInfo);
+    vkBeginCommandBuffer(cmd.buffer, &beginInfo);
+
+    if (queue != Queue::Transfer) {
+        vkCmdResetQueryPool(cmd.buffer, cmd.queryPool, 0, _ctx.timeStampPerPool);
+    }
 }
 
-uint64_t EndCommandBuffer() {
-    auto& cmd = _ctx.GetCurrentCommandResources();
+void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
+    auto& cmd = GetCurrentCommandResources();
+
     vkEndCommandBuffer(cmd.buffer);
 
-    VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmd.buffer;
 
-    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
+    auto res = vkQueueSubmit(queues[currentQueue].queue, 1, &submitInfo, cmd.fence);
     DEBUG_VK(res, "Failed to submit command buffer");
+}
+
+void EndCommandBuffer() {
+    _ctx.EndCommandBuffer({});
     _ctx.currentQueue = vkw::Queue::Count;
     _ctx.currentPipeline = {};
-    return 0;
 }
 
 void WaitQueue(Queue queue) {
@@ -1400,6 +1542,8 @@ void Context::CreatePhysicalDevice() {
 
 void Context::CreateDevice() {
     LUZ_PROFILE_FUNC();
+
+
     std::set<uint32_t> uniqueFamilies;
     for (int q = 0; q < Queue::Count; q++) {
         uniqueFamilies.emplace(queues[q].family);
@@ -1534,6 +1678,16 @@ void Context::CreateDevice() {
         const u32 MAX_STORAGE = physicalProperties.limits.maxPerStageDescriptorStorageBuffers;
         const u32 MAX_SAMPLEDIMAGES = physicalProperties.limits.maxPerStageDescriptorSampledImages;
         const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+
+        for (int i = 0; i < MAX_STORAGE; i++) {
+            availableBufferRID.push_back(i);
+        }
+        for (int i = 0; i < MAX_SAMPLEDIMAGES; i++) {
+            availableImageRID.push_back(i);
+        }
+        for (int i = 0; i < MAX_ACCELERATIONSTRUCTURE; i++) {
+            availableTLASRID.push_back(i);
+        }
 
         // create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
@@ -1809,6 +1963,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = 1;
 
+
         for (int q = 0; q < Queue::Count; q++) {
             InternalQueue& queue = queues[q];
             poolInfo.queueFamilyIndex = queue.family;
@@ -1828,6 +1983,16 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
                 fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
                 fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
                 vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
+
+                VkQueryPoolCreateInfo queryPoolInfo{};
+                queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+                queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+                queryPoolInfo.queryCount = timeStampPerPool;
+                res = vkCreateQueryPool(device, &queryPoolInfo, allocator, &queue.commands[i].queryPool);
+                DEBUG_VK(res, "failed to create query pool");
+
+                queue.commands[i].timeStamps.clear();
+                queue.commands[i].timeStampNames.clear();
             }
         }
     }
@@ -1851,6 +2016,7 @@ void Context::DestroySwapChain() {
             queues[q].commands[i].staging = {};
             queues[q].commands[i].stagingCpu = nullptr;
             vkDestroyFence(device, queues[q].commands[i].fence, allocator);
+            vkDestroyQueryPool(device, queues[q].commands[i].queryPool, allocator);
         }
     }
 
@@ -1878,6 +2044,10 @@ void AcquireImage() {
 
 bool GetSwapChainDirty() {
     return _ctx.swapChainDirty;
+}
+
+void GetTimeStamps(std::map<std::string, float>& timeTable) {
+    timeTable = _ctx.timeStampTable;
 }
 
 void SubmitAndPresent() {
@@ -1911,12 +2081,12 @@ void SubmitAndPresent() {
     presentInfo.pImageIndices = &_ctx.currentImageIndex;
     presentInfo.pResults = nullptr;
 
-    vkEndCommandBuffer(cmd.buffer);
+    //vkEndCommandBuffer(cmd.buffer);
+    //auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
+    //DEBUG_VK(res, "Failed to submit command buffer");
+    _ctx.EndCommandBuffer(submitInfo);
 
-    auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
-    DEBUG_VK(res, "Failed to submit command buffer");
-
-    res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
+    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
     _ctx.currentQueue = Queue::Count;
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
