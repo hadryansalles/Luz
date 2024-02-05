@@ -16,8 +16,6 @@ using f32 = float;
 using f64 = double;
 using RID = u32;
 using UUID = u64;
-template <typename T>
-using Ref = std::shared_ptr<T>;
 
 #define ALIGN_AS(size, alignment) ((size) % (alignment) > 0 ? (size) + (alignment) - (size) % (alignment) : (size))
 #define COUNT_OF(arr) (sizeof((arr)) / sizeof((arr)[0]))

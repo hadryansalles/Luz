@@ -10,6 +10,9 @@
 
 struct Serializer;
 
+template<typename T>
+using Ref = std::shared_ptr<T>;
+
 enum class ObjectType {
     Invalid,
     TextureAsset,
@@ -168,7 +171,7 @@ struct AssetManager2 {
         std::vector<Ref<T>> all;
         for (auto& pair : assets) {
             if (pair.second->type == type) {
-                all.emplace_back(std::dynamic_pointer_cast<T>(asset.second));
+                all.emplace_back(std::dynamic_pointer_cast<T>(pair.second));
             }
         }
         return all;

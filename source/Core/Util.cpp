@@ -1,6 +1,7 @@
 #include "Util.hpp"
 
 #include <chrono>
+#include "Log.hpp"
 
 std::string const base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

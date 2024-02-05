@@ -93,10 +93,11 @@ void ImportSceneOBJ(const std::filesystem::path& path) {
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string err;
+    std::string warn;
     std::string filename = path.stem().string();
     std::string parentPath = path.parent_path().string() + "/";
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str(),parentPath.c_str(), true)) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(),parentPath.c_str(), true)) {
         LOG_ERROR("{}", err);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }

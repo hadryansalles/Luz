@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Base.hpp"
+#include "Luzpch.hpp"
 
 std::string EncodeBase64(unsigned char const* input, size_t len);
 std::vector<u8> DecodeBase64(std::string const& input);
