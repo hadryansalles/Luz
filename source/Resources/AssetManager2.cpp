@@ -64,9 +64,9 @@ MeshNode::MeshNode() {
 
 void TextureAsset::Serialize(Serializer& s) {
     s.Vector("data", data);
-    s("width", width);
-    s("height", height);
-    s("channels", channels);
+    //s("width", width);
+    //s("height", height);
+    //s("channels", channels);
 }
 
 void MeshAsset::Serialize(Serializer& s) {
@@ -75,10 +75,10 @@ void MeshAsset::Serialize(Serializer& s) {
 }
 
 void MaterialAsset::Serialize(Serializer& s) {
-    s("color", color);
-    s("emission", emission);
-    s("metallic", metallic);
-    s("roughness", roughness);
+    //s("color", color);
+    //s("emission", emission);
+    //s("metallic", metallic);
+    //s("roughness", roughness);
     s.Asset("colorMap", colorMap);
     s.Asset("aoMap", aoMap);
     s.Asset("emissionMap", emissionMap);
@@ -92,9 +92,9 @@ void SceneAsset::Serialize(Serializer& s) {
 
 void Node::Serialize(Serializer& s) {
     s.Vector("children", children);
-    s("position", position);
-    s("rotation", rotation);
-    s("scale", scale);
+    //s("position", position);
+    //s("rotation", rotation);
+    //s("scale", scale);
 }
 
 void MeshNode::Serialize(Serializer& s) {
