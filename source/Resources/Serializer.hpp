@@ -5,6 +5,31 @@
 
 using Json = nlohmann::json;
 
+inline void to_json(Json& j, const glm::vec3& v) {
+    j = Json{v.x, v.y, v.z};
+}
+
+inline void to_json(Json& j, const glm::vec4& v) {
+    j = Json{v.x, v.y, v.z, v.w};
+}
+
+inline void from_json(const Json& j, glm::vec4& v) {
+    if (j.is_array() && j.size() == 4) {
+        v.x = j[0];
+        v.y = j[1];
+        v.z = j[2];
+        v.w = j[3];
+    }
+}
+
+inline void from_json(const Json& j, glm::vec3& v) {
+    if (j.is_array() && j.size() == 3) {
+        v.x = j[0];
+        v.y = j[1];
+        v.z = j[2];
+    }
+}
+
 struct Serializer {
     Json& j;
     int dir = 0;
@@ -47,33 +72,34 @@ struct Serializer {
 
     template<typename T>
     void Vector(const std::string& field, std::vector<T>& v) {
-        if constexpr (std::is_pod_v<T>) {
-            if (dir == SAVE) {
-                j[field] = EncodeBase64((u8*)v.data(), v.size() * sizeof(T));
-            } else if (j.contains(field)) {
-                std::vector<u8> data = DecodeBase64(j[field]);
-                v.resize(data.size()/sizeof(T));
-                memcpy(v.data(), data.data(), data.size());
-            }
-        } else {
-             if (dir == SAVE) {
-                 Json childrenArray = Json::array();
-                 for (auto& x : v) {
-                     Serializer childSerializer(childrenArray.emplace_back(), dir);
-                     childSerializer.Serialize(x);
-                 }
-                 j[field] = childrenArray;
-             } else if (j.contains(field)) {
-                 v.reserve(j.size());
-                 for (auto& value : j[field]) {
-                     ObjectType type = j["type"];
-                     std::string name = j["name"];
-                     UUID uuid = j["uuid"];
-                     Serializer childSerializer(value, dir);
-                     childSerializer.Serialize(v.emplace_back());
-                 }
-             }
+        if (dir == SAVE) {
+            j[field] = EncodeBase64((u8*)v.data(), v.size() * sizeof(T));
+        } else if (j.contains(field)) {
+            std::vector<u8> data = DecodeBase64(j[field]);
+            v.resize(data.size()/sizeof(T));
+            memcpy(v.data(), data.data(), data.size());
         }
+    }
+
+    template<typename T>
+    void VectorRef(const std::string& field, std::vector<T>& v) {
+         if (dir == SAVE) {
+             Json childrenArray = Json::array();
+             for (auto& x : v) {
+                 Serializer childSerializer(childrenArray.emplace_back(), dir);
+                 childSerializer.Serialize(x);
+             }
+             j[field] = childrenArray;
+         } else if (j.contains(field)) {
+             v.reserve(j.size());
+             for (auto& value : j[field]) {
+                 ObjectType type = j["type"];
+                 std::string name = j["name"];
+                 UUID uuid = j["uuid"];
+                 Serializer childSerializer(value, dir);
+                 childSerializer.Serialize(v.emplace_back());
+             }
+         }
     }
 
     template <typename T>
@@ -89,28 +115,3 @@ struct Serializer {
         }
     }
 };
-
-inline void to_json(Json& j, const glm::vec3& v) {
-    j = Json{v.x, v.y, v.z};
-}
-
-inline void to_json(Json& j, const glm::vec4& v) {
-    j = Json{v.x, v.y, v.z, v.w};
-}
-
-inline void from_json(const Json& j, glm::vec4& v) {
-    if (j.is_array() && j.size() == 4) {
-        v.x = j[0];
-        v.y = j[1];
-        v.z = j[2];
-        v.w = j[3];
-    }
-}
-
-inline void from_json(const Json& j, glm::vec3& v) {
-    if (j.is_array() && j.size() == 3) {
-        v.x = j[0];
-        v.y = j[1];
-        v.z = j[2];
-    }
-}

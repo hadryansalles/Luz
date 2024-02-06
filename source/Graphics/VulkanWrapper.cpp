@@ -2,7 +2,7 @@
 
 #include "VulkanWrapper.h"
 
-#include "common.h"
+#include "LuzCommon.h"
 #include "imgui/imgui_impl_vulkan.h"
 #include <GLFW/glfw3.h>
 

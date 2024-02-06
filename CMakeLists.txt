@@ -44,7 +44,7 @@ set(LIBS_DIR ${CMAKE_SOURCE_DIR}/lib/${CMAKE_CFG_INTDIR})
 
 # Luz
 file(GLOB_RECURSE GLSL_SOURCE "source/*.vert" "source/*.frag" "source/*.rchit" "source/*.rgen" "source/*.rmiss")
-file(GLOB_RECURSE SOURCE "source/*.cpp")
+file(GLOB_RECURSE SOURCE "source/*.cpp" "source/*.hpp" "source/*.h")
 file(GLOB HEADERS "source/*")
 add_executable(${PROJECT_NAME} ${SOURCE} ${GLSL_SOURCE})
 source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCE} ${GLSL_SOURCE})
