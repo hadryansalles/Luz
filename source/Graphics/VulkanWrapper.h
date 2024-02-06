@@ -6,6 +6,7 @@
 #include <string>
 #include <filesystem>
 #include <map>
+#include <vector>
 
 struct GLFWwindow;
 
