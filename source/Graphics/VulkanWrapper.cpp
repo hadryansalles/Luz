@@ -628,6 +628,14 @@ TLAS CreateTLAS(uint32_t maxInstances, const std::string& name) {
     createInfo.buffer = tlasRes->buffer.resource->buffer;
     _ctx.vkCreateAccelerationStructureKHR(device, &createInfo, _ctx.allocator, &tlasRes->accel);
 
+    VkDebugUtilsObjectNameInfoEXT vkName = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
+    .objectHandle = (uint64_t)tlasRes->accel,
+    .pObjectName = name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &vkName);
+
     VkWriteDescriptorSetAccelerationStructureKHR descriptorAccelerationStructure{};
     descriptorAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     descriptorAccelerationStructure.accelerationStructureCount = 1;
@@ -731,6 +739,14 @@ BLAS CreateBLAS(const BLASDesc& desc) {
     createInfo.size = res->sizeInfo.accelerationStructureSize; // Will be used to allocate memory.
     createInfo.buffer = res->buffer.resource->buffer;
     _ctx.vkCreateAccelerationStructureKHR(device, &createInfo, nullptr, &res->accel);
+
+    VkDebugUtilsObjectNameInfoEXT vkName = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
+    .objectHandle = (uint64_t)res->accel,
+    .pObjectName = desc.name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &vkName);
 
     if (_ctx.asScratchBuffer.size < res->sizeInfo.buildScratchSize) {
         _ctx.asScratchBuffer = vkw::CreateBuffer(res->sizeInfo.buildScratchSize, vkw::BufferUsage::Storage, vkw::Memory::GPU);
@@ -1675,8 +1691,8 @@ void Context::CreateDevice() {
 
     // create bindless resources
     {
-        const u32 MAX_STORAGE = physicalProperties.limits.maxPerStageDescriptorStorageBuffers;
-        const u32 MAX_SAMPLEDIMAGES = physicalProperties.limits.maxPerStageDescriptorSampledImages;
+        const u32 MAX_STORAGE = 4096;
+        const u32 MAX_SAMPLEDIMAGES = 4096;
         const u32 MAX_ACCELERATIONSTRUCTURE = 64;
 
         for (int i = 0; i < MAX_STORAGE; i++) {

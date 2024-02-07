@@ -22,6 +22,12 @@ void Window::WindowChangePosCallback(GLFWwindow* window, int x, int y) {
     Window::posY = y;
 }
 
+void Window::WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
+    for (int i = 0; i < count; i++) {
+        pathsDrop.push_back(paths[i]);
+    }
+}
+
 void Window::Create() {
     LUZ_PROFILE_FUNC();
     // initializing glfw
@@ -42,6 +48,7 @@ void Window::Create() {
     glfwSetScrollCallback(window, Window::ScrollCallback);
     glfwSetWindowMaximizeCallback(window, Window::WindowMaximizeCallback);
     glfwSetWindowPosCallback(window, Window::WindowChangePosCallback);
+    glfwSetDropCallback(window, Window::WindowDropCallback);
 
     dirty = false;
     Window::ApplyChanges();

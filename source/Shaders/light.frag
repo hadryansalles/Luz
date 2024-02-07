@@ -12,8 +12,7 @@ layout(push_constant) uniform PresentConstants {
     int depthRID;
 };
 
-#include "base.glsl"
-
+#include "LuzCommon.h"
 
 layout(location = 0) in vec2 fragTexCoord;
 

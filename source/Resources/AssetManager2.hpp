@@ -9,6 +9,7 @@
 #include "Util.hpp"
 
 struct Serializer;
+struct AssetManager2;
 
 template<typename T>
 using Ref = std::shared_ptr<T>;
@@ -37,6 +38,14 @@ struct Object {
     std::string name = "Unintialized";
     UUID uuid = 0;
     ObjectType type = ObjectType::Invalid;
+    bool gpuDirty = true;
+
+    Object& operator=(Object& rhs) {
+        name = rhs.name;
+        type = rhs.type;
+        gpuDirty = true;
+        return *this;
+    }
 
     virtual ~Object();
     virtual void Serialize(Serializer& s) = 0;
@@ -111,6 +120,12 @@ struct Node : Object {
         }
     }
 
+    void Add(Ref<Node>& node) {
+        children.push_back(node);
+    }
+
+    void AddClone(AssetManager2& manager, const Ref<Node>& node);
+
     glm::mat4 GetLocalTransform();
     glm::mat4 GetWorldTransform();
     void UpdateTransforms();
@@ -134,6 +149,12 @@ struct SceneAsset : Asset {
         return node;
     }
 
+    void Add(Ref<Node>& node) {
+        nodes.push_back(node);
+    }
+
+    void Merge(AssetManager2& manager, const Ref<SceneAsset>& rhs);
+
     template<typename T>
     void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
         for (auto& node : nodes) {
@@ -150,8 +171,7 @@ struct SceneAsset : Asset {
 };
 
 struct AssetManager2 {
-    static AssetManager2& Instance();
-
+    void AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
     void LoadProject(const std::filesystem::path& path);
     void SaveProject(const std::filesystem::path& path);
     Ref<SceneAsset> GetInitialScene();
@@ -210,8 +230,31 @@ struct AssetManager2 {
         }
     }
 
+    template<typename T>
+    Ref<T> CloneAsset(const Ref<Object>& rhs) {
+        Ref<T> asset = CreateAsset<T>(rhs->name, 0);
+        *asset = *std::dynamic_pointer_cast<T>(rhs);
+        return asset;
+    }
+
+    template<typename T>
+    Ref<T> CloneObject(const Ref<Object>& rhs) {
+        Ref<T> object = CreateObject<T>(rhs->name, 0);
+        *object = *std::dynamic_pointer_cast<T>(rhs);
+        return object;
+    }
+
+    Ref<Object> CloneObject(ObjectType type, const Ref<Object>& rhs) {
+        switch (type) {
+            case ObjectType::SceneAsset: return CloneAsset<SceneAsset>(rhs);
+            case ObjectType::Node: return CloneObject<Node>(rhs);
+            case ObjectType::MeshNode: return CloneObject<MeshNode>(rhs);
+            default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
+        }
+    }
+
 private:
     std::unordered_map<UUID, Ref<Asset>> assets;
     UUID NewUUID();
-    UUID initialScene;
+    UUID initialScene = 0;
 };

@@ -21,6 +21,8 @@ private:
     static inline std::chrono::high_resolution_clock::time_point lastTime;
     static inline float deltaTime = .0f;
 
+    static inline std::vector<std::string> pathsDrop;
+
     static inline float     scroll        = .0f;
     static inline float     deltaScroll   = .0f;
     static inline glm::vec2 mousePos      = glm::vec2(.0f, .0f);
@@ -44,6 +46,7 @@ private:
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
     static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
     static void WindowChangePosCallback(GLFWwindow* window, int x, int y);
+    static void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]);
 
 public:
     static void Create();
@@ -66,4 +69,5 @@ public:
     static inline bool        GetFramebufferResized()          { return framebufferResized;                     }
     static inline bool        IsKeyDown(uint16_t keyCode)      { return glfwGetKey(window, keyCode);            }
     static inline bool        IsMouseDown(uint16_t buttonCode) { return glfwGetMouseButton(window, buttonCode); }
+    static inline std::vector<std::string> GetAndClearPaths()  { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };

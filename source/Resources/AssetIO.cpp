@@ -26,8 +26,8 @@ namespace std {
 
 namespace AssetIO {
 
-void ImportSceneGLTF(const std::filesystem::path& path);
-void ImportSceneOBJ(const std::filesystem::path& path);
+UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager2& manager);
+UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager2& manager);
 
 bool IsTexture(const std::filesystem::path& path) {
     const std::string ext = path.extension().string();
@@ -52,14 +52,15 @@ void WriteFile(const std::filesystem::path& path, const std::string& content) {
     fclose(f);
 }
 
-void Import(const std::filesystem::path& path) {
+UUID Import(const std::filesystem::path& path, AssetManager2& assets) {
     TimeScope t("AssetIO::Import(" + path.string() + ")");
     const std::string ext = path.extension().string();
     if (IsTexture(path)) {
-        ImportTexture(path);
+        return ImportTexture(path, assets);
     } else if (IsScene(path)) {
-        ImportScene(path);
+        return ImportScene(path, assets);
     }
+    return 0;
 }
 
 void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
@@ -68,27 +69,28 @@ void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     memcpy(t->data.data(), indata, t->data.size());
 }
 
-void ImportTexture(const std::filesystem::path& path) {
-    auto t = AssetManager2::Instance().CreateAsset<TextureAsset>(path.stem().string());
+UUID ImportTexture(const std::filesystem::path& path, AssetManager2& assets) {
+    auto t = assets.CreateAsset<TextureAsset>(path.stem().string());
     ImportTexture(path, t);
+    return t->uuid;
 }
 
-void ImportScene(const std::filesystem::path& path) {
+UUID ImportScene(const std::filesystem::path& path, AssetManager2& assets) {
     const std::string ext = path.extension().string();
     if (ext == ".gltf" || ext == ".glb") {
-        ImportSceneGLTF(path);
+        return ImportSceneGLTF(path, assets);
     } else if (ext == ".obj") {
-        ImportSceneOBJ(path);
+        return ImportSceneOBJ(path, assets);
     }
+    return 0;
 }
 
-void ImportSceneGLTF(const std::filesystem::path& path) {
-    
+UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager2& assets) {
+    return 0;
 }
 
-void ImportSceneOBJ(const std::filesystem::path& path) {
+UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager2& manager) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
-    auto& manager = AssetManager2::Instance();
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -185,6 +187,7 @@ void ImportSceneOBJ(const std::filesystem::path& path) {
             }
         }
     }
+    return scene->uuid;
 }
 
 }

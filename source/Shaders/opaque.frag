@@ -10,7 +10,7 @@ layout(push_constant) uniform ConstantsBlock {
     int modelID;
 };
 
-#include "base.glsl"
+#include "LuzCommon.h"
 
 layout(location = 0) in vec3 fragNormal;
 layout(location = 1) in vec3 fragTangent;
@@ -23,22 +23,40 @@ layout(location = 2) out vec4 outMaterial;
 layout(location = 3) out vec4 outEmission;
 
 void main() {
-    vec4 albedo = texture(textures[model.colorMap], fragTexCoord)*model.color;
+    vec4 albedo = model.color;
+    if (model.colorMap >= 0) {
+        albedo *= texture(textures[model.colorMap], fragTexCoord);
+    }
     if(albedo.a < 0.5) {
         discard;
     }
-    vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
-    vec4 emission = texture(textures[model.emissionMap], fragTexCoord)*vec4(model.emission, 1.0);
-    vec3 normalSample = texture(textures[model.normalMap], fragTexCoord).rgb;
-    float occlusion = texture(textures[model.aoMap], fragTexCoord).r;
-    float roughness = metallicRoughness.g*model.roughness;
-    float metallic = metallicRoughness.b*model.metallic;
+
+    vec3 normalSample = vec3(1, 1, 1);
+    float occlusion = 1;
+    float roughness = model.roughness;
+    float metallic = model.metallic;
+    vec4 emission = vec4(model.emission, 1.0);
+
+    // if (model.metallicRoughnessMap >= 0) {
+    //     vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
+    //     roughness *= metallicRoughness.g;
+    //     metallic *= metallicRoughness.b;
+    // }
+    // if (model.aoMap >= 0) {
+    //     occlusion = texture(textures[model.aoMap], fragTexCoord).r;
+    // }
+    // if (model.normalMap >= 0) {
+    //     normalSample = texture(textures[model.normalMap], fragTexCoord).rgb;
+    // }
+    // if (emissionMap >= 0) {
+    //     emission *= texture(textures[model.emissionMap], fragTexCoord);
+    // }
     vec3 N;
-    if(fragTangent == vec3(0, 0, 0) || normalSample == vec3(1, 1, 1)) {
+    // if(fragTangent == vec3(0, 0, 0) || normalSample == vec3(1, 1, 1)) {
         N = normalize(fragNormal); 
-    } else {
-        N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
-    }
+    // } else {
+    //     N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
+    // }
     outAlbedo = albedo; 
     outNormal = vec4(N, 1.0);
     outMaterial = vec4(roughness, metallic, occlusion, 1.0);

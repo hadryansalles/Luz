@@ -103,9 +103,10 @@ void MeshNode::Serialize(Serializer& s) {
 }
 
 Ref<SceneAsset> AssetManager2::GetInitialScene() {
-    if (initialScene) {
-        return Get<SceneAsset>(initialScene);
+    if (!initialScene) {
+        CreateAsset<SceneAsset>("DefaultScene");
     }
+    return Get<SceneAsset>(initialScene);
 }
 
 void AssetManager2::LoadProject(const std::filesystem::path& path) {
@@ -114,7 +115,7 @@ void AssetManager2::LoadProject(const std::filesystem::path& path) {
     j = Json::parse(AssetIO::ReadFile(path));
     for (auto& assetJson : j) {
         Ref<Asset> asset;
-        Serializer s = Serializer(assetJson, dir);
+        Serializer s = Serializer(assetJson, dir, *this);
         s.Serialize(asset);
     }
     if (j.contains("initialScene")) {
@@ -136,7 +137,7 @@ void AssetManager2::SaveProject(const std::filesystem::path& path) {
     });
     for (Ref<Asset> asset : assetsOrdered) {
         Json assetJson;
-        Serializer s = Serializer(assetJson, dir);
+        Serializer s = Serializer(assetJson, dir, *this);
         s.Serialize(asset);
         j.push_back(assetJson);
     }
@@ -160,7 +161,33 @@ UUID AssetManager2::NewUUID() {
     return dist(eng);
 }
 
-AssetManager2& AssetManager2::Instance() {
-    static AssetManager2 instance;
-    return instance;
+void AssetManager2::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths) {
+    for (const auto& path : paths) {
+        UUID uuid = AssetIO::Import(path, *this);
+        if (uuid != 0 && assets[uuid]->type == ObjectType::SceneAsset) {
+            scene->Merge(*this, Get<SceneAsset>(uuid));
+        }
+    }
+}
+
+void SceneAsset::Merge(AssetManager2& manager, const Ref<SceneAsset>& rhs) {
+    for (auto& node : rhs->nodes) {
+        Ref<Object> newObject = manager.CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
+        Ref<Node> newNode = std::dynamic_pointer_cast<Node>(newObject);
+        newNode->children.clear();
+        for (auto& child : node->children) {
+            newNode->AddClone(manager, child);
+        }
+        nodes.push_back(newNode);
+    }
+}
+
+void Node::AddClone(AssetManager2& manager, const Ref<Node>& node) {
+    Ref<Object> newObject = manager.CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
+    Ref<Node> newNode = std::dynamic_pointer_cast<Node>(newObject);
+    newNode->children.clear();
+    for (auto& child : node->children) {
+        newNode->AddClone(manager, child);
+    }
+    children.push_back(newNode);
 }

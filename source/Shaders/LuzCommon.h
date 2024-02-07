@@ -59,3 +59,36 @@ struct SceneBlock {
     int blackTexture;
     int tlasRid;
 };
+
+#if !defined(LUZ_ENGINE)
+
+#extension GL_KHR_vulkan_glsl : enable
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_ray_query : enable
+
+#define LIGHT_TYPE_POINT 0
+#define LIGHT_TYPE_DIRECTIONAL 1
+#define LIGHT_TYPE_SPOT 2
+
+#define PI 3.14159265359
+#define GOLDEN_RATIO 2.118033988749895
+
+layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler2D textures[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBuffer {
+    SceneBlock block;
+} sceneBuffers[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {
+    ModelBlock models[LUZ_MAX_MODELS];
+} modelsBuffers[];
+
+layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
+
+#define tlas tlasBuffer[scene.tlasRid]
+#define scene sceneBuffers[sceneBufferIndex].block
+#define model modelsBuffers[modelBufferIndex].models[modelID]
+
+#endif

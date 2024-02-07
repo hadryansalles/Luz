@@ -7,6 +7,9 @@
 #include "Scene.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
+#include "AssetManager2.hpp"
+#include "GPUScene.hpp"
+#include "ImGuiLayer.h"
 
 #include <stb_image.h>
 
@@ -37,6 +40,10 @@ private:
     bool drawUi = true;
     bool viewportResized = false;
     glm::ivec2 viewportSize = { 64, 48 };
+    AssetManager2 assetManager;
+    GPUScene gpuScene;
+    Ref<SceneAsset> scene;
+    ImGuiLayer imguiLayer;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -53,47 +60,44 @@ private:
         AssetManager::Setup();
         SetupImgui();
         Scene::Setup();
+        // todo: asset manager load default file
+        scene = assetManager.GetInitialScene();
     }
 
     void Create() {
         LUZ_PROFILE_FUNC();
-        CreateVulkan();
-    }
-
-    void CreateVulkan() {
-        LUZ_PROFILE_FUNC();
         Window::Create();
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
-        DEBUG_TRACE("Finish creating SwapChain.");
         CreateImgui();
         DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         DeferredShading::CreateShaders();
         AssetManager::Create();
+        gpuScene.Create();
         Scene::CreateResources();
         createUniformProjection();
     }
 
     void Finish() {
         LUZ_PROFILE_FUNC();
-        DestroyVulkan();
-        AssetManager::Finish();
-        FinishImgui();
-    }
-
-    void DestroyVulkan() {
-        LUZ_PROFILE_FUNC();
+        gpuScene.Destroy();
         Scene::DestroyResources();
         DeferredShading::Destroy();
         AssetManager::Destroy();
         DestroyImgui();
         vkw::Destroy();
         Window::Destroy();
+        AssetManager::Finish();
+        // todo: asset manager save scene
+        FinishImgui();
     }
 
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
             Window::Update();
+            assetManager.AddAssetsToScene(scene, Window::GetAndClearPaths());
+            gpuScene.AddAssets(assetManager);
+            gpuScene.UpdateResources(scene);
             AssetManager::UpdateResources();
             Transform* selectedTransform = nullptr;
             if (Scene::selectedEntity != nullptr) {
@@ -162,7 +166,7 @@ private:
                     Scene::camera.OnImgui();
                     ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem("Assets")) {
+                if (ImGui::BeginTabItem("Assets-old")) {
                     AssetManager::OnImgui();
                     ImGui::EndTabItem();
                 }
@@ -190,10 +194,13 @@ private:
         DeferredShading::OnImgui(0);
 
         bool sceneOpen = true;
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene2")) {
             Scene::OnImgui();
         }
         ImGui::End();
+
+        imguiLayer.AssetManagerOnImGui(assetManager);
+        imguiLayer.SceneOnImGui(scene);
 
         ImGui::Render();
         imguiDrawData = ImGui::GetDrawData();
@@ -220,29 +227,39 @@ private:
         });
         vkw::CmdBarrier();
 
-        auto opaqueTS = vkw::CmdBeginTimeStamp("GPU::OpaquePass");
-        DeferredShading::BeginOpaquePass();
+        gpuScene.UpdateResourcesGPU();
 
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = Scene::sceneBuffer.RID();
-        constants.modelBufferIndex = Scene::modelsBuffer.RID();
+        //constants.modelBufferIndex = Scene::modelsBuffer.RID();
+        constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 
-        for (Model* model : Scene::modelEntities) {
-            constants.modelID = model->id;
-            vkw::CmdPushConstants(&constants, sizeof(constants));
-            DeferredShading::RenderMesh(model->mesh);
-        }
+        if (gpuScene.GetMeshModels().size() > 0) {
+            auto opaqueTS = vkw::CmdBeginTimeStamp("GPU::OpaquePass");
+            DeferredShading::BeginOpaquePass();
 
-        if (Scene::renderLightGizmos) {
-            for (Light* light : Scene::lightEntities) {
-                constants.modelID = light->id;
+            //for (Model* model : Scene::modelEntities) {
+            //    constants.modelID = model->id;
+            //    vkw::CmdPushConstants(&constants, sizeof(constants));
+            //    DeferredShading::RenderMesh(model->mesh);
+            //}
+            for (GPUModel& model : gpuScene.GetMeshModels()) {
+                constants.modelID = model.modelRID;
                 vkw::CmdPushConstants(&constants, sizeof(constants));
-                DeferredShading::RenderMesh(Scene::lightMeshes[light->block.type]);
+                vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
             }
-        }
 
-        DeferredShading::EndPass();
-        vkw::CmdEndTimeStamp(opaqueTS);
+            //if (Scene::renderLightGizmos) {
+            //    for (Light* light : Scene::lightEntities) {
+            //        constants.modelID = light->id;
+            //        vkw::CmdPushConstants(&constants, sizeof(constants));
+            //        DeferredShading::RenderMesh(Scene::lightMeshes[light->block.type]);
+            //    }
+            //}
+
+            DeferredShading::EndPass();
+            vkw::CmdEndTimeStamp(opaqueTS);
+        }
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
         DeferredShading::LightConstants lightPassConstants;

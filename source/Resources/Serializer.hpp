@@ -2,6 +2,7 @@
 
 #include "Base.hpp"
 #include <json.hpp>
+#include "AssetManager2.hpp"
 
 using Json = nlohmann::json;
 
@@ -32,13 +33,15 @@ inline void from_json(const Json& j, glm::vec3& v) {
 
 struct Serializer {
     Json& j;
+    AssetManager2& manager;
     int dir = 0;
     std::filesystem::path filename;
     inline static constexpr int LOAD = 0;
     inline static constexpr int SAVE = 1;
 
-    Serializer(Json& j, int dir)
+    Serializer(Json& j, int dir, AssetManager2& manager)
         : j(j)
+        , manager(manager)
         , dir(dir)
     {}
 
@@ -49,11 +52,11 @@ struct Serializer {
             ObjectType type = j["type"];
             std::string name = j["name"];
             UUID uuid = j["uuid"];
-            object = std::dynamic_pointer_cast<T>(AssetManager2::Instance().CreateObject(type, name, uuid));
-            Serializer s(j, dir);
+            object = std::dynamic_pointer_cast<T>(manager.CreateObject(type, name, uuid));
+            Serializer s(j, dir, manager);
             object->Serialize(s);
         } else {
-            Serializer s(j, dir);
+            Serializer s(j, dir, manager);
             j["type"] = object->type;
             j["name"] = object->name;
             j["uuid"] = object->uuid;
@@ -86,7 +89,7 @@ struct Serializer {
          if (dir == SAVE) {
              Json childrenArray = Json::array();
              for (auto& x : v) {
-                 Serializer childSerializer(childrenArray.emplace_back(), dir);
+                 Serializer childSerializer(childrenArray.emplace_back(), dir, manager);
                  childSerializer.Serialize(x);
              }
              j[field] = childrenArray;
@@ -96,7 +99,7 @@ struct Serializer {
                  ObjectType type = j["type"];
                  std::string name = j["name"];
                  UUID uuid = j["uuid"];
-                 Serializer childSerializer(value, dir);
+                 Serializer childSerializer(value, dir, manager);
                  childSerializer.Serialize(v.emplace_back());
              }
          }
@@ -111,7 +114,7 @@ struct Serializer {
                 j[field] = 0;
             }
         } else if (j.contains(field) && j[field] != 0) {
-            object = AssetManager2::Instance().Get<T>(j[field]);
+            object = manager.Get<T>(j[field]);
         }
     }
 };

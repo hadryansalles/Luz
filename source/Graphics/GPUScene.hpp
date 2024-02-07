@@ -23,12 +23,16 @@ struct GPUTexture {
 struct GPUModel {
     GPUMesh mesh;
     uint32_t modelRID;
+    Ref<MeshNode> node;
 };
 
 struct GPUScene {
     GPUScene();
     ~GPUScene();
     
+    void Create();
+    void Destroy();
+
     void AddMesh(const Ref<MeshAsset>& asset);
     void AddTexture(const Ref<TextureAsset>& asset);
     void AddAssets(const AssetManager2& assets);
@@ -37,7 +41,7 @@ struct GPUScene {
     void UpdateResources(Ref<SceneAsset>& asset);
     void UpdateResourcesGPU();
 
-    const std::vector<GPUModel>& GetMeshModels();
+    std::vector<GPUModel>& GetMeshModels();
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();
