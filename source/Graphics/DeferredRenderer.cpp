@@ -195,12 +195,8 @@ void ComposePass() {
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
-void BeginPresentPass() {
-    vkw::CmdBeginPresent();
-}
-
-void EndPresentPass() {
-    vkw::CmdEndPresent();
+void PrepareEmptyPresent() {
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
 void OnImgui(int numFrame) {

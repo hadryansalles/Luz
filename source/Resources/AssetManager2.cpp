@@ -87,7 +87,7 @@ void MaterialAsset::Serialize(Serializer& s) {
 }
 
 void SceneAsset::Serialize(Serializer& s) {
-    s.Vector("nodes", nodes);
+    s.VectorRef("nodes", nodes);
 }
 
 void Node::Serialize(Serializer& s) {
@@ -98,6 +98,7 @@ void Node::Serialize(Serializer& s) {
 }
 
 void MeshNode::Serialize(Serializer& s) {
+    Node::Serialize(s);
     s.Asset("mesh", mesh);
     s.Asset("material", material);
 }
@@ -113,14 +114,15 @@ void AssetManager2::LoadProject(const std::filesystem::path& path) {
     Json j;
     int dir = Serializer::LOAD;
     j = Json::parse(AssetIO::ReadFile(path));
-    for (auto& assetJson : j) {
+    for (auto& assetJson : j["assets"]) {
         Ref<Asset> asset;
         Serializer s = Serializer(assetJson, dir, *this);
         s.Serialize(asset);
     }
-    if (j.contains("initialScene")) {
-        initialScene = j["initialScene"];
+    for (auto& assetPair : assets) {
+        LOG_INFO("uuid {} type {}", assetPair.second->uuid, assetPair.second->type);
     }
+    initialScene = j["initialScene"];
 }
 
 void AssetManager2::SaveProject(const std::filesystem::path& path) {
@@ -139,9 +141,11 @@ void AssetManager2::SaveProject(const std::filesystem::path& path) {
         Json assetJson;
         Serializer s = Serializer(assetJson, dir, *this);
         s.Serialize(asset);
-        j.push_back(assetJson);
+        j["assets"].push_back(assetJson);
     }
     j["initialScene"] = initialScene;
+    AssetIO::WriteFile(path, j.dump(2));
+    // todo: use imgui flag to tell it's unsaved
 }
 
 void AssetManager2::OnImgui() {

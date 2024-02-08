@@ -15,6 +15,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+#include <ostream>
+
 namespace std {
     template<> struct hash<MeshAsset::MeshVertex> {
         size_t operator()(MeshAsset::MeshVertex const& vertex) const {
@@ -47,9 +49,11 @@ std::string ReadFile(const std::filesystem::path& path) {
 }
 
 void WriteFile(const std::filesystem::path& path, const std::string& content) {
-    FILE* f = fopen(path.string().c_str(), "w");
-    fwrite(content.data(), sizeof(u8), content.size(), f);
-    fclose(f);
+    std::ofstream file(path, std::ofstream::out);
+    if (file.is_open()) {
+        file.write(content.data(), content.size());
+        file.close();
+    }
 }
 
 UUID Import(const std::filesystem::path& path, AssetManager2& assets) {

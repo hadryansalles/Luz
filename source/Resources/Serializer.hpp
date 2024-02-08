@@ -48,6 +48,7 @@ struct Serializer {
     template<typename T>
     void Serialize(Ref<T>& object) {
         if (dir == LOAD) {
+            LOG_INFO("{}", j.dump());
             DEBUG_ASSERT(j.contains("type") && j.contains("name") && j.contains("uuid"), "Object doens't contain required fields.");
             ObjectType type = j["type"];
             std::string name = j["name"];

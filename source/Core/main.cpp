@@ -61,6 +61,7 @@ private:
         SetupImgui();
         Scene::Setup();
         // todo: asset manager load default file
+        assetManager.LoadProject("assets/default.luz");
         scene = assetManager.GetInitialScene();
     }
 
@@ -107,6 +108,10 @@ private:
             drawFrame();
             if (Window::IsKeyPressed(GLFW_KEY_F1)) {
                 drawUi = !drawUi;
+            }
+            if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyPressed(GLFW_KEY_S)) {
+                LOG_INFO("Request saved");
+                assetManager.SaveProject("assets/default.luz");
             }
             if (Window::IsKeyPressed(GLFW_KEY_R)) {
                 vkw::WaitIdle();
@@ -259,26 +264,28 @@ private:
 
             DeferredShading::EndPass();
             vkw::CmdEndTimeStamp(opaqueTS);
+
+            auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
+            DeferredShading::LightConstants lightPassConstants;
+            lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
+            lightPassConstants.frameID = frameCount;
+            DeferredShading::LightPass(lightPassConstants);
+            vkw::CmdEndTimeStamp(lightTS);
+
+            auto composeTS = vkw::CmdBeginTimeStamp("GPU::ComposePass");
+            DeferredShading::ComposePass();
+            vkw::CmdEndTimeStamp(composeTS);
+        } else {
+            DeferredShading::PrepareEmptyPresent();
         }
 
-        auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
-        DeferredShading::LightConstants lightPassConstants;
-        lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
-        lightPassConstants.frameID = frameCount;
-        DeferredShading::LightPass(lightPassConstants);
-        vkw::CmdEndTimeStamp(lightTS);
-
-        auto composeTS = vkw::CmdBeginTimeStamp("GPU::ComposePass");
-        DeferredShading::ComposePass();
-        vkw::CmdEndTimeStamp(composeTS);
-
-        DeferredShading::BeginPresentPass();
+        vkw::CmdBeginPresent();
         auto imguiTS = vkw::CmdBeginTimeStamp("GPU::ImGui");
         if (drawUi) {
             vkw::CmdDrawImGui(imguiDrawData);
         }
         vkw::CmdEndTimeStamp(imguiTS);
-        DeferredShading::EndPresentPass();
+        vkw::CmdEndPresent();
         vkw::CmdEndTimeStamp(totalTS);
     }
 
@@ -429,13 +436,7 @@ private:
 int main() {
     Log::Init();
     LuzApplication app;
-    try {
-        app.run();
-    }
-    catch (const std::exception& e) {
-        std::cerr << e.what() << '\n';
-        return EXIT_FAILURE;
-    }
+    app.run();
 
     return EXIT_SUCCESS;
 }
