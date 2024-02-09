@@ -182,9 +182,13 @@ private:
     void updateCommandBuffer() {
         LUZ_PROFILE_FUNC();
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+        gpuScene.UpdateResourcesGPU();
+        vkw::EndCommandBuffer();
+        vkw::WaitQueue(vkw::Queue::Graphics);
+
+        vkw::BeginCommandBuffer(vkw::Queue::Graphics);
         auto totalTS = vkw::CmdBeginTimeStamp("GPU::Total");
 
-        gpuScene.UpdateResourcesGPU();
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
@@ -271,6 +275,7 @@ private:
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.FontGlobalScale = 2.0f;
         {
             constexpr auto ColorFromBytes = [](uint8_t r, uint8_t g, uint8_t b)
             {

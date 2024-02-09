@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Luzpch.hpp"
-
 #include <filesystem>
 #include <mutex>
 #include <unordered_map>

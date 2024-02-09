@@ -89,7 +89,232 @@ UUID ImportScene(const std::filesystem::path& path, AssetManager& assets) {
     return 0;
 }
 
-UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& assets) {
+UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager) {
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    bool ret = false;
+    if (path.extension() == ".gltf") {
+        ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+    } else {
+        ret = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
+    }
+
+    if (!warn.empty()) {
+      LOG_WARN("Warn: {}", warn.c_str());
+    }
+
+    if (!err.empty()) {
+      LOG_ERROR("Err: {}", err.c_str());
+    }
+
+    if (!ret) {
+      LOG_ERROR("Failed to parse glTF");
+      return 0;
+    }
+
+    const tinygltf::Scene& scene = model.scenes[model.defaultScene];
+    const auto getBuffer = [&](auto& accessor, auto& view) { return &model.buffers[view.buffer].data[view.byteOffset + accessor.byteOffset]; };
+
+    std::vector<Ref<TextureAsset>> loadedTextures(model.textures.size());
+    for (int i = 0; i < model.textures.size(); i++) {
+        tinygltf::Texture texture = model.textures[i];
+        tinygltf::Image image = model.images[texture.source];
+        std::vector<u8> buffer(image.width * image.height * 4);
+        if (image.component == 3) {
+            unsigned char* rgba = buffer.data(); 
+            unsigned char* rgb = image.image.data();
+            for (u32 j = 0; j < image.width * image.height; j++) {
+                rgba[0] = rgb[0];
+                rgba[1] = rgb[1];
+                rgba[2] = rgb[2];
+                rgba += 4;
+                rgb += 3;
+            }
+        } else {
+            memcpy(buffer.data(), image.image.data(), image.width * image.height * 4);
+        }
+        loadedTextures[i] = manager.CreateAsset<TextureAsset>(texture.name);
+        loadedTextures[i]->data = buffer;
+        loadedTextures[i]->width = image.width;
+        loadedTextures[i]->height = image.height;
+        loadedTextures[i]->channels = 4;
+    }
+
+    std::vector<Ref<MaterialAsset>> materials(model.materials.size());
+
+    for (int i = 0; i < materials.size(); i++) {
+        auto& mat = model.materials[i];
+        materials[i] = manager.CreateAsset<MaterialAsset>(mat.name);
+        // pbr
+        if (mat.values.find("baseColorTexture") != mat.values.end()) {
+            materials[i]->colorMap = loadedTextures[mat.values["baseColorTexture"].TextureIndex()];
+        }
+        if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
+            materials[i]->metallicRoughnessMap = loadedTextures[mat.values["metallicRoughnessTexture"].TextureIndex()];
+        }
+        if (mat.values.find("baseColorFactor") != mat.values.end()) {
+            materials[i]->color = glm::make_vec4(mat.values["baseColorFactor"].ColorFactor().data());
+        }
+        if (mat.values.find("roughnessFactor") != mat.values.end()) {
+            materials[i]->roughness = mat.values["roughnessFactor"].Factor();
+        }
+        if (mat.values.find("metallicFactor") != mat.values.end()) {
+            materials[i]->metallic = mat.values["metallicFactor"].Factor();
+        }
+        // additional
+        if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
+            materials[i]->normalMap = loadedTextures[mat.additionalValues["normalTexture"].TextureIndex()];
+        }
+        if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
+            materials[i]->emissionMap = loadedTextures[mat.additionalValues["emissiveTexture"].TextureIndex()];
+        }
+        if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
+            materials[i]->aoMap = loadedTextures[mat.additionalValues["occlusionTexture"].TextureIndex()];
+        }
+        if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
+            materials[i]->emission = glm::make_vec3(mat.additionalValues["emissiveFactor"].ColorFactor().data());
+        }
+    }
+
+    std::vector<Ref<MeshAsset>> loadedMeshes;
+    for (const tinygltf::Mesh & mesh : model.meshes) {
+        for (int i = 0; i < mesh.primitives.size(); i++) {
+            const tinygltf::Primitive& primitive = mesh.primitives[i];
+            std::string name = (mesh.name != "" ? mesh.name : path.stem().string()) + "_" + std::to_string(i);
+            Ref<MeshAsset>& desc = loadedMeshes.emplace_back(manager.CreateAsset<MeshAsset>(name));
+
+            float* bufferPos = nullptr;
+            float* bufferNormals = nullptr;
+            float* bufferTangents = nullptr;
+            float* bufferUV = nullptr;
+
+            int stridePos = 0;
+            int strideNormals = 0;
+            int strideTangents = 0;
+            int strideUV = 0;
+
+            u32 vertexCount = 0;
+            u32 indexCount = 0;
+
+            // position
+            {
+                auto it = primitive.attributes.find("POSITION");
+                DEBUG_ASSERT(it != primitive.attributes.end(), "Primitive don't have position attribute");
+                const tinygltf::Accessor accessor = model.accessors[it->second];
+                const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                bufferPos = (float*)getBuffer(accessor, bufferView);
+                stridePos = accessor.ByteStride(bufferView) / sizeof(float);
+                vertexCount = accessor.count;
+            }
+
+            // normal
+            {
+                auto it = primitive.attributes.find("NORMAL");
+                if (it != primitive.attributes.end()) {
+                    const tinygltf::Accessor accessor = model.accessors[it->second];
+                    const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                    bufferNormals = (float*)getBuffer(accessor, bufferView);
+                    strideNormals = accessor.ByteStride(bufferView) / sizeof(float);
+                }
+            }
+
+            // tangent
+            {
+                auto it = primitive.attributes.find("TANGENT");
+                if (it != primitive.attributes.end()) {
+                    const tinygltf::Accessor accessor = model.accessors[it->second];
+                    const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                    bufferTangents = (float*)getBuffer(accessor, bufferView);
+                    strideTangents = accessor.ByteStride(bufferView) / sizeof(float);
+                }
+            }
+
+            // uvs
+            {
+                auto it = primitive.attributes.find("TEXCOORD_0");
+                if (it != primitive.attributes.end()) {
+                    const tinygltf::Accessor accessor = model.accessors[it->second];
+                    const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                    bufferUV = (float*)getBuffer(accessor, bufferView);
+                    strideUV = accessor.ByteStride(bufferView) / sizeof(float);
+                }
+            }
+
+            // vertices
+            for (u32 v = 0; v < vertexCount; v++) {
+                MeshAsset::MeshVertex vertex{};
+                vertex.position = glm::make_vec3(&bufferPos[v * stridePos]);
+                vertex.normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * strideNormals]) : glm::vec3(0);
+                vertex.texCoord = bufferUV ? glm::make_vec3(&bufferUV[v * strideUV]) : glm::vec3(0);
+                vertex.tangent = bufferTangents ? glm::make_vec4(&bufferTangents[v * strideTangents]) : glm::vec4(0);
+                desc->vertices.push_back(vertex);
+            }
+
+            // indices
+            DEBUG_ASSERT(primitive.indices > -1, "Non indexed primitive not supported!");
+            {
+                const tinygltf::Accessor accessor = model.accessors[primitive.indices];
+                const tinygltf::BufferView bufferView = model.bufferViews[accessor.bufferView];
+                indexCount = accessor.count;
+                auto pushIndices = [&](auto* bufferIndex) {
+                    for (u32 i = 0; i < indexCount; i++) {
+                        desc->indices.push_back(bufferIndex[i]);
+                    }
+                };
+                switch (accessor.componentType) {
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+                    pushIndices((u32*)getBuffer(accessor, bufferView));
+                    break;
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+                    pushIndices((u16*)getBuffer(accessor, bufferView));
+                    break;
+                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+                    pushIndices((u8*)getBuffer(accessor, bufferView));
+                    break;
+                default:
+                    DEBUG_ASSERT(false, "Index type not supported!");
+                }
+            }
+
+            // calculate tangents
+            if (!bufferTangents) {
+                glm::vec3* tan1 = new glm::vec3[desc->vertices.size()*2];
+                glm::vec3* tan2 = tan1 + vertexCount;
+                for (int indexID = 0; indexID < desc->indices.size(); indexID += 3) {
+                    int index1 = desc->indices[indexID + 0];
+                    int index2 = desc->indices[indexID + 2];
+                    int index3 = desc->indices[indexID + 1];
+                    const auto& v1 = desc->vertices[index1];
+                    const auto& v2 = desc->vertices[index2];
+                    const auto& v3 = desc->vertices[index3];
+                    glm::vec3 e1 = v2.position - v1.position;
+                    glm::vec3 e2 = v3.position - v1.position;
+                    glm::vec2 duv1 = v2.texCoord - v1.texCoord;
+                    glm::vec2 duv2 = v3.texCoord - v1.texCoord;
+                    float f = 1.0f / (duv1.x * duv2.y - duv2.x * duv1.y);
+                    glm::vec3 sdir = f * (duv2.y * e1 - duv1.y * e2);
+                    glm::vec3 tdir = f * (duv1.x * e2 - duv2.x * e1);
+                    tan1[index1] += sdir;
+                    tan1[index2] += sdir;
+                    tan1[index3] += sdir;
+                    tan2[index1] += tdir;
+                    tan2[index2] += tdir;
+                    tan2[index3] += tdir;
+                }
+                for (int a = 0; a < desc->vertices.size(); a++) {
+                    glm::vec3 t = tan1[a];
+                    auto& v = desc->vertices[a];
+                    glm::vec3 n = v.normal;
+                    v.tangent = glm::vec4(glm::normalize(t - n * glm::dot(t, n)), 1.0);
+                    v.tangent.w = (glm::dot(glm::cross(n, t), tan2[a]) < 0.0f) ? -1.0f : 1.0f;
+                }
+                delete[] tan1;
+            }
+        }
+    }
     return 0;
 }
 

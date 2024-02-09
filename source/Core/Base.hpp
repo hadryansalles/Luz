@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <glm/glm.hpp>
 #include <memory>
 
 using u8  = uint8_t;

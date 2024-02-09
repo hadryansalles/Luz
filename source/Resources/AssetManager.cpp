@@ -144,9 +144,6 @@ void AssetManager::LoadProject(const std::filesystem::path& path) {
         Serializer s = Serializer(assetJson, dir, *this);
         s.Serialize(asset);
     }
-    for (auto& assetPair : assets) {
-        LOG_INFO("uuid {} type {}", assetPair.second->uuid, assetPair.second->type);
-    }
     initialScene = j["initialScene"];
 }
 

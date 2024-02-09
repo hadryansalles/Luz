@@ -180,8 +180,12 @@ void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
         ImGui::InputText("Name", &selected->name);
         impl->OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
         switch (selected->type) {
-            case ObjectType::MeshNode: impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
-            case ObjectType::LightNode: impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
+            case ObjectType::MeshNode:
+                impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
+                break;
+            case ObjectType::LightNode:
+                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
+                break;
         }
     }
     ImGui::End();
