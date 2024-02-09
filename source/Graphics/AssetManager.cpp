@@ -1,16 +1,10 @@
 #include "Luzpch.hpp"
 
 #include "AssetManager.hpp"
-//#include "LogicalDevice.hpp"
 #include "VulkanWrapper.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-
-#define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#// include <stb_image.h>
+#include <stb_image.h>
 #include <tiny_gltf.h>
 
 void AssetManager::Setup() {
@@ -207,10 +201,10 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
+    std::string err;
     std::filesystem::path parentPath = path.parent_path();
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(), parentPath.string().c_str())) {
-        LOG_ERROR("{} {}", warn, err);
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str(), parentPath.string().c_str())) {
+        LOG_ERROR("{}", err);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
     // convert obj material to my material
@@ -229,9 +223,6 @@ void AssetManager::LoadOBJ(std::filesystem::path path) {
         //     materialBlocks[i].colorMap = AssetManager::LoadTexture(copyPath.append(materials[i].diffuse_texname));
         //     materialBlocks[i].color = glm::vec3(1.0);
         // }
-    }
-    if (warn != "") {
-        LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
     Collection* collection = nullptr;
