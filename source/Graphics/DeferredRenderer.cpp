@@ -4,6 +4,7 @@
 #include "VulkanWrapper.h"
 
 #include "FileManager.hpp"
+#include <imgui/ImGuizmo.h>
 
 namespace DeferredShading {
 

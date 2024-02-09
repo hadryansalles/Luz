@@ -1,10 +1,12 @@
 #include "Editor.h"
+#include "Luzpch.hpp"
 
 #include "AssetManager.hpp"
 #include "Camera.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
+#include <imgui/ImGuizmo.h>
 
 struct EditorImpl {
     std::vector<Ref<Node>> selectedNodes;

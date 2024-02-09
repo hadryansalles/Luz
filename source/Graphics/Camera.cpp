@@ -3,6 +3,7 @@
 #include "Camera.hpp"
 #include "Window.hpp"
 #include "Transform.hpp"
+#include <imgui/imgui.h>
 
 Camera::Camera() {
     UpdateView();

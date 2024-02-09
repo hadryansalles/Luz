@@ -15,13 +15,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include <imgui/imgui.h>
-#include <imgui/ImGuizmo.h>
-
 #define GLM_FORCE_RADIANS
 #define GLM_ENABLE_EXPERIMENTAL
-// force the GLM projection matrix to use depth range of [0.0, 1.0]
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>

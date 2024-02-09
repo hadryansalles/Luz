@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <map>
 #include <vector>
+#include <imgui/imgui.h>
 
 struct GLFWwindow;
 

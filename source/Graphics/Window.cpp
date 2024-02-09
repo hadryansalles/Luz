@@ -1,6 +1,7 @@
 #include "Luzpch.hpp"
 
 #include "Window.hpp"
+#include <imgui/imgui.h>
 
 void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
     Window::scroll += y;

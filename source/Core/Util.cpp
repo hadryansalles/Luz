@@ -105,13 +105,19 @@ std::vector<u8> DecodeBase64(std::string const& input) {
     return ret;
 }
 
+struct TimeScopeImpl {
+    std::chrono::high_resolution_clock::time_point start;
+};
+
 TimeScope::TimeScope(const std::string& title) {
     this->title = title;
-    start = std::chrono::high_resolution_clock::now();
+    impl = new TimeScopeImpl;
+    impl->start = std::chrono::high_resolution_clock::now();
 }
 
 TimeScope::~TimeScope() {
     std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
-    float elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count() / 1000.0f;
+    float elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - impl->start).count() / 1000.0f;
     LOG_INFO("{} took {} seconds", title.c_str(), elapsed);
+    delete impl;
 }
