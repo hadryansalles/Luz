@@ -128,6 +128,7 @@ struct Node : Object {
 
     glm::mat4 GetLocalTransform();
     glm::mat4 GetWorldTransform();
+    static glm::mat4 ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scl, glm::mat4 parent = glm::mat4(1));
     void UpdateTransforms();
 };
 

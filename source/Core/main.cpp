@@ -180,7 +180,7 @@ private:
         }
         ImGui::End();
 
-        if (ImGui::Begin("Inspector")) {
+        if (ImGui::Begin("Inspector_old")) {
             if (Scene::selectedEntity != nullptr) {
                 Scene::InspectEntity(Scene::selectedEntity);
             }
@@ -199,13 +199,14 @@ private:
         DeferredShading::OnImgui(0);
 
         bool sceneOpen = true;
-        if (ImGui::Begin("Scene2")) {
+        if (ImGui::Begin("Scene_old")) {
             Scene::OnImgui();
         }
         ImGui::End();
 
-        imguiLayer.AssetManagerOnImGui(assetManager);
-        imguiLayer.SceneOnImGui(scene);
+        imguiLayer.AssetsPanel(assetManager);
+        imguiLayer.ScenePanel(scene);
+        imguiLayer.InspectorPanel(Scene::camera);
 
         ImGui::Render();
         imguiDrawData = ImGui::GetDrawData();

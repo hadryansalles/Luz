@@ -32,11 +32,15 @@ Node::Node() {
     type = ObjectType::Node;
 }
 
+glm::mat4 Node::ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scl, glm::mat4 parent) {
+    glm::mat4 rotationMat = glm::toMat4(glm::quat(glm::radians(rot)));
+    glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), pos);
+    glm::mat4 scaleMat = glm::scale(scl);
+    return parent * (translationMat * scaleMat * rotationMat);
+}
+
 glm::mat4 Node::GetLocalTransform() {
-    glm::mat4 rotationMat = glm::toMat4(glm::quat(glm::radians(rotation)));
-    glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), position);
-    glm::mat4 scaleMat = glm::scale(scale);
-    return translationMat * scaleMat * rotationMat;
+    return ComposeTransform(position, rotation, scale);
 }
 
 glm::mat4 Node::GetWorldTransform() {
