@@ -157,7 +157,7 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.outerAngle = 0;
         block.direction = { 0, 0, 1 };
         block.type = LightNode::LightType::Point;
-        block.numShadowSamples = 16;
+        block.numShadowSamples = light->shadows ? 16 : 0;
         block.radius = light->radius;
     }
     s.ambientLightColor = { 1, 1, 1 };

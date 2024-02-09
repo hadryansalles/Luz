@@ -37,7 +37,7 @@ glm::mat4 Node::ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, con
     glm::mat4 rotationMat = glm::toMat4(glm::quat(glm::radians(rot)));
     glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), pos);
     glm::mat4 scaleMat = glm::scale(scl);
-    return parent * (translationMat * scaleMat * rotationMat);
+    return parent * (translationMat * rotationMat * scaleMat);
 }
 
 glm::mat4 Node::GetLocalTransform() {

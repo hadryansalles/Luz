@@ -61,10 +61,9 @@ void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rot
     if (!open) {
         return;
     }
-    bool changedOnDrag = false;
-    changedOnDrag |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1);
-    changedOnDrag |= ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.1);
-    changedOnDrag |= ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 1);
+    ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1);
+    ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.1);
+    ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 1);
 
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
@@ -195,6 +194,7 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
     ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
     ImGui::DragFloat("Intensity", &node->intensity, 0.01, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
+    ImGui::Checkbox("Shadow", &node->shadows);
 }
 
 void EditorImpl::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {

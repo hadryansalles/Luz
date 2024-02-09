@@ -39,6 +39,7 @@ struct Object {
     std::string name = "Unintialized";
     UUID uuid = 0;
     ObjectType type = ObjectType::Invalid;
+    // todo: rethink this gpu dirty flag...
     bool gpuDirty = true;
 
     Object& operator=(Object& rhs) {
