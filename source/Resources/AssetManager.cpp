@@ -132,6 +132,9 @@ Ref<SceneAsset> AssetManager::GetInitialScene() {
 }
 
 void AssetManager::LoadProject(const std::filesystem::path& path) {
+    if (!std::ifstream(path)) {
+        return;
+    }
     Json j;
     int dir = Serializer::LOAD;
     j = Json::parse(AssetIO::ReadFile(path));

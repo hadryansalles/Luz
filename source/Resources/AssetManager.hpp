@@ -11,9 +11,6 @@
 struct Serializer;
 struct AssetManager;
 
-template<typename T>
-using Ref = std::shared_ptr<T>;
-
 enum class ObjectType {
     Invalid,
     TextureAsset,
@@ -23,16 +20,19 @@ enum class ObjectType {
     Node,
     MeshNode,
     LightNode,
+    Count,
 };
 
-inline const char* ObjectTypeName[] = {
+inline std::string ObjectTypeName[] = {
     "Invalid",
-    "TextureAsset",
-    "MeshAsset",
-    "MaterialAsset",
-    "SceneAsset",
+    "Texture",
+    "Mesh",
+    "Material",
+    "Scene",
     "Node",
-    "MeshNode"
+    "MeshNode",
+    "LightNode",
+    "Count",
 };
 
 struct Object {
@@ -242,6 +242,14 @@ struct AssetManager {
             if (pair.second->type == type) {
                 all.emplace_back(std::dynamic_pointer_cast<T>(pair.second));
             }
+        }
+        return all;
+    }
+
+    std::vector<Ref<Asset>> GetAll() const {
+        std::vector<Ref<Asset>> all;
+        for (auto& pair : assets) {
+            all.emplace_back(std::dynamic_pointer_cast<Asset>(pair.second));
         }
         return all;
     }

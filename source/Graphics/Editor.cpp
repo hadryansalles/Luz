@@ -1,9 +1,37 @@
-#include "ImGuiLayer.h"
+#include "Editor.h"
+
+#include "AssetManager.hpp"
+#include "Camera.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
 
-void ImGuiLayer::OnNode(Ref<Node> node) {
+struct EditorImpl {
+    std::vector<Ref<Node>> selectedNodes;
+    std::vector<Ref<Node>> copiedNodes;
+    bool assetTypeFilter[int(ObjectType::Count)] = {};
+    std::string assetNameFilter = "";
+    void OnNode(Ref<Node> node);
+    void InspectMeshNode(AssetManager& manager, Ref<MeshNode> node);
+    void InspectLightNode(AssetManager& manager, Ref<LightNode> node);
+    void InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material);
+    void OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
+    void Select(Ref<Node>& node);
+    int FindSelected(Ref<Node>& node);
+};
+
+Editor::Editor() {
+    impl = new EditorImpl();
+    for (int i = 0; i < int(ObjectType::Count); i++) {
+        impl->assetTypeFilter[i] = true;
+    }
+}
+
+Editor::~Editor() {
+    delete impl;
+}
+
+void EditorImpl::OnNode(Ref<Node> node) {
     ImGui::PushID(node->uuid);
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
     if (node->children.size() == 0) {
@@ -25,7 +53,7 @@ void ImGuiLayer::OnNode(Ref<Node> node) {
     ImGui::PopID();
 }
 
-void ImGuiLayer::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent) {
+void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent) {
     // todo: use parent transform to allow World option
     bool open = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
     if (!open) {
@@ -81,14 +109,14 @@ void ImGuiLayer::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rot
     ImGui::Separator();
 }
 
-int ImGuiLayer::FindSelected(Ref<Node>& node) {
+int EditorImpl::FindSelected(Ref<Node>& node) {
     auto it = std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const Ref<Node>& other) {
         return node->uuid == other->uuid;
     });
     return it == selectedNodes.end() ? -1 : it - selectedNodes.begin();
 }
 
-void ImGuiLayer::Select(Ref<Node>& node) {
+void EditorImpl::Select(Ref<Node>& node) {
     bool holdingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
     int index = FindSelected(node);
     if (index != -1 && holdingCtrl) {
@@ -102,7 +130,7 @@ void ImGuiLayer::Select(Ref<Node>& node) {
     }
 }
 
-void ImGuiLayer::ScenePanel(Ref<SceneAsset>& scene) {
+void Editor::ScenePanel(Ref<SceneAsset>& scene) {
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -118,18 +146,18 @@ void ImGuiLayer::ScenePanel(Ref<SceneAsset>& scene) {
         if (ImGui::Button("Light")) {
             auto newLight = scene->Add<LightNode>();
             newLight->name = "New Light";
-            selectedNodes = { newLight };
+            impl->selectedNodes = { newLight };
         }
         if (ImGui::CollapsingHeader("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (auto& node : scene->nodes) {
-                OnNode(node);
+                impl->OnNode(node);
             }
             bool pressingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
             if (pressingCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
-                copiedNodes = selectedNodes;
+                impl->copiedNodes = impl->selectedNodes;
             }
             if (pressingCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) {
-                for (auto& node : selectedNodes) {
+                for (auto& node : impl->selectedNodes) {
                     scene->Add(Node::Clone(node));
                 }
             }
@@ -140,34 +168,30 @@ void ImGuiLayer::ScenePanel(Ref<SceneAsset>& scene) {
     ImGui::End();
 }
 
-bool ImGuiLayer::IsSelected(Ref<Node>& node) {
-    return FindSelected(node) != -1;
-}
-
-void ImGuiLayer::InspectorPanel(AssetManager& assetManager, Camera& camera) {
+void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
     bool open = ImGui::Begin("Inspector");
-    if (open && selectedNodes.size() > 0) {
+    if (open && impl->selectedNodes.size() > 0) {
         // todo: handle multi selection
-        Ref<Node>& selected = selectedNodes.back();
+        Ref<Node>& selected = impl->selectedNodes.back();
         // todo: fix uuid on imgui
         ImGui::InputInt("UUID", (int*)&selected->uuid, 0, 0, ImGuiInputTextFlags_ReadOnly);
         ImGui::InputText("Name", &selected->name);
-        OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
+        impl->OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
         switch (selected->type) {
-            case ObjectType::MeshNode: InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
-            case ObjectType::LightNode: InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
+            case ObjectType::MeshNode: impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
+            case ObjectType::LightNode: impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
         }
     }
     ImGui::End();
 }
 
-void ImGuiLayer::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
+void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
     ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
     ImGui::DragFloat("Intensity", &node->intensity, 0.01, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
 }
 
-void ImGuiLayer::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
+void EditorImpl::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
     std::string preview = node->mesh ? node->mesh->name : "UNSELECTED";
     if (ImGui::BeginCombo("Mesh", preview.c_str())) {
         for (const auto& mesh : manager.GetAll<MeshAsset>(ObjectType::MeshAsset)) {
@@ -203,7 +227,7 @@ void ImGuiLayer::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
     ImGui::Separator();
 }
 
-void ImGuiLayer::InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material) {
+void EditorImpl::InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material) {
     ImGui::PushID(material->uuid);
     ImGui::InputText("Name", &material->name);
     ImGui::ColorEdit4("Color", glm::value_ptr(material->color));
@@ -213,27 +237,35 @@ void ImGuiLayer::InspectMaterial(AssetManager& manager, Ref<MaterialAsset> mater
     ImGui::PopID();
 }
 
-void ImGuiLayer::AssetsPanel(AssetManager& assets) {
-    if (ImGui::Begin("Assets")) {
-        if (ImGui::CollapsingHeader("Meshes")) {
-            for (auto& asset : assets.GetAll<MeshAsset>(ObjectType::MeshAsset)) {
-                if (ImGui::TreeNodeEx(&asset->uuid, ImGuiTreeNodeFlags_None, "%s#%d", asset->name.c_str(), asset->uuid)) {
-                    ImGui::Text("Indices: %d", asset->indices.size());
-                    ImGui::Text("Vertices: %d", asset->vertices.size());
-                    ImGui::TreePop();
-                }
-            }
+void Editor::AssetsPanel(AssetManager& manager) {
+    if (!ImGui::Begin("Assets")) {
+        ImGui::End();
+        return;
+    }
+    ImGui::InputText("Filter", &impl->assetNameFilter);
+    ImGui::Checkbox("Mesh", &impl->assetTypeFilter[int(ObjectType::MeshAsset)]);
+    ImGui::SameLine();
+    ImGui::Checkbox("Scene", &impl->assetTypeFilter[int(ObjectType::SceneAsset)]);
+    ImGui::SameLine();
+    ImGui::Checkbox("Texture", &impl->assetTypeFilter[int(ObjectType::TextureAsset)]);
+    ImGui::SameLine();
+    if (ImGui::Button("All/None")) {
+        for (int i = 0; i < int(ObjectType::Count); i++) {
+            impl->assetTypeFilter[i] = !impl->assetTypeFilter[int(ObjectType::Count)-1];
         }
-        if (ImGui::CollapsingHeader("Textures")) {
-            for (auto& asset : assets.GetAll<TextureAsset>(ObjectType::TextureAsset)) {
-                if (ImGui::TreeNodeEx(&asset->uuid, ImGuiTreeNodeFlags_None, "%s#%d", asset->name.c_str(), asset->uuid)) {
-                    ImGui::Text("Width: %d", asset->width);
-                    ImGui::Text("Height: %d", asset->height);
-                    ImGui::Text("Channels: %d", asset->channels);
-                    ImGui::TreePop();
-                }
-            }
+    }
+    for (auto& asset : manager.GetAll()) {
+        if (!impl->assetTypeFilter[int(asset->type)]) {
+            continue;
         }
+        if (impl->assetNameFilter != "" && asset->name.find(impl->assetNameFilter) == std::string::npos) {
+            continue;
+        }
+        ImGui::PushID(asset->uuid);
+        if (ImGui::CollapsingHeader((ObjectTypeName[int(asset->type)] + "-" + asset->name).c_str())) {
+            // todo: check type and inspect
+        }
+        ImGui::PopID();
     }
     ImGui::End();
 }

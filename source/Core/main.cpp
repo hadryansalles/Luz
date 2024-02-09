@@ -7,7 +7,7 @@
 #include "VulkanWrapper.h"
 #include "AssetManager.hpp"
 #include "GPUScene.hpp"
-#include "ImGuiLayer.h"
+#include "Editor.h"
 
 #include <stb_image.h>
 
@@ -39,7 +39,7 @@ private:
     AssetManager assetManager;
     GPUScene gpuScene;
     Ref<SceneAsset> scene;
-    ImGuiLayer imguiLayer;
+    Editor editor;
     Camera mainCamera;
 
     void WaitToInit(float seconds) {
@@ -171,9 +171,9 @@ private:
 
         DeferredShading::OnImgui(0);
 
-        imguiLayer.AssetsPanel(assetManager);
-        imguiLayer.ScenePanel(scene);
-        imguiLayer.InspectorPanel(assetManager, mainCamera);
+        editor.AssetsPanel(assetManager);
+        editor.ScenePanel(scene);
+        editor.InspectorPanel(assetManager, mainCamera);
 
         ImGui::Render();
         imguiDrawData = ImGui::GetDrawData();
