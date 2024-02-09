@@ -1,7 +1,6 @@
 #include "Luzpch.hpp"
 
 #include "DeferredRenderer.hpp"
-#include "AssetManager.hpp"
 #include "VulkanWrapper.h"
 
 #include "FileManager.hpp"
@@ -131,11 +130,6 @@ void CreateImages(uint32_t width, uint32_t height) {
 
 void Destroy() {
     ctx = {};
-}
-
-void RenderMesh(RID meshId) {
-    MeshResource& mesh = AssetManager::meshes[meshId];
-    vkw::CmdDrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
 }
 
 void BeginOpaquePass() {

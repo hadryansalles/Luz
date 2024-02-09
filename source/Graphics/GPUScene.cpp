@@ -106,7 +106,7 @@ void GPUScene::ClearAssets() {
     impl->meshModels.clear();
 }
 
-void GPUScene::AddAssets(const AssetManager2& assets) {
+void GPUScene::AddAssets(const AssetManager& assets) {
     const auto& meshes = assets.GetAll<MeshAsset>(ObjectType::MeshAsset);
     for (auto& mesh : meshes) {
         if (mesh->gpuDirty) {

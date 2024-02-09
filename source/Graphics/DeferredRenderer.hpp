@@ -24,7 +24,6 @@ void CreateShaders();
 void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
 
-void RenderMesh(RID meshId);
 void LightPass(LightConstants constants);
 void ComposePass();
 void BeginOpaquePass();

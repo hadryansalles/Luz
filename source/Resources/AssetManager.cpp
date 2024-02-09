@@ -1,6 +1,6 @@
 #include "Luzpch.hpp"
 
-#include "AssetManager2.hpp"
+#include "AssetManager.hpp"
 #include "Serializer.hpp"
 #include "AssetIO.hpp"
 
@@ -121,16 +121,17 @@ void LightNode::Serialize(Serializer& s) {
     s("intensity", intensity);
     s("lightType", type);
     s("shadows", shadows);
+    s("radius", radius);
 }
 
-Ref<SceneAsset> AssetManager2::GetInitialScene() {
+Ref<SceneAsset> AssetManager::GetInitialScene() {
     if (!initialScene) {
         CreateAsset<SceneAsset>("DefaultScene");
     }
     return Get<SceneAsset>(initialScene);
 }
 
-void AssetManager2::LoadProject(const std::filesystem::path& path) {
+void AssetManager::LoadProject(const std::filesystem::path& path) {
     Json j;
     int dir = Serializer::LOAD;
     j = Json::parse(AssetIO::ReadFile(path));
@@ -145,7 +146,7 @@ void AssetManager2::LoadProject(const std::filesystem::path& path) {
     initialScene = j["initialScene"];
 }
 
-void AssetManager2::SaveProject(const std::filesystem::path& path) {
+void AssetManager::SaveProject(const std::filesystem::path& path) {
     TimeScope t("AssetManager::SaveProject");
     Json j;
     int dir = Serializer::SAVE;
@@ -168,7 +169,7 @@ void AssetManager2::SaveProject(const std::filesystem::path& path) {
     // todo: use imgui flag to tell it's unsaved
 }
 
-void AssetManager2::OnImgui() {
+void AssetManager::OnImgui() {
      for (auto& assetPair : assets) {
          auto& asset = assetPair.second;
          if (ImGui::TreeNode(&asset->uuid, "%s", asset->name.c_str())) {
@@ -177,7 +178,7 @@ void AssetManager2::OnImgui() {
      }
 }
 
-UUID AssetManager2::NewUUID() {
+UUID AssetManager::NewUUID() {
     // todo: replace with something actually UUID
     static std::random_device rd;
     static std::mt19937_64 eng(rd());
@@ -185,7 +186,7 @@ UUID AssetManager2::NewUUID() {
     return dist(eng);
 }
 
-void AssetManager2::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths) {
+void AssetManager::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths) {
     for (const auto& path : paths) {
         UUID uuid = AssetIO::Import(path, *this);
         if (uuid != 0 && assets[uuid]->type == ObjectType::SceneAsset) {
@@ -194,7 +195,7 @@ void AssetManager2::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<s
     }
 }
 
-void SceneAsset::Merge(AssetManager2& manager, const Ref<SceneAsset>& rhs) {
+void SceneAsset::Merge(AssetManager& manager, const Ref<SceneAsset>& rhs) {
     for (auto& node : rhs->nodes) {
         Ref<Object> newObject = manager.CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
         Ref<Node> newNode = std::dynamic_pointer_cast<Node>(newObject);
@@ -207,7 +208,7 @@ void SceneAsset::Merge(AssetManager2& manager, const Ref<SceneAsset>& rhs) {
 }
 
 Ref<Node> Node::Clone(Ref<Node>& node) {
-    Ref<Object> cloneObject = AssetManager2::CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
+    Ref<Object> cloneObject = AssetManager::CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
     Ref<Node> clone = std::dynamic_pointer_cast<Node>(cloneObject);
     clone->children.clear();
     for (auto& child : node->children) {
@@ -216,7 +217,7 @@ Ref<Node> Node::Clone(Ref<Node>& node) {
     return clone;
 }
 
-void Node::AddClone(AssetManager2& manager, const Ref<Node>& node) {
+void Node::AddClone(AssetManager& manager, const Ref<Node>& node) {
     Ref<Object> newObject = manager.CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
     Ref<Node> newNode = std::dynamic_pointer_cast<Node>(newObject);
     newNode->children.clear();

@@ -3,12 +3,12 @@
 #include <filesystem>
 #include "Base.hpp"
 
-struct AssetManager2;
+struct AssetManager;
 
 namespace AssetIO {
-    UUID Import(const std::filesystem::path& path, AssetManager2& assets);
-    UUID ImportTexture(const std::filesystem::path& path, AssetManager2& assets);
-    UUID ImportScene(const std::filesystem::path& path, AssetManager2& assets);
+    UUID Import(const std::filesystem::path& path, AssetManager& assets);
+    UUID ImportTexture(const std::filesystem::path& path, AssetManager& assets);
+    UUID ImportScene(const std::filesystem::path& path, AssetManager& assets);
     bool IsTexture(const std::filesystem::path& path);
     bool IsScene(const std::filesystem::path& path);
     void WriteFile(const std::filesystem::path& path, const std::string& content);

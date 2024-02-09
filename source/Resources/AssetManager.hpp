@@ -9,7 +9,7 @@
 #include "Util.hpp"
 
 struct Serializer;
-struct AssetManager2;
+struct AssetManager;
 
 template<typename T>
 using Ref = std::shared_ptr<T>;
@@ -138,7 +138,7 @@ struct Node : Object {
     }
 
     static Ref<Node> Clone(Ref<Node>& node);
-    void AddClone(AssetManager2& manager, const Ref<Node>& node);
+    void AddClone(AssetManager& manager, const Ref<Node>& node);
 
     glm::mat4 GetLocalTransform();
     glm::mat4 GetWorldTransform();
@@ -190,7 +190,7 @@ struct SceneAsset : Asset {
         nodes.push_back(node);
     }
 
-    void Merge(AssetManager2& manager, const Ref<SceneAsset>& rhs);
+    void Merge(AssetManager& manager, const Ref<SceneAsset>& rhs);
 
     template<typename T>
     void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
@@ -219,7 +219,7 @@ struct SceneAsset : Asset {
     void UpdateTransforms();
 };
 
-struct AssetManager2 {
+struct AssetManager {
     void AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
     void LoadProject(const std::filesystem::path& path);
     void SaveProject(const std::filesystem::path& path);

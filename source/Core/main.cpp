@@ -3,11 +3,9 @@
 #include "Window.hpp"
 #include "Camera.hpp"
 #include "FileManager.hpp"
-#include "AssetManager.hpp"
-#include "Scene.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
-#include "AssetManager2.hpp"
+#include "AssetManager.hpp"
 #include "GPUScene.hpp"
 #include "ImGuiLayer.h"
 
@@ -17,8 +15,6 @@
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_stdlib.h>
 
-// #define GLFW_INCLUDE_VULKAN
-// glfw will include vulkan and its own definitions
 #include <GLFW/glfw3.h>
 
 #ifdef _DEBUG
@@ -40,10 +36,11 @@ private:
     bool drawUi = true;
     bool viewportResized = false;
     glm::ivec2 viewportSize = { 64, 48 };
-    AssetManager2 assetManager;
+    AssetManager assetManager;
     GPUScene gpuScene;
     Ref<SceneAsset> scene;
     ImGuiLayer imguiLayer;
+    Camera mainCamera;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -57,10 +54,7 @@ private:
 
     void Setup() {
         LUZ_PROFILE_FUNC();
-        AssetManager::Setup();
         SetupImgui();
-        Scene::Setup();
-        // todo: asset manager load default file
         assetManager.LoadProject("assets/default.luz");
         scene = assetManager.GetInitialScene();
     }
@@ -72,23 +66,17 @@ private:
         CreateImgui();
         DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         DeferredShading::CreateShaders();
-        AssetManager::Create();
         gpuScene.Create();
-        Scene::CreateResources();
         createUniformProjection();
     }
 
     void Finish() {
         LUZ_PROFILE_FUNC();
         gpuScene.Destroy();
-        Scene::DestroyResources();
         DeferredShading::Destroy();
-        AssetManager::Destroy();
         DestroyImgui();
         vkw::Destroy();
         Window::Destroy();
-        AssetManager::Finish();
-        // todo: asset manager save scene
         FinishImgui();
     }
 
@@ -98,13 +86,9 @@ private:
             Window::Update();
             assetManager.AddAssetsToScene(scene, Window::GetAndClearPaths());
             gpuScene.AddAssets(assetManager);
-            gpuScene.UpdateResources(scene, Scene::camera);
-            AssetManager::UpdateResources();
-            Transform* selectedTransform = nullptr;
-            if (Scene::selectedEntity != nullptr) {
-                selectedTransform = &Scene::selectedEntity->transform;
-            }
-            Scene::camera.Update(selectedTransform);
+            gpuScene.UpdateResources(scene, mainCamera);
+            // todo: focus camera on selected object
+            mainCamera.Update(nullptr);
             drawFrame();
             if (Window::IsKeyPressed(GLFW_KEY_F1)) {
                 drawUi = !drawUi;
@@ -134,7 +118,7 @@ private:
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = Scene::camera.GetProj() * Scene::camera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = mainCamera.GetProj() * mainCamera.GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         glm::ivec2 ext = viewportSize;
         screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
@@ -168,21 +152,10 @@ private:
             if (ImGui::BeginTabBar("LuzEngineMainTab")) {
                 if (ImGui::BeginTabItem("Configuration")) {
                     Window::OnImgui();
-                    Scene::camera.OnImgui();
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Assets-old")) {
-                    AssetManager::OnImgui();
+                    mainCamera.OnImgui();
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
-            }
-        }
-        ImGui::End();
-
-        if (ImGui::Begin("Inspector_old")) {
-            if (Scene::selectedEntity != nullptr) {
-                Scene::InspectEntity(Scene::selectedEntity);
             }
         }
         ImGui::End();
@@ -198,15 +171,9 @@ private:
 
         DeferredShading::OnImgui(0);
 
-        bool sceneOpen = true;
-        if (ImGui::Begin("Scene_old")) {
-            Scene::OnImgui();
-        }
-        ImGui::End();
-
         imguiLayer.AssetsPanel(assetManager);
         imguiLayer.ScenePanel(scene);
-        imguiLayer.InspectorPanel(assetManager, Scene::camera);
+        imguiLayer.InspectorPanel(assetManager, mainCamera);
 
         ImGui::Render();
         imguiDrawData = ImGui::GetDrawData();
@@ -217,27 +184,8 @@ private:
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
         auto totalTS = vkw::CmdBeginTimeStamp("GPU::Total");
 
-        vkw::CmdCopy(Scene::sceneBuffer, &Scene::scene, sizeof(Scene::scene));
-        vkw::CmdCopy(Scene::modelsBuffer, &Scene::models, sizeof(Scene::models));
-        vkw::CmdTimeStamp("GPU::BuildTLAS", [&] {
-            std::vector<vkw::BLASInstance> vkwInstances(Scene::modelEntities.size());
-            for (int i = 0; i < Scene::modelEntities.size(); i++) {
-                MeshResource& mesh = AssetManager::meshes[Scene::modelEntities[i]->mesh];
-                vkwInstances[i] = {
-                    .blas = mesh.blas,
-                    .modelMat = Scene::modelEntities[i]->transform.GetMatrix(),
-                    .customIndex = Scene::modelEntities[i]->id,
-                };
-            }
-            vkw::CmdBuildTLAS(Scene::tlas, vkwInstances);
-        });
-        vkw::CmdBarrier();
-
         gpuScene.UpdateResourcesGPU();
-
         DeferredShading::OpaqueConstants constants;
-        //constants.sceneBufferIndex = Scene::sceneBuffer.RID();
-        //constants.modelBufferIndex = Scene::modelsBuffer.RID();
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 
@@ -245,24 +193,13 @@ private:
             auto opaqueTS = vkw::CmdBeginTimeStamp("GPU::OpaquePass");
             DeferredShading::BeginOpaquePass();
 
-            //for (Model* model : Scene::modelEntities) {
-            //    constants.modelID = model->id;
-            //    vkw::CmdPushConstants(&constants, sizeof(constants));
-            //    DeferredShading::RenderMesh(model->mesh);
-            //}
             for (GPUModel& model : gpuScene.GetMeshModels()) {
                 constants.modelID = model.modelRID;
                 vkw::CmdPushConstants(&constants, sizeof(constants));
                 vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
             }
 
-            //if (Scene::renderLightGizmos) {
-            //    for (Light* light : Scene::lightEntities) {
-            //        constants.modelID = light->id;
-            //        vkw::CmdPushConstants(&constants, sizeof(constants));
-            //        DeferredShading::RenderMesh(Scene::lightMeshes[light->block.type]);
-            //    }
-            //}
+            // todo: light gizmos
 
             DeferredShading::EndPass();
             vkw::CmdEndTimeStamp(opaqueTS);
@@ -298,7 +235,6 @@ private:
         if (vkw::GetSwapChainDirty()) {
             return;
         }
-        updateUniformBuffer();
         updateCommandBuffer();
         vkw::SubmitAndPresent();
 
@@ -327,12 +263,7 @@ private:
     void createUniformProjection() {
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
-        Scene::camera.SetExtent(viewportSize.x, viewportSize.y);
-    }
-
-    void updateUniformBuffer() {
-        LUZ_PROFILE_FUNC();
-        Scene::UpdateResources();
+        mainCamera.SetExtent(viewportSize.x, viewportSize.y);
     }
 
     void SetupImgui() {
@@ -340,7 +271,6 @@ private:
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        //ImGui::Dock
         {
             constexpr auto ColorFromBytes = [](uint8_t r, uint8_t g, uint8_t b)
             {

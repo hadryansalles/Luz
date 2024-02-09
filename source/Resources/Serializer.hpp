@@ -2,7 +2,7 @@
 
 #include "Base.hpp"
 #include <json.hpp>
-#include "AssetManager2.hpp"
+#include "AssetManager.hpp"
 
 using Json = nlohmann::json;
 
@@ -33,13 +33,13 @@ inline void from_json(const Json& j, glm::vec3& v) {
 
 struct Serializer {
     Json& j;
-    AssetManager2& manager;
+    AssetManager& manager;
     int dir = 0;
     std::filesystem::path filename;
     inline static constexpr int LOAD = 0;
     inline static constexpr int SAVE = 1;
 
-    Serializer(Json& j, int dir, AssetManager2& manager)
+    Serializer(Json& j, int dir, AssetManager& manager)
         : j(j)
         , manager(manager)
         , dir(dir)

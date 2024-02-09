@@ -1,7 +1,7 @@
 #include "Luzpch.hpp"
 
 #include "AssetIO.hpp"
-#include "AssetManager2.hpp"
+#include "AssetManager.hpp"
 
 #define TINYGLTF_IMPLEMENTATION
 #include <tiny_gltf.h>
@@ -28,8 +28,8 @@ namespace std {
 
 namespace AssetIO {
 
-UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager2& manager);
-UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager2& manager);
+UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager);
+UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager);
 
 bool IsTexture(const std::filesystem::path& path) {
     const std::string ext = path.extension().string();
@@ -56,7 +56,7 @@ void WriteFile(const std::filesystem::path& path, const std::string& content) {
     }
 }
 
-UUID Import(const std::filesystem::path& path, AssetManager2& assets) {
+UUID Import(const std::filesystem::path& path, AssetManager& assets) {
     TimeScope t("AssetIO::Import(" + path.string() + ")");
     const std::string ext = path.extension().string();
     if (IsTexture(path)) {
@@ -73,13 +73,13 @@ void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     memcpy(t->data.data(), indata, t->data.size());
 }
 
-UUID ImportTexture(const std::filesystem::path& path, AssetManager2& assets) {
+UUID ImportTexture(const std::filesystem::path& path, AssetManager& assets) {
     auto t = assets.CreateAsset<TextureAsset>(path.stem().string());
     ImportTexture(path, t);
     return t->uuid;
 }
 
-UUID ImportScene(const std::filesystem::path& path, AssetManager2& assets) {
+UUID ImportScene(const std::filesystem::path& path, AssetManager& assets) {
     const std::string ext = path.extension().string();
     if (ext == ".gltf" || ext == ".glb") {
         return ImportSceneGLTF(path, assets);
@@ -89,11 +89,11 @@ UUID ImportScene(const std::filesystem::path& path, AssetManager2& assets) {
     return 0;
 }
 
-UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager2& assets) {
+UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& assets) {
     return 0;
 }
 
-UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager2& manager) {
+UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;

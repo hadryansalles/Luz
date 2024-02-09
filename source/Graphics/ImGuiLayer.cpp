@@ -144,7 +144,7 @@ bool ImGuiLayer::IsSelected(Ref<Node>& node) {
     return FindSelected(node) != -1;
 }
 
-void ImGuiLayer::InspectorPanel(AssetManager2& assetManager, Camera& camera) {
+void ImGuiLayer::InspectorPanel(AssetManager& assetManager, Camera& camera) {
     bool open = ImGui::Begin("Inspector");
     if (open && selectedNodes.size() > 0) {
         // todo: handle multi selection
@@ -154,13 +154,20 @@ void ImGuiLayer::InspectorPanel(AssetManager2& assetManager, Camera& camera) {
         ImGui::InputText("Name", &selected->name);
         OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
         switch (selected->type) {
-            case ObjectType::MeshNode: InspectMesh(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
+            case ObjectType::MeshNode: InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
+            case ObjectType::LightNode: InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
         }
     }
     ImGui::End();
 }
 
-void ImGuiLayer::InspectMesh(AssetManager2& manager, Ref<MeshNode> node) {
+void ImGuiLayer::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
+    ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
+    ImGui::DragFloat("Intensity", &node->intensity, 0.01, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
+    ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
+}
+
+void ImGuiLayer::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
     std::string preview = node->mesh ? node->mesh->name : "UNSELECTED";
     if (ImGui::BeginCombo("Mesh", preview.c_str())) {
         for (const auto& mesh : manager.GetAll<MeshAsset>(ObjectType::MeshAsset)) {
@@ -196,7 +203,7 @@ void ImGuiLayer::InspectMesh(AssetManager2& manager, Ref<MeshNode> node) {
     ImGui::Separator();
 }
 
-void ImGuiLayer::InspectMaterial(AssetManager2& manager, Ref<MaterialAsset> material) {
+void ImGuiLayer::InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material) {
     ImGui::PushID(material->uuid);
     ImGui::InputText("Name", &material->name);
     ImGui::ColorEdit4("Color", glm::value_ptr(material->color));
@@ -206,7 +213,7 @@ void ImGuiLayer::InspectMaterial(AssetManager2& manager, Ref<MaterialAsset> mate
     ImGui::PopID();
 }
 
-void ImGuiLayer::AssetsPanel(AssetManager2& assets) {
+void ImGuiLayer::AssetsPanel(AssetManager& assets) {
     if (ImGui::Begin("Assets")) {
         if (ImGui::CollapsingHeader("Meshes")) {
             for (auto& asset : assets.GetAll<MeshAsset>(ObjectType::MeshAsset)) {
