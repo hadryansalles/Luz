@@ -40,6 +40,7 @@ GPUScene::~GPUScene() {
 
 void GPUScene::Create() {
     impl->tlas = vkw::CreateTLAS(LUZ_MAX_MODELS, "mainTLAS");
+    impl->sceneBuffer = vkw::CreateBuffer(sizeof(SceneBlock), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
     impl->modelsBuffer = vkw::CreateBuffer(sizeof(ModelBlock) * LUZ_MAX_MODELS, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
 }
 
@@ -122,7 +123,7 @@ void GPUScene::AddAssets(const AssetManager2& assets) {
     }
 }
 
-void GPUScene::UpdateResources(Ref<SceneAsset>& scene) {
+void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     std::vector<Ref<MeshNode>> meshNodes;
     scene->GetAll<MeshNode>(ObjectType::MeshNode, meshNodes);
     impl->modelsBlock.clear();
@@ -144,6 +145,32 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene) {
         block.modelMat = node->GetWorldTransform();
     }
     // todo: scene, lights
+
+    SceneBlock& s = impl->sceneBlock;
+    s.numLights = 0;
+    for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+        LightBlock& block = s.lights[s.numLights++];
+        block.color = light->color;
+        block.intensity = light->intensity;
+        block.position = light->GetWorldPosition();
+        block.innerAngle = 0;
+        block.outerAngle = 0;
+        block.direction = { 0, 0, 1 };
+        block.type = LightNode::LightType::Point;
+        block.numShadowSamples = 16;
+        block.radius = light->radius;
+    }
+    s.ambientLightColor = { 1, 1, 1 };
+    s.ambientLightIntensity = 0.01;
+    s.camPos = camera.GetPosition();
+    s.projView = camera.GetProj() * camera.GetView();
+    s.inverseProj = glm::inverse(camera.GetProj());
+    s.inverseView = glm::inverse(camera.GetView());
+    s.tlasRid = impl->tlas.RID();
+    s.useBlueNoise = false;
+    s.whiteTexture = -1;
+    s.blackTexture = -1;
+    s.aoNumSamples = 0;
 }
 
 void GPUScene::UpdateResourcesGPU() {
@@ -151,6 +178,7 @@ void GPUScene::UpdateResourcesGPU() {
         return;
     }
     vkw::CmdCopy(impl->modelsBuffer, impl->modelsBlock.data(), sizeof(ModelBlock)*impl->modelsBlock.size());
+    vkw::CmdCopy(impl->sceneBuffer, &impl->sceneBlock, sizeof(SceneBlock));
     vkw::CmdTimeStamp("GPUScene::BuildTLAS", [&] {
         std::vector<vkw::BLASInstance> vkwInstances(impl->meshModels.size());
         for (int i = 0; i < impl->meshModels.size(); i++) {

@@ -22,6 +22,7 @@ enum class ObjectType {
     SceneAsset,
     Node,
     MeshNode,
+    LightNode,
 };
 
 inline const char* ObjectTypeName[] = {
@@ -120,14 +121,28 @@ struct Node : Object {
         }
     }
 
-    void Add(Ref<Node>& node) {
+    template<typename T>
+    std::vector<Ref<T>> GetAll(ObjectType type) {
+        std::vector<Ref<T>> all;
+        for (auto& node : children) {
+            if (node->type == type) {
+                all.emplace_back(std::dynamic_pointer_cast<T>(node));
+            }
+            node->GetAll(type, all);
+        }
+        return all;
+    }
+
+    void Add(const Ref<Node>& node) {
         children.push_back(node);
     }
 
+    static Ref<Node> Clone(Ref<Node>& node);
     void AddClone(AssetManager2& manager, const Ref<Node>& node);
 
     glm::mat4 GetLocalTransform();
     glm::mat4 GetWorldTransform();
+    glm::vec3 GetWorldPosition();
     static glm::mat4 ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scl, glm::mat4 parent = glm::mat4(1));
     void UpdateTransforms();
 };
@@ -140,8 +155,29 @@ struct MeshNode : Node {
     virtual void Serialize(Serializer& s);
 };
 
+struct LightNode : Node {
+    enum LightType {
+        Point = 0,
+        Spot = 1,
+        Directional = 2
+    };
+    inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
+    glm::vec3 color = glm::vec3(1);
+    float intensity = 10.0f;
+    LightType lightType = LightType::Point;
+    bool shadows = false;
+
+    float radius = 2.0f;
+    float innerAngle = 2.0;
+    float outerAngle = 2.0;
+
+    LightNode();
+    virtual void Serialize(Serializer& s);
+};
+
 struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
+    // todo: scene properties, background color, hdr, etc
 
     template<typename T>
     Ref<T> Add() {
@@ -150,7 +186,7 @@ struct SceneAsset : Asset {
         return node;
     }
 
-    void Add(Ref<Node>& node) {
+    void Add(const Ref<Node>& node) {
         nodes.push_back(node);
     }
 
@@ -164,6 +200,18 @@ struct SceneAsset : Asset {
             }
             node->GetAll(type, all);
         }
+    }
+
+    template<typename T>
+    std::vector<Ref<T>> GetAll(ObjectType type) {
+        std::vector<Ref<T>> all;
+        for (auto& node : nodes) {
+            if (node->type == type) {
+                all.emplace_back(std::dynamic_pointer_cast<T>(node));
+            }
+            node->GetAll(type, all);
+        }
+        return all;
     }
 
     SceneAsset();
@@ -199,7 +247,7 @@ struct AssetManager2 {
     }
 
     template<typename T>
-    Ref<T> CreateObject(const std::string& name, UUID uuid = 0) {
+    static Ref<T> CreateObject(const std::string& name, UUID uuid = 0) {
         if (uuid == 0) {
             uuid = NewUUID();
         }
@@ -211,7 +259,12 @@ struct AssetManager2 {
 
     template<typename T>
     Ref<T> CreateAsset(const std::string& name, UUID uuid = 0) {
-        auto a = CreateObject<T>(name, uuid);
+        if (uuid == 0) {
+            uuid = NewUUID();
+        }
+        Ref<T> a = std::make_shared<T>();
+        a->name = name;
+        a->uuid = uuid;
         assets[a->uuid] = a;
         if (a->type == ObjectType::SceneAsset && !initialScene) {
             initialScene = a->uuid;
@@ -227,6 +280,7 @@ struct AssetManager2 {
             case ObjectType::SceneAsset: return CreateAsset<SceneAsset>(name, uuid);
             case ObjectType::Node: return CreateObject<Node>(name, uuid);
             case ObjectType::MeshNode: return CreateObject<MeshNode>(name, uuid);
+            case ObjectType::LightNode: return CreateObject<LightNode>(name, uuid);
             default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
@@ -239,23 +293,30 @@ struct AssetManager2 {
     }
 
     template<typename T>
-    Ref<T> CloneObject(const Ref<Object>& rhs) {
+    static Ref<T> CloneObject(const Ref<Object>& rhs) {
         Ref<T> object = CreateObject<T>(rhs->name, 0);
         *object = *std::dynamic_pointer_cast<T>(rhs);
         return object;
     }
 
-    Ref<Object> CloneObject(ObjectType type, const Ref<Object>& rhs) {
+    Ref<Object> CloneAsset(ObjectType type, const Ref<Object>& rhs) {
         switch (type) {
             case ObjectType::SceneAsset: return CloneAsset<SceneAsset>(rhs);
+            default: DEBUG_ASSERT(false, "Invalid asset type {}.", type) return nullptr;
+        }
+    }
+
+    static Ref<Object> CloneObject(ObjectType type, const Ref<Object>& rhs) {
+        switch (type) {
             case ObjectType::Node: return CloneObject<Node>(rhs);
             case ObjectType::MeshNode: return CloneObject<MeshNode>(rhs);
+            case ObjectType::LightNode: return CloneObject<LightNode>(rhs);
             default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
 
 private:
     std::unordered_map<UUID, Ref<Asset>> assets;
-    UUID NewUUID();
+    static UUID NewUUID();
     UUID initialScene = 0;
 };

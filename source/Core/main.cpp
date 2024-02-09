@@ -98,7 +98,7 @@ private:
             Window::Update();
             assetManager.AddAssetsToScene(scene, Window::GetAndClearPaths());
             gpuScene.AddAssets(assetManager);
-            gpuScene.UpdateResources(scene);
+            gpuScene.UpdateResources(scene, Scene::camera);
             AssetManager::UpdateResources();
             Transform* selectedTransform = nullptr;
             if (Scene::selectedEntity != nullptr) {
@@ -206,7 +206,7 @@ private:
 
         imguiLayer.AssetsPanel(assetManager);
         imguiLayer.ScenePanel(scene);
-        imguiLayer.InspectorPanel(Scene::camera);
+        imguiLayer.InspectorPanel(assetManager, Scene::camera);
 
         ImGui::Render();
         imguiDrawData = ImGui::GetDrawData();
@@ -236,8 +236,9 @@ private:
         gpuScene.UpdateResourcesGPU();
 
         DeferredShading::OpaqueConstants constants;
-        constants.sceneBufferIndex = Scene::sceneBuffer.RID();
+        //constants.sceneBufferIndex = Scene::sceneBuffer.RID();
         //constants.modelBufferIndex = Scene::modelsBuffer.RID();
+        constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 
         if (gpuScene.GetMeshModels().size() > 0) {

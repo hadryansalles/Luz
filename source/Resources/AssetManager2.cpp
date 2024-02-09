@@ -47,6 +47,10 @@ glm::mat4 Node::GetWorldTransform() {
     return parentTransform * GetLocalTransform();
 }
 
+glm::vec3 Node::GetWorldPosition() {
+    return parentTransform * glm::vec4(position, 1);
+}
+
 void Node::UpdateTransforms() {
     worldTransform = GetWorldTransform();
     for (auto& child : children) {
@@ -64,6 +68,10 @@ void SceneAsset::UpdateTransforms() {
 
 MeshNode::MeshNode() {
     type = ObjectType::MeshNode;
+}
+
+LightNode::LightNode() {
+    type = ObjectType::LightNode;
 }
 
 void TextureAsset::Serialize(Serializer& s) {
@@ -105,6 +113,14 @@ void MeshNode::Serialize(Serializer& s) {
     Node::Serialize(s);
     s.Asset("mesh", mesh);
     s.Asset("material", material);
+}
+
+void LightNode::Serialize(Serializer& s) {
+    Node::Serialize(s);
+    s("color", color);
+    s("intensity", intensity);
+    s("lightType", type);
+    s("shadows", shadows);
 }
 
 Ref<SceneAsset> AssetManager2::GetInitialScene() {
@@ -188,6 +204,16 @@ void SceneAsset::Merge(AssetManager2& manager, const Ref<SceneAsset>& rhs) {
         }
         nodes.push_back(newNode);
     }
+}
+
+Ref<Node> Node::Clone(Ref<Node>& node) {
+    Ref<Object> cloneObject = AssetManager2::CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
+    Ref<Node> clone = std::dynamic_pointer_cast<Node>(cloneObject);
+    clone->children.clear();
+    for (auto& child : node->children) {
+        clone->Add(Node::Clone(child));
+    }
+    return clone;
 }
 
 void Node::AddClone(AssetManager2& manager, const Ref<Node>& node) {

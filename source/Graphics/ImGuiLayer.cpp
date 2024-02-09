@@ -3,7 +3,7 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
 
-void ImGuiLayer::OnNode(Ref<Node>& node) {
+void ImGuiLayer::OnNode(Ref<Node> node) {
     ImGui::PushID(node->uuid);
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
     if (node->children.size() == 0) {
@@ -78,6 +78,7 @@ void ImGuiLayer::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rot
     ImGuizmo::Manipulate(glm::value_ptr(camera.GetView()), glm::value_ptr(guizmoProj), currentGizmoOperation, currentGizmoMode, glm::value_ptr(modelMat));
     modelMat = glm::inverse(parent) * modelMat;
     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(modelMat), glm::value_ptr(position), glm::value_ptr(rotation), glm::value_ptr(scale));
+    ImGui::Separator();
 }
 
 int ImGuiLayer::FindSelected(Ref<Node>& node) {
@@ -104,8 +105,36 @@ void ImGuiLayer::Select(Ref<Node>& node) {
 void ImGuiLayer::ScenePanel(Ref<SceneAsset>& scene) {
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
-        for (auto& node : scene->nodes) {
-            OnNode(node);
+        ImGui::Text("Add");
+        ImGui::SameLine();
+        if (ImGui::Button("Empty")) {
+            
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Mesh")) {
+            
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Light")) {
+            auto newLight = scene->Add<LightNode>();
+            newLight->name = "New Light";
+            selectedNodes = { newLight };
+        }
+        if (ImGui::CollapsingHeader("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (auto& node : scene->nodes) {
+                OnNode(node);
+            }
+            bool pressingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
+            if (pressingCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
+                copiedNodes = selectedNodes;
+            }
+            if (pressingCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) {
+                for (auto& node : selectedNodes) {
+                    scene->Add(Node::Clone(node));
+                }
+            }
+        }
+        if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         }
     }
     ImGui::End();
@@ -115,16 +144,66 @@ bool ImGuiLayer::IsSelected(Ref<Node>& node) {
     return FindSelected(node) != -1;
 }
 
-void ImGuiLayer::InspectorPanel(Camera& camera) {
+void ImGuiLayer::InspectorPanel(AssetManager2& assetManager, Camera& camera) {
     bool open = ImGui::Begin("Inspector");
     if (open && selectedNodes.size() > 0) {
         // todo: handle multi selection
         Ref<Node>& selected = selectedNodes.back();
+        // todo: fix uuid on imgui
         ImGui::InputInt("UUID", (int*)&selected->uuid, 0, 0, ImGuiInputTextFlags_ReadOnly);
         ImGui::InputText("Name", &selected->name);
         OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
+        switch (selected->type) {
+            case ObjectType::MeshNode: InspectMesh(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
+        }
     }
     ImGui::End();
+}
+
+void ImGuiLayer::InspectMesh(AssetManager2& manager, Ref<MeshNode> node) {
+    std::string preview = node->mesh ? node->mesh->name : "UNSELECTED";
+    if (ImGui::BeginCombo("Mesh", preview.c_str())) {
+        for (const auto& mesh : manager.GetAll<MeshAsset>(ObjectType::MeshAsset)) {
+            bool selected = node->mesh ? node->mesh->uuid == mesh->uuid : false;
+            if (ImGui::Selectable(mesh->name.c_str(), selected)) {
+                node->mesh = mesh;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::Separator();
+    preview = node->material ? node->material->name : "UNSELECTED";
+    if (ImGui::BeginCombo("Material", preview.c_str())) {
+        for (const auto& material : manager.GetAll<MaterialAsset>(ObjectType::MaterialAsset)) {
+            bool selected = node->material ? node->material->uuid == material->uuid : false;
+            if (ImGui::Selectable(material->name.c_str(), selected)) {
+                node->material = material;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("New")) {
+        if (node->material) {
+            node->material = manager.CloneAsset<MaterialAsset>(node->material);
+        } else {
+            node->material = manager.CreateAsset<MaterialAsset>("New Material");
+        }
+    }
+    if (node->material) {
+        InspectMaterial(manager, node->material);
+    }
+    ImGui::Separator();
+}
+
+void ImGuiLayer::InspectMaterial(AssetManager2& manager, Ref<MaterialAsset> material) {
+    ImGui::PushID(material->uuid);
+    ImGui::InputText("Name", &material->name);
+    ImGui::ColorEdit4("Color", glm::value_ptr(material->color));
+    ImGui::ColorEdit3("Emission", glm::value_ptr(material->emission));
+    ImGui::DragFloat("Roughness", &material->roughness, 0.005, 0, 1);
+    ImGui::DragFloat("Metallic", &material->metallic, 0.005, 0, 1);
+    ImGui::PopID();
 }
 
 void ImGuiLayer::AssetsPanel(AssetManager2& assets) {
