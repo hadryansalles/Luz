@@ -255,7 +255,9 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
         }
         ImGui::SameLine();
         if (ImGui::Button("Mesh")) {
-            
+            auto node = scene->Add<MeshNode>();
+            node->name = "New Mesh";
+            impl->selectedNodes = { node };
         }
         ImGui::SameLine();
         if (ImGui::Button("Light")) {

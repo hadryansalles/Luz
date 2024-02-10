@@ -37,26 +37,26 @@ void main() {
     float metallic = model.metallic;
     vec4 emission = vec4(model.emission, 1.0);
 
-    // if (model.metallicRoughnessMap >= 0) {
-    //     vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
-    //     roughness *= metallicRoughness.g;
-    //     metallic *= metallicRoughness.b;
-    // }
-    // if (model.aoMap >= 0) {
-    //     occlusion = texture(textures[model.aoMap], fragTexCoord).r;
-    // }
-    // if (model.normalMap >= 0) {
-    //     normalSample = texture(textures[model.normalMap], fragTexCoord).rgb;
-    // }
-    // if (emissionMap >= 0) {
-    //     emission *= texture(textures[model.emissionMap], fragTexCoord);
-    // }
+    if (model.metallicRoughnessMap >= 0) {
+        vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
+        roughness *= metallicRoughness.g;
+        metallic *= metallicRoughness.b;
+    }
+    if (model.aoMap >= 0) {
+        occlusion = texture(textures[model.aoMap], fragTexCoord).r;
+    }
+    if (model.normalMap >= 0) {
+        normalSample = texture(textures[model.normalMap], fragTexCoord).rgb;
+    }
+    if (model.emissionMap >= 0) {
+        emission *= texture(textures[model.emissionMap], fragTexCoord);
+    }
     vec3 N;
-    // if(fragTangent == vec3(0, 0, 0) || normalSample == vec3(1, 1, 1)) {
+    if(fragTangent == vec3(0, 0, 0) || normalSample == vec3(1, 1, 1)) {
         N = normalize(fragNormal); 
-    // } else {
-    //     N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
-    // }
+    } else {
+        N = normalize(fragTBN*normalize(normalSample*2.0 - 1.0));
+    }
     outAlbedo = albedo; 
     outNormal = vec4(N, 1.0);
     outMaterial = vec4(roughness, metallic, occlusion, 1.0);
