@@ -6,6 +6,9 @@
 #include "imgui/imgui_impl_vulkan.h"
 #include <GLFW/glfw3.h>
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 // taken from Sam Lantiga: https://www.libsdl.org/tmp/SDL/test/testvulkan.c
 static const char *VK_ERROR_STRING(VkResult result) {
     switch((int)result)
@@ -91,6 +94,7 @@ struct Context {
     VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
     std::string applicationName = "Luz";
     std::string engineName = "Luz";
+    VmaAllocator vmaAllocator;
 
     uint32_t apiVersion;
     std::vector<bool> activeLayers;
@@ -234,26 +238,24 @@ struct Resource {
 
 struct BufferResource : Resource {
     VkBuffer buffer;
-    VkDeviceMemory memory;
+    VmaAllocation allocation;
 
     virtual ~BufferResource() {
-        vkDestroyBuffer(_ctx.device, buffer, _ctx.allocator);
-        vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+        vmaDestroyBuffer(_ctx.vmaAllocator, buffer, allocation);
     }
 };
 
 struct ImageResource : Resource {
     VkImage image;
     VkImageView view;
-    VkDeviceMemory memory;
+    VmaAllocation allocation;
     bool fromSwapchain = false;
     ImTextureID imguiRID = nullptr;
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
             vkDestroyImageView(_ctx.device, view, _ctx.allocator);
-            vkDestroyImage(_ctx.device, image, _ctx.allocator);
-            vkFreeMemory(_ctx.device, memory, _ctx.allocator);
+            vmaDestroyImage(_ctx.vmaAllocator, image, allocation);
             if (rid >= 0) {
                 _ctx.availableImageRID.push_back(rid);
                 ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
@@ -401,22 +403,13 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     bufferInfo.usage = (VkBufferUsageFlagBits)usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    auto result = vkCreateBuffer(_ctx.device, &bufferInfo, _ctx.allocator, &res->buffer);
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    if (memory & Memory::CPU) {
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+    auto result = vmaCreateBuffer(_ctx.vmaAllocator, &bufferInfo, &allocInfo, &res->buffer, &res->allocation, nullptr);
     DEBUG_VK(result, "Failed to create buffer!");
-
-    VkMemoryRequirements memReq;
-    vkGetBufferMemoryRequirements(_ctx.device, res->buffer, &memReq);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = _ctx.FindMemoryType(memReq.memoryTypeBits, (VkMemoryPropertyFlags)memory);
-
-    result = vkAllocateMemory(_ctx.device, &allocInfo, _ctx.allocator, &res->memory);
-    DEBUG_VK(result, "Failed to allocate buffer memory!");
-
-    vkBindBufferMemory(_ctx.device, res->buffer, res->memory, 0);
-    res->name = name;
 
     Buffer buffer = {
         .resource = res,
@@ -472,21 +465,10 @@ Image CreateImage(const ImageDesc& desc) {
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.flags = 0;
 
-    auto result = vkCreateImage(device, &imageInfo, allocator, &res->image);
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    auto result = vmaCreateImage(_ctx.vmaAllocator, &imageInfo, &allocInfo, &res->image, &res->allocation, nullptr);
     DEBUG_VK(result, "Failed to create image!");
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(device, res->image, &memReq);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = _ctx.FindMemoryType(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    result = vkAllocateMemory(device, &allocInfo, allocator, &res->memory);
-    DEBUG_VK(result, "Failed to allocate image memory!");
-
-    vkBindImageMemory(device, res->image, res->memory, 0);
 
     AspectFlags aspect = Aspect::Color;
     if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
@@ -1564,13 +1546,14 @@ void Context::CreateDevice() {
     auto supportedFeatures = physicalFeatures;
 
     // logical device features
-    VkPhysicalDeviceFeatures features{};
-    if (supportedFeatures.logicOp)           { features.logicOp           = VK_TRUE; }
-    if (supportedFeatures.samplerAnisotropy) { features.samplerAnisotropy = VK_TRUE; }
-    if (supportedFeatures.sampleRateShading) { features.sampleRateShading = VK_TRUE; }
-    if (supportedFeatures.fillModeNonSolid)  { features.fillModeNonSolid  = VK_TRUE; }
-    if (supportedFeatures.wideLines)         { features.wideLines         = VK_TRUE; }
-    if (supportedFeatures.depthClamp)        { features.depthClamp        = VK_TRUE; }
+    VkPhysicalDeviceFeatures2 features2 = {};
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
+    if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
+    if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
+    if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
+    if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
+    if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
 
     auto requiredExtensions = _ctx.requiredExtensions;
     auto allExtensions = _ctx.availableExtensions;
@@ -1597,7 +1580,7 @@ void Context::CreateDevice() {
     descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
 
     VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
-    bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_ADDRESS_FEATURES_EXT;
+    bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
     bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
     bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
 
@@ -1628,14 +1611,16 @@ void Context::CreateDevice() {
     sync2Features.synchronization2 = VK_TRUE;
     sync2Features.pNext = &dynamicRenderingFeatures;
 
+    features2.pNext = &sync2Features;
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-    createInfo.pEnabledFeatures = &features;
-    createInfo.pNext = &sync2Features;
+    createInfo.pEnabledFeatures;
+    createInfo.pNext = &features2;
 
     // specify the required layers to the device 
     if (_ctx.enableValidationLayers) {
@@ -1649,6 +1634,18 @@ void Context::CreateDevice() {
 
     auto res = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
     DEBUG_VK(res, "Failed to create logical device!");
+
+    VmaVulkanFunctions vulkanFunctions = {};
+    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+    VmaAllocatorCreateInfo allocatorCreateInfo = {};
+    allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+    allocatorCreateInfo.physicalDevice = physicalDevice;
+    allocatorCreateInfo.device = device;
+    allocatorCreateInfo.instance = instance;
+    allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+    vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
 
     for (int q = 0; q < Queue::Count; q++) {
         vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
@@ -1760,6 +1757,8 @@ void Context::CreateDevice() {
         DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
     }
 
+    
+
     asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
     VkBufferDeviceAddressInfo scratchInfo{};
     scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -1776,6 +1775,7 @@ void Context::DestroyDevice() {
     bindlessDescriptorSet = VK_NULL_HANDLE;
     bindlessDescriptorPool = VK_NULL_HANDLE;
     bindlessDescriptorLayout = VK_NULL_HANDLE;
+    vmaDestroyAllocator(vmaAllocator);
     vkDestroySampler(device, genericSampler, allocator);
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
@@ -1977,7 +1977,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
                 DEBUG_VK(res, "Failed to allocate command buffer!");
 
                 queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
-                vkMapMemory(device, queue.commands[i].staging.resource->memory, 0, stagingBufferSize, 0, (void**)&queue.commands[i].stagingCpu);
+                queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
 
                 VkFenceCreateInfo fenceInfo{};
                 fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
