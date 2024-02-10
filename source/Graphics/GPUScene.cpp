@@ -92,12 +92,12 @@ void GPUScene::AddTexture(const Ref<TextureAsset>& asset) {
         .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
         .name = "Texture " + std::to_string(asset->uuid),
     });
-    vkw::BeginCommandBuffer(vkw::Queue::Transfer);
+    vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdBarrier(texture.image, vkw::Layout::TransferDst);
     vkw::CmdCopy(texture.image, asset->data.data(), asset->width * asset->height * 4);
     vkw::CmdBarrier(texture.image, vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
-    vkw::WaitQueue(vkw::Queue::Transfer);
+    vkw::WaitQueue(vkw::Queue::Graphics);
 }
 
 void GPUScene::ClearAssets() {
@@ -135,12 +135,25 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
             .node = node,
         });
         ModelBlock& block = impl->modelsBlock.emplace_back();
+        Ref<MaterialAsset> material = node->material;
         block = impl->defaultModelBlock;
-        if (node->material) {
+        if (material) {
             block.color = node->material->color;
             block.emission = node->material->emission;
             block.metallic = node->material->metallic;
             block.roughness = node->material->roughness;
+            if (material->colorMap) {
+                block.colorMap = impl->textures[material->colorMap->uuid].image.RID();
+            }
+            if (material->normalMap) {
+                block.normalMap = impl->textures[material->normalMap->uuid].image.RID();
+            }
+            if (material->metallicRoughnessMap) {
+                block.metallicRoughnessMap = impl->textures[material->metallicRoughnessMap->uuid].image.RID();
+            }
+            if (material->emissionMap) {
+                block.emissionMap = impl->textures[material->emissionMap->uuid].image.RID();
+            }
         }
         block.modelMat = node->GetWorldTransform();
     }

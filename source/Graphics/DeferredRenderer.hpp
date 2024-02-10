@@ -28,7 +28,6 @@ void LightPass(LightConstants constants);
 void ComposePass();
 void BeginOpaquePass();
 void EndPass();
-void PrepareEmptyPresent();
 void OnImgui(int numFrame);
 
 void ViewportOnImGui();

@@ -222,6 +222,8 @@ struct Context {
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+
+    vkw::Buffer dummyVertexBuffer;
 };
 
 static Context _ctx;
@@ -1150,7 +1152,10 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount)
 }
 
 void CmdDrawPassThrough() {
-    vkCmdDraw(_ctx.GetCurrentCommandResources().buffer, 6, 1, 0, 0);
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &_ctx.dummyVertexBuffer.resource->buffer, offsets);
+    vkCmdDraw(cmd.buffer, 6, 1, 0, 0);
 }
 
 void CmdDrawImGui(ImDrawData* data) {
@@ -1559,7 +1564,6 @@ void Context::CreatePhysicalDevice() {
 void Context::CreateDevice() {
     LUZ_PROFILE_FUNC();
 
-
     std::set<uint32_t> uniqueFamilies;
     for (int q = 0; q < Queue::Count; q++) {
         uniqueFamilies.emplace(queues[q].family);
@@ -1781,9 +1785,17 @@ void Context::CreateDevice() {
     scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     scratchInfo.buffer = asScratchBuffer.resource->buffer;
     asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+
+    dummyVertexBuffer = vkw::CreateBuffer(
+        6 * 3 * sizeof(float),
+        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::Memory::GPU,
+        "VertexBuffer#Dummy"
+    );
 }
 
 void Context::DestroyDevice() {
+    dummyVertexBuffer = {};
     currentPipeline = {};
     asScratchBuffer = {};
     vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);

@@ -100,7 +100,8 @@ struct Serializer {
                  std::string name = j["name"];
                  UUID uuid = j["uuid"];
                  Serializer childSerializer(value, dir, manager);
-                 childSerializer.Serialize(v.emplace_back());
+                 auto& child = v.emplace_back();
+                 childSerializer.Serialize(child);
              }
          }
     }

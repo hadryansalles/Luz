@@ -208,12 +208,23 @@ void SceneAsset::Merge(AssetManager& manager, const Ref<SceneAsset>& rhs) {
     }
 }
 
+void SceneAsset::DeleteRecursive(const Ref<Node>& node) {
+    auto it = std::find_if(nodes.begin(), nodes.end(), [&](auto& child) {
+        return child->uuid == node->uuid;
+    });
+    if (it != nodes.end()) {
+        nodes.erase(it);
+    }
+    // todo: fix parents
+}
+
 Ref<Node> Node::Clone(Ref<Node>& node) {
     Ref<Object> cloneObject = AssetManager::CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
     Ref<Node> clone = std::dynamic_pointer_cast<Node>(cloneObject);
     clone->children.clear();
     for (auto& child : node->children) {
-        clone->Add(Node::Clone(child));
+        Ref<Node> childClone = Node::Clone(child);
+        clone->Add(childClone);
     }
     return clone;
 }

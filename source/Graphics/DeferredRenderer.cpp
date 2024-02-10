@@ -190,10 +190,6 @@ void ComposePass() {
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
-void PrepareEmptyPresent() {
-    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
-}
-
 void OnImgui(int numFrame) {
     if (ImGui::Begin("Deferred Renderer")) {
         if (ImGui::BeginCombo("Present", ctx.presentTypes[ctx.presentType])) {

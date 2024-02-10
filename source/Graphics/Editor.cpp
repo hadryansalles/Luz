@@ -7,11 +7,23 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
 #include <imgui/ImGuizmo.h>
+#include <imgui/IconsFontAwesome5.h>
+
 
 struct EditorImpl {
     std::vector<Ref<Node>> selectedNodes;
     std::vector<Ref<Node>> copiedNodes;
+
+#define LUZ_SCENE_ICON ICON_FA_GLOBE_AMERICAS
+#define LUZ_MESH_ICON ICON_FA_CUBE
+#define LUZ_TEXTURE_ICON ICON_FA_IMAGE
+#define LUZ_CAMERA_ICON ICON_FA_CAMERA
+#define LUZ_NODE_ICON ICON_FA_CIRCLE
+#define LUZ_LIGHT_ICON ICON_FA_LIGHTBULB
+#define LUZ_MATERIAL_ICON ICON_FA_PALETTE
+
     bool assetTypeFilter[int(ObjectType::Count)] = {};
+    std::string objectTypeIcon[int(ObjectType::Count)] = {};
     std::string assetNameFilter = "";
     void OnNode(Ref<Node> node);
     void InspectMeshNode(AssetManager& manager, Ref<MeshNode> node);
@@ -27,6 +39,105 @@ Editor::Editor() {
     for (int i = 0; i < int(ObjectType::Count); i++) {
         impl->assetTypeFilter[i] = true;
     }
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->AddFontDefault();
+    const float fontSize = 18.0f;
+    io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/roboto.ttf", fontSize);
+    ImFontConfig config;
+    const float iconSize = fontSize * 2.8f / 3.0f;
+    config.MergeMode = true;
+    //config.PixelSnapH = true;
+    config.GlyphMinAdvanceX = iconSize;
+    static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+    io.Fonts->AddFontFromFileTTF("assets/fontawesome.otf", iconSize, &config, icon_ranges);
+    //io.Fonts->AddFontFromFileTTF("assets/fontawesome-webfont.ttf", iconSize, &config, icon_ranges);
+
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    // todo: find some solution to higher resolution having very small font size
+    {
+        constexpr auto ColorFromBytes = [](uint8_t r, uint8_t g, uint8_t b) {
+            return ImVec4((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 1.0f);
+        };
+
+        auto& style = ImGui::GetStyle();
+        ImVec4* colors = style.Colors;
+
+        const ImVec4 bgColor           = ColorFromBytes(37, 37, 38);
+        const ImVec4 lightBgColor      = ColorFromBytes(82, 82, 85);
+        const ImVec4 veryLightBgColor  = ColorFromBytes(90, 90, 95);
+
+        const ImVec4 panelColor        = ColorFromBytes(51, 51, 55);
+        const ImVec4 panelHoverColor   = ColorFromBytes(29, 151, 236);
+        const ImVec4 panelActiveColor  = ColorFromBytes(0, 119, 200);
+
+        const ImVec4 textColor         = ColorFromBytes(255, 255, 255);
+        const ImVec4 textDisabledColor = ColorFromBytes(151, 151, 151);
+        const ImVec4 borderColor       = ColorFromBytes(78, 78, 78);
+
+        colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, 0.25f);
+        colors[ImGuiCol_Text]                 = textColor;
+        colors[ImGuiCol_TextDisabled]         = textDisabledColor;
+        colors[ImGuiCol_TextSelectedBg]       = panelActiveColor;
+        colors[ImGuiCol_ChildBg]              = bgColor;
+        colors[ImGuiCol_PopupBg]              = bgColor;
+        colors[ImGuiCol_Border]               = borderColor;
+        colors[ImGuiCol_BorderShadow]         = borderColor;
+        colors[ImGuiCol_FrameBg]              = panelColor;
+        colors[ImGuiCol_FrameBgHovered]       = panelHoverColor;
+        colors[ImGuiCol_FrameBgActive]        = panelActiveColor;
+        colors[ImGuiCol_TitleBg]              = bgColor;
+        colors[ImGuiCol_TitleBgActive]        = bgColor;
+        colors[ImGuiCol_TitleBgCollapsed]     = bgColor;
+        colors[ImGuiCol_MenuBarBg]            = panelColor;
+        colors[ImGuiCol_ScrollbarBg]          = panelColor;
+        colors[ImGuiCol_ScrollbarGrab]        = lightBgColor;
+        colors[ImGuiCol_ScrollbarGrabHovered] = veryLightBgColor;
+        colors[ImGuiCol_ScrollbarGrabActive]  = veryLightBgColor;
+        colors[ImGuiCol_CheckMark]            = panelActiveColor;
+        colors[ImGuiCol_SliderGrab]           = panelHoverColor;
+        colors[ImGuiCol_SliderGrabActive]     = panelActiveColor;
+        colors[ImGuiCol_Button]               = panelColor;
+        colors[ImGuiCol_ButtonHovered]        = panelHoverColor;
+        colors[ImGuiCol_ButtonActive]         = panelHoverColor;
+        colors[ImGuiCol_Header]               = panelColor;
+        colors[ImGuiCol_HeaderHovered]        = panelHoverColor;
+        colors[ImGuiCol_HeaderActive]         = panelActiveColor;
+        colors[ImGuiCol_Separator]            = borderColor;
+        colors[ImGuiCol_SeparatorHovered]     = borderColor;
+        colors[ImGuiCol_SeparatorActive]      = borderColor;
+        colors[ImGuiCol_ResizeGrip]           = bgColor;
+        colors[ImGuiCol_ResizeGripHovered]    = panelColor;
+        colors[ImGuiCol_ResizeGripActive]     = lightBgColor;
+        colors[ImGuiCol_PlotLines]            = panelActiveColor;
+        colors[ImGuiCol_PlotLinesHovered]     = panelHoverColor;
+        colors[ImGuiCol_PlotHistogram]        = panelActiveColor;
+        colors[ImGuiCol_PlotHistogramHovered] = panelHoverColor;
+        colors[ImGuiCol_DragDropTarget]       = bgColor;
+        colors[ImGuiCol_NavHighlight]         = bgColor;
+        colors[ImGuiCol_DockingPreview]       = panelActiveColor;
+        colors[ImGuiCol_Tab]                  = bgColor;
+        colors[ImGuiCol_TabActive]            = panelActiveColor;
+        colors[ImGuiCol_TabUnfocused]         = bgColor;
+        colors[ImGuiCol_TabUnfocusedActive]   = panelActiveColor;
+        colors[ImGuiCol_TabHovered]           = panelHoverColor;
+
+        style.WindowRounding    = 0.0f;
+        style.ChildRounding     = 0.0f;
+        style.FrameRounding     = 0.0f;
+        style.GrabRounding      = 0.0f;
+        style.PopupRounding     = 0.0f;
+        style.ScrollbarRounding = 0.0f;
+        style.TabRounding       = 0.0f;
+    }
+    impl->objectTypeIcon[int(ObjectType::Node)] = LUZ_NODE_ICON;
+    impl->objectTypeIcon[int(ObjectType::MeshNode)] = LUZ_MESH_ICON;
+    impl->objectTypeIcon[int(ObjectType::MeshAsset)] = LUZ_MESH_ICON;
+    impl->objectTypeIcon[int(ObjectType::TextureAsset)] = LUZ_TEXTURE_ICON;
+    impl->objectTypeIcon[int(ObjectType::SceneAsset)] = LUZ_SCENE_ICON;
+    impl->objectTypeIcon[int(ObjectType::LightNode)] = LUZ_LIGHT_ICON;
+    impl->objectTypeIcon[int(ObjectType::MaterialAsset)] = LUZ_MATERIAL_ICON;
 }
 
 Editor::~Editor() {
@@ -42,7 +153,10 @@ void EditorImpl::OnNode(Ref<Node> node) {
     if (FindSelected(node) != -1) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
-    bool open = ImGui::TreeNodeEx(node->name.c_str(), flags);
+
+    std::string icon = objectTypeIcon[int(node->type)];
+
+    bool open = ImGui::TreeNodeEx((icon + " " + node->name).c_str(), flags);
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         Select(node);
     }
@@ -162,6 +276,12 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
                     scene->Add(Node::Clone(node));
                 }
             }
+            if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+                for (auto& node : impl->selectedNodes) {
+                    scene->DeleteRecursive(node);
+                }
+                impl->selectedNodes.clear();
+            }
         }
         if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         }
@@ -177,6 +297,9 @@ void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
         // todo: fix uuid on imgui
         ImGui::InputInt("UUID", (int*)&selected->uuid, 0, 0, ImGuiInputTextFlags_ReadOnly);
         ImGui::InputText("Name", &selected->name);
+        {
+
+        }
         impl->OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
         switch (selected->type) {
             case ObjectType::MeshNode:
@@ -248,12 +371,14 @@ void Editor::AssetsPanel(AssetManager& manager) {
         ImGui::End();
         return;
     }
-    ImGui::InputText("Filter", &impl->assetNameFilter);
-    ImGui::Checkbox("Mesh", &impl->assetTypeFilter[int(ObjectType::MeshAsset)]);
+    ImGui::InputText(ICON_FA_SEARCH " Filter", &impl->assetNameFilter);
+    ImGui::Checkbox(LUZ_MESH_ICON " Mesh", &impl->assetTypeFilter[int(ObjectType::MeshAsset)]);
     ImGui::SameLine();
-    ImGui::Checkbox("Scene", &impl->assetTypeFilter[int(ObjectType::SceneAsset)]);
+    ImGui::Checkbox(LUZ_SCENE_ICON " Scene", &impl->assetTypeFilter[int(ObjectType::SceneAsset)]);
     ImGui::SameLine();
-    ImGui::Checkbox("Texture", &impl->assetTypeFilter[int(ObjectType::TextureAsset)]);
+    ImGui::Checkbox(LUZ_TEXTURE_ICON " Texture", &impl->assetTypeFilter[int(ObjectType::TextureAsset)]);
+    ImGui::SameLine();
+    ImGui::Checkbox(LUZ_MATERIAL_ICON " Material", &impl->assetTypeFilter[int(ObjectType::MaterialAsset)]);
     ImGui::SameLine();
     if (ImGui::Button("All/None")) {
         for (int i = 0; i < int(ObjectType::Count); i++) {
@@ -268,7 +393,7 @@ void Editor::AssetsPanel(AssetManager& manager) {
             continue;
         }
         ImGui::PushID(asset->uuid);
-        if (ImGui::CollapsingHeader((ObjectTypeName[int(asset->type)] + "-" + asset->name).c_str())) {
+        if (ImGui::CollapsingHeader((impl->objectTypeIcon[int(asset->type)] + " " + asset->name).c_str())) {
             // todo: check type and inspect
         }
         ImGui::PopID();

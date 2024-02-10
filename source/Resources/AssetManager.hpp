@@ -101,6 +101,7 @@ struct MaterialAsset : Asset {
 };
 
 struct Node : Object {
+    Ref<Node> parent;
     std::vector<Ref<Node>> children;
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 rotation = glm::vec3(0.0f);
@@ -136,6 +137,17 @@ struct Node : Object {
 
     void Add(const Ref<Node>& node) {
         children.push_back(node);
+    }
+
+    void SetParent(const Ref<Node>& node) {
+        parent = node;
+    }
+
+    static void UpdateParents(const Ref<Node>& child, const Ref<Node>& parent) {
+        child->parent = parent;
+        for (auto& node : child->children) {
+            UpdateParents(node, child);
+        }
     }
 
     static Ref<Node> Clone(Ref<Node>& node);
@@ -176,6 +188,10 @@ struct LightNode : Node {
     virtual void Serialize(Serializer& s);
 };
 
+struct CameraNode : Node {
+
+};
+
 struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
     // todo: scene properties, background color, hdr, etc
@@ -190,6 +206,8 @@ struct SceneAsset : Asset {
     void Add(const Ref<Node>& node) {
         nodes.push_back(node);
     }
+
+    void DeleteRecursive(const Ref<Node>& node);
 
     void Merge(AssetManager& manager, const Ref<SceneAsset>& rhs);
 
