@@ -180,11 +180,13 @@ UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager) {
     }
 
     std::vector<Ref<MeshAsset>> loadedMeshes;
-    for (const tinygltf::Mesh & mesh : model.meshes) {
+    std::vector<int> loadedMeshMaterials;
+    for (const tinygltf::Mesh& mesh : model.meshes) {
         for (int i = 0; i < mesh.primitives.size(); i++) {
             const tinygltf::Primitive& primitive = mesh.primitives[i];
             std::string name = (mesh.name != "" ? mesh.name : path.stem().string()) + "_" + std::to_string(i);
             Ref<MeshAsset>& desc = loadedMeshes.emplace_back(manager.CreateAsset<MeshAsset>(name));
+            loadedMeshMaterials.emplace_back(primitive.material);
 
             float* bufferPos = nullptr;
             float* bufferNormals = nullptr;
@@ -315,7 +317,64 @@ UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager) {
             }
         }
     }
-    return 0;
+
+    std::vector<Ref<Node>> loadedNodes;
+    for (const tinygltf::Node& node : model.nodes) {
+        Ref<Node> groupNode = manager.CreateObject<Node>(node.name);
+        if (node.mesh >= 0) {
+            Ref<MeshNode> meshNode = manager.CreateObject<MeshNode>(node.name);
+            meshNode->mesh = loadedMeshes[node.mesh];
+            int matId = loadedMeshMaterials[node.mesh];
+            if (matId >= 0) {
+                meshNode->material = materials[matId];
+            }
+            Node::SetParent(meshNode, groupNode);
+        }
+        if (node.camera >= 0) {
+            // todo: load camera
+        }
+        if (node.light >= 0) {
+            Ref<LightNode> lightNode = manager.CreateObject<LightNode>(node.name);
+            Node::SetParent(lightNode, groupNode);
+        }
+        if (node.translation.size() == 3) {
+            groupNode->position = { float(node.translation[0]), float(node.translation[1]), float(node.translation[2]) };
+        }
+        if (node.rotation.size() == 4) {
+            glm::quat quat = { float(node.rotation[3]), float(node.rotation[0]), float(node.rotation[1]), float(node.rotation[2]) };
+            groupNode->rotation = glm::degrees(glm::eulerAngles(quat));
+        }
+        if (node.scale.size() == 3) {
+            groupNode->scale = { float(node.scale[0]), float(node.scale[1]), float(node.scale[2]) };
+        }
+        if (node.matrix.size() == 16) {
+            glm::mat4 mat;
+            for (int i = 0; i < 16; i++) {
+                glm::value_ptr(mat)[i] = node.matrix[i];
+            }
+            glm::quat quat = {};
+            glm::vec3 skew;
+            glm::vec4 perspective;
+            glm::decompose(mat, groupNode->scale, quat, groupNode->position, skew, perspective);
+            groupNode->rotation = glm::degrees(glm::eulerAngles(quat));
+        }
+        loadedNodes.emplace_back(groupNode);
+    }
+    for (int i = 0; i < model.nodes.size(); i++) {
+        for (auto child : model.nodes[i].children) {
+            Node::SetParent(loadedNodes[child], loadedNodes[i]);
+        }
+    }
+
+    std::vector<Ref<SceneAsset>> loadedScenes;
+    for (const tinygltf::Scene& scene : model.scenes) {
+        Ref<SceneAsset> s = loadedScenes.emplace_back(manager.CreateAsset<SceneAsset>(scene.name));
+        for (auto node : scene.nodes) {
+            s->Add(loadedNodes[node]);
+        }
+    }
+
+    return loadedScenes.size() ? loadedScenes[0]->uuid : 0;
 }
 
 UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {

@@ -11,7 +11,7 @@ using mat4 = glm::mat4;
 #define LUZ_BINDING_TLAS 2
 
 #define LUZ_MAX_LIGHTS 64
-#define LUZ_MAX_MODELS 4096
+#define LUZ_MAX_MODELS 8192
 
 #define LUZ_LIGHT_TYPE_POINT 0
 #define LUZ_LIGHT_TYPE_SPOT 1

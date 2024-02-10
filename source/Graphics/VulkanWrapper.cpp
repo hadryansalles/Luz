@@ -739,8 +739,6 @@ BLAS CreateBLAS(const BLASDesc& desc) {
     res->buildInfo.dstAccelerationStructure = res->accel; // Setting where the build lands
     res->buildInfo.scratchData.deviceAddress = _ctx.asScratchAddress; // All build are using the same scratch buffer
 
-    LOG_INFO("Created BLAS.");
-
     return blas;
 }
 

@@ -107,9 +107,6 @@ struct Node : Object {
     glm::vec3 rotation = glm::vec3(0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
 
-    glm::mat4 parentTransform = glm::mat4(1.0f);
-    glm::mat4 worldTransform = glm::mat4(1.0f);
-
     Node();
     virtual void Serialize(Serializer& s);
 
@@ -135,29 +132,33 @@ struct Node : Object {
         return all;
     }
 
-    void Add(const Ref<Node>& node) {
-        children.push_back(node);
-    }
-
-    void SetParent(const Ref<Node>& node) {
-        parent = node;
-    }
-
-    static void UpdateParents(const Ref<Node>& child, const Ref<Node>& parent) {
+    static void SetParent(const Ref<Node>& child, const Ref<Node>& parent) {
+        if (child->parent) {
+            Ref<Node> oldParent = child->parent;
+            auto it = std::find_if(oldParent->children.begin(), oldParent->children.end(), [&](auto& n) {
+                return child->uuid == n->uuid;
+            });
+            DEBUG_ASSERT(it != oldParent->children.end(), "Child not found in children vector");
+            oldParent->children.erase(it);
+        }
         child->parent = parent;
-        for (auto& node : child->children) {
-            UpdateParents(node, child);
+        parent->children.push_back(child);
+    }
+
+    static void UpdateChildrenParent(Ref<Node>& node) {
+        for (auto& child : node->children) {
+            SetParent(child, node);
+            UpdateChildrenParent(child);
         }
     }
 
     static Ref<Node> Clone(Ref<Node>& node);
-    void AddClone(AssetManager& manager, const Ref<Node>& node);
 
     glm::mat4 GetLocalTransform();
     glm::mat4 GetWorldTransform();
     glm::vec3 GetWorldPosition();
+    glm::mat4 GetParentTransform();
     static glm::mat4 ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scl, glm::mat4 parent = glm::mat4(1));
-    void UpdateTransforms();
 };
 
 struct MeshNode : Node {
@@ -195,6 +196,9 @@ struct CameraNode : Node {
 struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
     // todo: scene properties, background color, hdr, etc
+    glm::vec3 ambientLightColor = glm::vec3(1);
+    float ambientLight = 0.01f;
+    uint32_t aoSamples = 0;
 
     template<typename T>
     Ref<T> Add() {
@@ -233,9 +237,15 @@ struct SceneAsset : Asset {
         return all;
     }
 
+    void UpdateParents() {
+        for (auto& node : nodes) {
+            node->parent = {};
+            Node::UpdateChildrenParent(node);
+        }
+    }
+
     SceneAsset();
     virtual void Serialize(Serializer& s);
-    void UpdateTransforms();
 };
 
 struct AssetManager {

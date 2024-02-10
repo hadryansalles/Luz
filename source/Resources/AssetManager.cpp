@@ -45,26 +45,15 @@ glm::mat4 Node::GetLocalTransform() {
 }
 
 glm::mat4 Node::GetWorldTransform() {
-    return parentTransform * GetLocalTransform();
+    return GetParentTransform() * GetLocalTransform();
+}
+
+glm::mat4 Node::GetParentTransform() {
+    return parent ? parent->GetWorldTransform() : glm::mat4(1);
 }
 
 glm::vec3 Node::GetWorldPosition() {
-    return parentTransform * glm::vec4(position, 1);
-}
-
-void Node::UpdateTransforms() {
-    worldTransform = GetWorldTransform();
-    for (auto& child : children) {
-        child->parentTransform = worldTransform;
-        child->UpdateTransforms();
-    }
-}
-
-void SceneAsset::UpdateTransforms() {
-    for (auto& node : nodes) {
-        node->parentTransform = glm::mat4(1);
-        node->UpdateTransforms();
-    }
+    return GetParentTransform() * glm::vec4(position, 1);
 }
 
 MeshNode::MeshNode() {
@@ -101,6 +90,9 @@ void MaterialAsset::Serialize(Serializer& s) {
 
 void SceneAsset::Serialize(Serializer& s) {
     s.VectorRef("nodes", nodes);
+    s("ambientLight", ambientLight);
+    s("ambientLightColor", ambientLightColor);
+    s("aoSamples", aoSamples);
 }
 
 void Node::Serialize(Serializer& s) {
@@ -145,6 +137,9 @@ void AssetManager::LoadProject(const std::filesystem::path& path) {
         s.Serialize(asset);
     }
     initialScene = j["initialScene"];
+    for (auto& scene : GetAll<SceneAsset>(ObjectType::SceneAsset)) {
+        scene->UpdateParents();
+    }
 }
 
 void AssetManager::SaveProject(const std::filesystem::path& path) {
@@ -198,13 +193,8 @@ void AssetManager::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<st
 
 void SceneAsset::Merge(AssetManager& manager, const Ref<SceneAsset>& rhs) {
     for (auto& node : rhs->nodes) {
-        Ref<Object> newObject = manager.CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
-        Ref<Node> newNode = std::dynamic_pointer_cast<Node>(newObject);
-        newNode->children.clear();
-        for (auto& child : node->children) {
-            newNode->AddClone(manager, child);
-        }
-        nodes.push_back(newNode);
+        Ref<Node> nodeClone = Node::Clone(node);
+        nodes.push_back(nodeClone);
     }
 }
 
@@ -221,20 +211,11 @@ void SceneAsset::DeleteRecursive(const Ref<Node>& node) {
 Ref<Node> Node::Clone(Ref<Node>& node) {
     Ref<Object> cloneObject = AssetManager::CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
     Ref<Node> clone = std::dynamic_pointer_cast<Node>(cloneObject);
+    clone->parent = {};
     clone->children.clear();
     for (auto& child : node->children) {
         Ref<Node> childClone = Node::Clone(child);
-        clone->Add(childClone);
+        SetParent(childClone, clone);
     }
     return clone;
-}
-
-void Node::AddClone(AssetManager& manager, const Ref<Node>& node) {
-    Ref<Object> newObject = manager.CloneObject(node->type, std::dynamic_pointer_cast<Object>(node));
-    Ref<Node> newNode = std::dynamic_pointer_cast<Node>(newObject);
-    newNode->children.clear();
-    for (auto& child : node->children) {
-        newNode->AddClone(manager, child);
-    }
-    children.push_back(newNode);
 }

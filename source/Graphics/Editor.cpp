@@ -18,7 +18,7 @@ struct EditorImpl {
 #define LUZ_MESH_ICON ICON_FA_CUBE
 #define LUZ_TEXTURE_ICON ICON_FA_IMAGE
 #define LUZ_CAMERA_ICON ICON_FA_CAMERA
-#define LUZ_NODE_ICON ICON_FA_CIRCLE
+#define LUZ_NODE_ICON ""
 #define LUZ_LIGHT_ICON ICON_FA_LIGHTBULB
 #define LUZ_MATERIAL_ICON ICON_FA_PALETTE
 
@@ -175,9 +175,15 @@ void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rot
     if (!open) {
         return;
     }
+    if (ImGui::Button("Reset")) {
+        position = glm::vec3(0);
+        rotation = glm::vec3(0);
+        scale = glm::vec3(1);
+    }
     ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1);
     ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.1);
     ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 1);
+    scale = glm::max(scale, { 0.0001, 0.0001, 0.0001 });
 
     static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::ROTATE;
     static ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
@@ -286,6 +292,9 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             }
         }
         if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit3("Ambient Light##Color", glm::value_ptr(scene->ambientLightColor));
+            ImGui::DragFloat("Ambient Light##Intesity", &scene->ambientLight, 0.01f, 0.0f, 100.0f);
+            ImGui::DragInt("AO Samples", (int*)&scene->aoSamples, 1, 0, 256);
         }
     }
     ImGui::End();
@@ -302,7 +311,7 @@ void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
         {
 
         }
-        impl->OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->parentTransform);
+        impl->OnTransform(camera, selected->position, selected->rotation, selected->scale, selected->GetParentTransform());
         switch (selected->type) {
             case ObjectType::MeshNode:
                 impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));

@@ -173,8 +173,8 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.numShadowSamples = light->shadows ? 16 : 0;
         block.radius = light->radius;
     }
-    s.ambientLightColor = { 1, 1, 1 };
-    s.ambientLightIntensity = 0.01;
+    s.ambientLightColor = scene->ambientLightColor;
+    s.ambientLightIntensity = scene->ambientLight;
     s.camPos = camera.GetPosition();
     s.projView = camera.GetProj() * camera.GetView();
     s.inverseProj = glm::inverse(camera.GetProj());
@@ -183,7 +183,7 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     s.useBlueNoise = false;
     s.whiteTexture = -1;
     s.blackTexture = -1;
-    s.aoNumSamples = 0;
+    s.aoNumSamples = scene->aoSamples;
 }
 
 void GPUScene::UpdateResourcesGPU() {

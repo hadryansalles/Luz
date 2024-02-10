@@ -55,7 +55,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         SetupImgui();
-        assetManager.LoadProject("assets/default.luz");
+        //assetManager.LoadProject("assets/default.luz");
         scene = assetManager.GetInitialScene();
     }
 
