@@ -453,7 +453,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                 uniqueVertices[vertex] = (uint32_t)(asset->vertices.size());
                 asset->vertices.push_back(vertex);
             }
-            
+
             asset->indices.push_back(uniqueVertices[vertex]);
             j += 1;
 

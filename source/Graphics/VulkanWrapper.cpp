@@ -4,6 +4,7 @@
 
 #include "LuzCommon.h"
 #include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
 #include <GLFW/glfw3.h>
 
 #define VMA_IMPLEMENTATION
@@ -199,6 +200,8 @@ struct Context {
     void CreateDevice();
     void DestroyDevice();
 
+    void CreateImGui(GLFWwindow* window);
+
     void CreateSurfaceFormats();
 
     void CreateSwapChain(uint32_t width, uint32_t height);
@@ -335,6 +338,7 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     _ctx.CreateDevice();
     _ctx.CreateSurfaceFormats();
     _ctx.CreateSwapChain(width, height);
+    _ctx.CreateImGui(window);
 }
 
 void ImGuiCheckVulkanResult(VkResult res) {
@@ -347,7 +351,7 @@ void ImGuiCheckVulkanResult(VkResult res) {
     }
 }
 
-void InitImGui() {
+void Context::CreateImGui(GLFWwindow* window) {
     ImGui_ImplVulkan_InitInfo initInfo{};
     initInfo.Instance = _ctx.instance;
     initInfo.PhysicalDevice = _ctx.physicalDevice;
@@ -365,6 +369,7 @@ void InitImGui() {
     initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
     ImGui_ImplVulkan_Init(&initInfo, nullptr);
     ImGui_ImplVulkan_CreateFontsTexture();
+    ImGui_ImplGlfw_InitForVulkan(window, true);
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
@@ -374,6 +379,8 @@ void OnSurfaceUpdate(uint32_t width, uint32_t height) {
 }
 
 void Destroy() {
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     _ctx.DestroySwapChain();
     _ctx.DestroyDevice();
     _ctx.DestroyInstance();
@@ -1175,6 +1182,11 @@ void CmdBindPipeline(Pipeline& pipeline) {
 void CmdPushConstants(void* data, uint32_t size) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
+}
+
+void BeginImGui() {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
 }
 
 void BeginCommandBuffer(Queue queue) {

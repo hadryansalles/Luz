@@ -2,6 +2,12 @@
 
 #include "Base.hpp"
 
+namespace vkw {
+
+struct Image;
+
+}
+
 namespace DeferredShading {
 
 struct OpaqueConstants {
@@ -30,6 +36,6 @@ void BeginOpaquePass();
 void EndPass();
 void OnImgui(int numFrame);
 
-void ViewportOnImGui();
+vkw::Image& GetComposedImage();
 
 }

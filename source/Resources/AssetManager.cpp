@@ -92,7 +92,11 @@ void SceneAsset::Serialize(Serializer& s) {
     s.VectorRef("nodes", nodes);
     s("ambientLight", ambientLight);
     s("ambientLightColor", ambientLightColor);
+    s("lightSamples", lightSamples);
     s("aoSamples", aoSamples);
+    s("aoPower", aoPower);
+    s("aoMin", aoMin);
+    s("aoMax", aoMax);
 }
 
 void Node::Serialize(Serializer& s) {

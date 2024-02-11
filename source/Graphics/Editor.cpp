@@ -3,16 +3,17 @@
 
 #include "AssetManager.hpp"
 #include "Camera.hpp"
+#include "VulkanWrapper.h"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
 #include <imgui/ImGuizmo.h>
 #include <imgui/IconsFontAwesome5.h>
 
-
 struct EditorImpl {
     std::vector<Ref<Node>> selectedNodes;
     std::vector<Ref<Node>> copiedNodes;
+    bool fullscreen = false;
 
 #define LUZ_SCENE_ICON ICON_FA_GLOBE_AMERICAS
 #define LUZ_MESH_ICON ICON_FA_CUBE
@@ -144,6 +145,18 @@ Editor::~Editor() {
     delete impl;
 }
 
+void Editor::BeginFrame() {
+    vkw::BeginImGui();
+    ImGui::NewFrame();
+    //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+}
+
+ImDrawData* Editor::EndFrame() {
+    ImGui::Render();
+    return ImGui::GetDrawData();
+}
+
 void EditorImpl::OnNode(Ref<Node> node) {
     ImGui::PushID(node->uuid);
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
@@ -251,7 +264,14 @@ void EditorImpl::Select(Ref<Node>& node) {
     }
 }
 
-void Editor::ScenePanel(Ref<SceneAsset>& scene) {
+void Editor::DemoPanel() {
+    ImGui::ShowDemoWindow();
+}
+
+void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
+    if (impl->fullscreen) {
+        return;
+    }
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -292,10 +312,19 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             }
         }
         if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::ColorEdit3("Ambient Light##Color", glm::value_ptr(scene->ambientLightColor));
-            ImGui::DragFloat("Ambient Light##Intesity", &scene->ambientLight, 0.01f, 0.0f, 100.0f);
-            ImGui::DragInt("AO Samples", (int*)&scene->aoSamples, 1, 0, 256);
+            ImGui::SeparatorText("Ambient Light");
+            ImGui::ColorEdit3("Color", glm::value_ptr(scene->ambientLightColor));
+            ImGui::DragFloat("Intesity", &scene->ambientLight, 0.01f, 0.0f, 100.0f);
+            ImGui::SeparatorText("Ambient Occlusion");
+            ImGui::DragInt("Samples##AO", (int*)&scene->aoSamples, 1, 0, 256);
+            ImGui::DragFloat("Min##AO", &scene->aoMin, 0.01f, 0.000f, 10.0f);
+            ImGui::DragFloat("Max##AO", &scene->aoMax, 0.1f, 0.000f, 1000.0f);
+            ImGui::DragFloat("Power##AO", &scene->aoPower, 0.01f, 0.000f, 100.0f);
+            ImGui::SeparatorText("Lights");
+            ImGui::DragFloat("Exposure##lights", &scene->exposure, 0.01, 0, 10);
+            ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
         }
+        camera.OnImgui();
     }
     ImGui::End();
 }
@@ -408,6 +437,48 @@ void Editor::AssetsPanel(AssetManager& manager) {
             // todo: check type and inspect
         }
         ImGui::PopID();
+    }
+    ImGui::End();
+}
+
+bool Editor::ViewportPanel(vkw::Image& image, glm::ivec2& newViewportSize) {
+    bool hovered = false;
+    if (ImGui::Begin("Viewport", 0)) {
+        ImGui::BeginChild("##ChildViewport");
+        newViewportSize = { ImGui::GetWindowSize().x, ImGui::GetWindowSize().y };
+        ImGui::Image(image.ImGuiRID(), ImGui::GetWindowSize());
+        ImGuizmo::SetDrawlist();
+        ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+        hovered = ImGui::IsWindowHovered() && !ImGuizmo::IsUsing();
+        ImGui::EndChild();
+    }
+    ImGui::End();
+    return hovered;
+}
+
+void Editor::ProfilerPanel() {
+    if (ImGui::Begin("Profiler")) {
+        std::map<std::string, float> timeTable;
+        vkw::GetTimeStamps(timeTable);
+        for (const auto& pair : timeTable) {
+            ImGui::Text("%s: %.3f", pair.first.c_str(), pair.second);
+        }
+    }
+    ImGui::End();
+}
+
+void Editor::ProfilerPopup() {
+    ImGuiWindowFlags flags = 0;
+    flags |= ImGuiWindowFlags_NoNav;
+    flags |= ImGuiWindowFlags_NoDecoration;
+    flags |= ImGuiWindowFlags_NoInputs;
+    if (ImGui::Begin("ProfilerPopup", 0, flags)) {
+        ImGui::SetWindowPos(ImVec2(0, 0));
+        std::map<std::string, float> timeTable;
+        vkw::GetTimeStamps(timeTable);
+        for (const auto& pair : timeTable) {
+            ImGui::Text("%s: %.3f", pair.first.c_str(), pair.second);
+        }
     }
     ImGui::End();
 }

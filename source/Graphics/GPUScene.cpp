@@ -170,11 +170,16 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.outerAngle = 0;
         block.direction = { 0, 0, 1 };
         block.type = LightNode::LightType::Point;
-        block.numShadowSamples = light->shadows ? 16 : 0;
+        block.numShadowSamples = light->shadows ? scene->lightSamples : 0;
         block.radius = light->radius;
     }
     s.ambientLightColor = scene->ambientLightColor;
     s.ambientLightIntensity = scene->ambientLight;
+    s.aoMax = scene->aoMax;
+    s.aoMin = scene->aoMin;
+    s.aoPower = scene->aoPower;
+    s.aoNumSamples = scene->aoSamples;
+    s.exposure = scene->exposure;
     s.camPos = camera.GetPosition();
     s.projView = camera.GetProj() * camera.GetView();
     s.inverseProj = glm::inverse(camera.GetProj());
@@ -183,7 +188,6 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     s.useBlueNoise = false;
     s.whiteTexture = -1;
     s.blackTexture = -1;
-    s.aoNumSamples = scene->aoSamples;
 }
 
 void GPUScene::UpdateResourcesGPU() {
@@ -204,7 +208,6 @@ void GPUScene::UpdateResourcesGPU() {
         }
         vkw::CmdBuildTLAS(impl->tlas, vkwInstances);
     });
-    vkw::CmdBarrier();
 }
 
 std::vector<GPUModel>& GPUScene::GetMeshModels() {

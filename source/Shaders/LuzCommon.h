@@ -72,6 +72,9 @@ struct SceneBlock {
     int whiteTexture;
     int blackTexture;
     int tlasRid;
+
+    float exposure;
+    float pad[3];
 };
 
 #if !defined(LUZ_ENGINE)

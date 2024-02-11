@@ -87,6 +87,15 @@ vec4 BlueNoiseSample(int i) {
     return vec4(1, 0, 0, 0);
 }
 
+vec3 aces(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     if(numSamples == 0) {
         return 0;
@@ -216,6 +225,12 @@ void main() {
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
     vec3 color = ambient + Lo;
     color = color / (color + vec3(1.0));
-    outColor = vec4(pow(color, vec3(1.0/2.2)) + emission.rgb, 1.0);
-    // outColor = vec4(step(depth, 10));
+    vec3 totalRadiance = color + emission.rgb;
+
+    // exposure tone mapping
+    vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
+    mapped = aces(mapped);
+    
+    // gamma correction 
+    outColor = vec4(pow(mapped, vec3(1.0 / 1.0)), 1);
 }

@@ -205,6 +205,10 @@ void OnImgui(int numFrame) {
     ImGui::End();
 }
 
+vkw::Image& GetComposedImage() {
+    return ctx.compose;
+}
+
 void ViewportOnImGui() {
     ImGui::Image(ctx.compose.ImGuiRID(), ImGui::GetWindowSize());
 

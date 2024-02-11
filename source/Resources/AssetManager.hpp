@@ -179,8 +179,7 @@ struct LightNode : Node {
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
     LightType lightType = LightType::Point;
-    bool shadows = false;
-
+    bool shadows = true;
     float radius = 2.0f;
     float innerAngle = 2.0;
     float outerAngle = 2.0;
@@ -198,7 +197,12 @@ struct SceneAsset : Asset {
     // todo: scene properties, background color, hdr, etc
     glm::vec3 ambientLightColor = glm::vec3(1);
     float ambientLight = 0.01f;
-    uint32_t aoSamples = 0;
+    uint32_t aoSamples = 32;
+    uint32_t lightSamples = 16;
+    float aoMin = 0.0001f;
+    float aoMax = 1.0000f;
+    float aoPower = 2.0f;
+    float exposure = 2.0f;
 
     template<typename T>
     Ref<T> Add() {

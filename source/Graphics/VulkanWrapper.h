@@ -244,9 +244,9 @@ void BeginCommandBuffer(Queue queue);
 void EndCommandBuffer();
 void WaitQueue(Queue queue);
 void WaitIdle();
+void BeginImGui();
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
-void InitImGui();
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
 

@@ -51,10 +51,10 @@ void Camera::UpdateProj(){
     proj[1][1] *= -1;
 }
 
-void Camera::Update(Transform* selectedTransform) {
-    //if (!autoOrbit && ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
-    //    return;
-    //}
+void Camera::Update(Transform* selectedTransform, bool viewportHovered) {
+    if (!viewportHovered) {
+       return;
+    }
     bool viewDirty = false;
     bool projDirty = false;
     glm::vec2 drag(.0f);
@@ -77,10 +77,10 @@ void Camera::Update(Transform* selectedTransform) {
             viewDirty = true;
         }
     }
-    if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {
+    if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_1) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {
         drag = -Window::GetDeltaMouse();
     }
-    if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_3) || Window::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) {
+    if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) {
         move = -Window::GetDeltaMouse();
     }
     if (autoOrbit) {

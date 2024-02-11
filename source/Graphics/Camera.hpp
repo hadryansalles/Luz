@@ -45,7 +45,7 @@ private:
 
 public:
     Camera();
-    void Update(struct Transform* selectedTransform);
+    void Update(struct Transform* selectedTransform, bool viewportHovered);
     void OnImgui();
     void SetExtent(float width, float height);
 
