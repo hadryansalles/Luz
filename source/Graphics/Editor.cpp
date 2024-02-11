@@ -44,7 +44,7 @@ Editor::Editor() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->AddFontDefault();
-    const float fontSize = 18.0f;
+    const float fontSize = 17.0f;
     io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/roboto.ttf", fontSize);
     ImFontConfig config;
     const float iconSize = fontSize * 2.8f / 3.0f;
@@ -490,7 +490,7 @@ void Editor::ProfilerPopup() {
         ImGui::Text("F11 - Fullscreen");
         ImVec2 maxPos = ImGui::GetMainViewport()->Size;
         ImVec2 panelSize = ImGui::GetWindowSize();
-        ImGui::SetWindowPos({ maxPos.x - panelSize.x, maxPos.y - panelSize.y });
+        ImGui::SetWindowPos({ maxPos.x - panelSize.x, 0});
     }
     ImGui::End();
 }
