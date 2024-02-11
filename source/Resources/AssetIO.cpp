@@ -57,7 +57,7 @@ void WriteFile(const std::filesystem::path& path, const std::string& content) {
 }
 
 UUID Import(const std::filesystem::path& path, AssetManager& assets) {
-    TimeScope t("AssetIO::Import(" + path.string() + ")");
+    TimeScope t("AssetIO::Import(" + path.string() + ")", true);
     const std::string ext = path.extension().string();
     if (IsTexture(path)) {
         return ImportTexture(path, assets);

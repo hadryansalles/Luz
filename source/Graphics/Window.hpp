@@ -4,6 +4,11 @@
 #include <glm/glm.hpp>
 #include <chrono>
 
+enum class WindowMode {
+    Windowed,
+    WindowedFullScreen,
+    FullScreen
+};
 class Window {
 private:
     static inline GLFWwindow*   window             = nullptr;
@@ -29,14 +34,7 @@ private:
     static inline glm::vec2 deltaMousePos = glm::vec2(.0f, .0f);
 
     static inline char lastKeyState[GLFW_KEY_LAST + 1];
-
-    enum class Mode {
-        Windowed,
-        WindowedFullScreen,
-        FullScreen
-    };
-
-    static inline Mode mode      = Mode::Windowed;
+    static inline WindowMode mode = WindowMode::Windowed;
     static inline bool dirty     = true;
     static inline bool resizable = true;
     static inline bool decorated = true;
@@ -69,5 +67,6 @@ public:
     static inline bool        GetFramebufferResized()          { return framebufferResized;                     }
     static inline bool        IsKeyDown(uint16_t keyCode)      { return glfwGetKey(window, keyCode);            }
     static inline bool        IsMouseDown(uint16_t buttonCode) { return glfwGetMouseButton(window, buttonCode); }
+    static inline void        SetMode(WindowMode newMode) { mode = newMode; dirty = true; }
     static inline std::vector<std::string> GetAndClearPaths()  { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };

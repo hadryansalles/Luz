@@ -16,10 +16,6 @@
 
 #include <GLFW/glfw3.h>
 
-#ifdef _DEBUG
-#define IMGUI_VULKAN_DEBUG_REPORT
-#endif
-
 class LuzApplication {
 public:
     void run() {
@@ -32,9 +28,8 @@ public:
 private:
     u32 frameCount = 0;
     ImDrawData* imguiDrawData = nullptr;
-    bool drawUi = true;
-    bool viewportResized = false;
     glm::ivec2 viewportSize = { 64, 48 };
+    glm::ivec2 newViewportSize = viewportSize;
     AssetManager assetManager;
     GPUScene gpuScene;
     Ref<SceneAsset> scene;
@@ -56,6 +51,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
+        //assetManager.LoadProject("assets/default.luz");
         scene = assetManager.GetInitialScene();
     }
 
@@ -81,26 +77,22 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
+            LUZ_PROFILE_NAMED("Total");
             Window::Update();
             assetManager.AddAssetsToScene(scene, Window::GetAndClearPaths());
             gpuScene.AddAssets(assetManager);
             // todo: focus camera on selected object
             mainCamera.Update(nullptr, viewportHovered);
             DrawFrame();
-            if (Window::IsKeyPressed(GLFW_KEY_F1)) {
-                drawUi = !drawUi;
-            }
-            if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyPressed(GLFW_KEY_S)) {
-                LOG_INFO("Request saved");
+            bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
+            if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
                 assetManager.SaveProject("assets/default.luz");
             }
-            if (Window::IsKeyPressed(GLFW_KEY_R)) {
+            if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
                 DeferredShading::CreateShaders();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
-            } else if (Window::IsDirty()) {
-                Window::ApplyChanges();
             }
         }
         vkw::WaitIdle();
@@ -108,9 +100,10 @@ private:
 
     bool DirtyFrameResources() {
         bool dirty = false;
-        dirty |= viewportResized;
+        dirty |= (newViewportSize != viewportSize);
         dirty |= vkw::GetSwapChainDirty();
         dirty |= Window::GetFramebufferResized();
+        dirty |= Window::IsDirty();
         return dirty;
     }
 
@@ -125,34 +118,34 @@ private:
 
     void DrawEditor() {
         LUZ_PROFILE_FUNC();
+        LUZ_PROFILE_NAMED("DrawEditor");
 
         if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
             fullscreen = !fullscreen;
             if (fullscreen) {
+                Window::SetMode(WindowMode::FullScreen);
                 glfwSetInputMode(Window::GetGLFWwindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             } else {
+                Window::SetMode(WindowMode::Windowed);
                 glfwSetInputMode(Window::GetGLFWwindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
         }
 
         editor.BeginFrame();
-        glm::ivec2 newViewportSize = viewportSize;
-        viewportHovered = editor.ViewportPanel(DeferredShading::GetComposedImage(), newViewportSize);
 
         if (!fullscreen) {
+            viewportHovered = editor.ViewportPanel(DeferredShading::GetComposedImage(), newViewportSize);
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
             editor.ScenePanel(scene, mainCamera);
             editor.InspectorPanel(assetManager, mainCamera);
         } else {
-            editor.ProfilerPopup();
+            newViewportSize = { Window::GetWidth(), Window::GetHeight() };
+            viewportHovered = true;
         }
+        editor.ProfilerPopup();
 
-        if (newViewportSize != viewportSize) {
-            viewportResized = true;
-            viewportSize = newViewportSize;
-        }
         imguiDrawData = editor.EndFrame();
     }
 
@@ -164,13 +157,13 @@ private:
 
         vkw::CmdBarrier();
 
-        auto totalTS = vkw::CmdBeginTimeStamp("GPU::Total");
+        auto totalTS = vkw::CmdBeginTimeStamp("Total");
 
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 
-        auto opaqueTS = vkw::CmdBeginTimeStamp("GPU::OpaquePass");
+        auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredShading::BeginOpaquePass();
 
         for (GPUModel& model : gpuScene.GetMeshModels()) {
@@ -191,18 +184,23 @@ private:
         DeferredShading::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);
 
-        auto composeTS = vkw::CmdBeginTimeStamp("GPU::ComposePass");
-        DeferredShading::ComposePass();
+        auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
+        if (fullscreen) {
+            vkw::CmdBeginPresent();
+            DeferredShading::ComposePass(false);
+        }  else {
+            DeferredShading::ComposePass(true);
+            vkw::CmdBeginPresent();
+        }
         vkw::CmdEndTimeStamp(composeTS);
 
-        vkw::CmdBeginPresent();
-        auto imguiTS = vkw::CmdBeginTimeStamp("GPU::ImGui");
-        if (drawUi) {
-            vkw::CmdDrawImGui(imguiDrawData);
-        }
+        auto imguiTS = vkw::CmdBeginTimeStamp("ImGui");
+        vkw::CmdDrawImGui(imguiDrawData);
         vkw::CmdEndTimeStamp(imguiTS);
+
         vkw::CmdEndPresent();
         vkw::CmdEndTimeStamp(totalTS);
+
     }
 
     void DrawFrame() {
@@ -223,11 +221,15 @@ private:
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
         }
+        viewportSize = newViewportSize;
         if (viewportSize.x == 0 || viewportSize.y == 0) {
             return;
         }
         vkw::WaitIdle();
-        if (Window::GetFramebufferResized()) {
+        if (Window::GetFramebufferResized() || Window::IsDirty()) {
+            if (Window::IsDirty()) {
+                Window::ApplyChanges();
+            }
             Window::UpdateFramebufferSize();
             vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         }
@@ -235,7 +237,6 @@ private:
         // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
         // the easiest way to fix this is fliping the scaling factor of the y axis
         mainCamera.SetExtent(viewportSize.x, viewportSize.y);
-        viewportResized = false;
     }
 
     void FinishImgui() {

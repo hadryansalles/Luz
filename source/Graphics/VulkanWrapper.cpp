@@ -1,5 +1,9 @@
 #include "Luzpch.hpp"
 
+#ifdef _DEBUG
+#define IMGUI_VULKAN_DEBUG_REPORT
+#endif
+
 #include "VulkanWrapper.h"
 
 #include "LuzCommon.h"

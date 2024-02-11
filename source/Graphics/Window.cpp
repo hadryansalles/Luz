@@ -69,7 +69,7 @@ void Window::ApplyChanges() {
 
     // creating window
     switch (mode) {
-    case Mode::Windowed:
+    case WindowMode::Windowed:
         posY = std::max(posY, 31);
         glfwSetWindowMonitor(window, nullptr, posX, posY, width, height, GLFW_DONT_CARE);
         if (maximized) {
@@ -79,14 +79,14 @@ void Window::ApplyChanges() {
         glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable);
         glfwSetWindowAttrib(window, GLFW_DECORATED, decorated);
         break;
-    case Mode::WindowedFullScreen:
+    case WindowMode::WindowedFullScreen:
         glfwWindowHint(GLFW_RED_BITS, monitorMode->redBits);
         glfwWindowHint(GLFW_GREEN_BITS, monitorMode->greenBits);
         glfwWindowHint(GLFW_BLUE_BITS, monitorMode->blueBits);
         glfwWindowHint(GLFW_REFRESH_RATE, monitorMode->refreshRate);
         glfwSetWindowMonitor(window, monitor, 0, 0, monitorMode->width, monitorMode->height, monitorMode->refreshRate);
         break;
-    case Mode::FullScreen:
+    case WindowMode::FullScreen:
         GLFWvidmode videoMode = videoModes[videoModeIndex];
         glfwSetWindowMonitor(window, monitor, 0, 0, videoMode.width, videoMode.height, videoMode.refreshRate);
         break;
@@ -103,6 +103,7 @@ void Window::Destroy() {
 }
 
 void Window::Update() {
+    LUZ_PROFILE_NAMED("WindowUpdate");
     for (int i = 0; i < GLFW_KEY_LAST + 1; i++) {
         lastKeyState[i] = glfwGetKey(window, i);
     }
@@ -136,7 +137,7 @@ void Window::OnImgui() {
                 for (int i = 0; i < 3; i++) {
                     bool selected = (int)mode == i;
                     if (ImGui::Selectable(modeNames[i], selected)) {
-                        mode = (Window::Mode)i;
+                        mode = (WindowMode)i;
                         dirty = true;
                     }
                     if (selected) {
@@ -147,7 +148,7 @@ void Window::OnImgui() {
             }
             ImGui::PopID();
         }
-        if (mode != Mode::Windowed) {
+        if (mode != WindowMode::Windowed) {
             // monitor
             {
                 ImGui::Text("Monitor");
@@ -174,7 +175,7 @@ void Window::OnImgui() {
         }
         // resolution
         {
-            if (mode == Mode::FullScreen) {
+            if (mode == WindowMode::FullScreen) {
                 ImGui::Text("Resolution");
                 ImGui::SameLine(totalWidth / 2.0f);
                 ImGui::SetNextItemWidth(totalWidth / 4.0f);
@@ -205,7 +206,7 @@ void Window::OnImgui() {
         }
         // windowed only
         {
-            if (mode == Mode::Windowed) {
+            if (mode == WindowMode::Windowed) {
                 // maximized
                 {
                     ImGui::Text("Maximized");

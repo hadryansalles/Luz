@@ -14,7 +14,7 @@ void Critical(const char* format, ...);
 
 namespace spdlog {
 
-struct logger;
+class logger;
 
 }
 

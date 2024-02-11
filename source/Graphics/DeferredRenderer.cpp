@@ -72,7 +72,7 @@ void CreateShaders() {
         },
         .name = "Present Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {vkw::Format::RGBA8_unorm},
+        .colorFormats = {vkw::Format::BGRA8_unorm},
         .useDepth = false,
     });
 }
@@ -123,7 +123,7 @@ void CreateImages(uint32_t width, uint32_t height) {
     ctx.compose = vkw::CreateImage({
         .width = width,
         .height = height,
-        .format = vkw::Format::RGBA8_unorm,
+        .format = vkw::Format::BGRA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
@@ -166,12 +166,11 @@ void LightPass(LightConstants constants) {
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();
     vkw::CmdEndRendering();
+
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
-void ComposePass() {
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
-    vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
-
+void ComposePass(bool separatePass) {
     ComposeConstant constants;
     constants.lightRID = ctx.light.RID();
     constants.albedoRID = ctx.albedo.RID();
@@ -181,13 +180,17 @@ void ComposePass() {
     constants.depthRID = ctx.depth.RID();
     constants.imageType = ctx.presentType;
 
-    vkw::CmdBeginRendering({ ctx.compose });
+    if (separatePass) {
+        vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
+        vkw::CmdBeginRendering({ ctx.compose });
+    }
     vkw::CmdBindPipeline(ctx.composePipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();
-    vkw::CmdEndRendering();
-
-    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
+    if (separatePass) {
+        vkw::CmdEndRendering();
+        vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
+    }
 }
 
 void OnImgui(int numFrame) {

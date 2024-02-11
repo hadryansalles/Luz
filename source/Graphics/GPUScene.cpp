@@ -107,6 +107,7 @@ void GPUScene::ClearAssets() {
 }
 
 void GPUScene::AddAssets(const AssetManager& assets) {
+    LUZ_PROFILE_NAMED("GPUAddAssets");
     const auto& meshes = assets.GetAll<MeshAsset>(ObjectType::MeshAsset);
     for (auto& mesh : meshes) {
         if (mesh->gpuDirty) {

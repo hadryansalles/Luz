@@ -129,6 +129,7 @@ Ref<SceneAsset> AssetManager::GetInitialScene() {
 }
 
 void AssetManager::LoadProject(const std::filesystem::path& path) {
+    TimeScope t("AssetManager::LoadProject", true);
     if (!std::ifstream(path)) {
         return;
     }
@@ -147,7 +148,7 @@ void AssetManager::LoadProject(const std::filesystem::path& path) {
 }
 
 void AssetManager::SaveProject(const std::filesystem::path& path) {
-    TimeScope t("AssetManager::SaveProject");
+    TimeScope t("AssetManager::SaveProject", true);
     Json j;
     int dir = Serializer::SAVE;
     std::vector<Ref<Asset>> assetsOrdered;
@@ -166,7 +167,6 @@ void AssetManager::SaveProject(const std::filesystem::path& path) {
     }
     j["initialScene"] = initialScene;
     AssetIO::WriteFile(path, j.dump(2));
-    // todo: use imgui flag to tell it's unsaved
 }
 
 void AssetManager::OnImgui() {
@@ -187,6 +187,7 @@ UUID AssetManager::NewUUID() {
 }
 
 void AssetManager::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths) {
+    LUZ_PROFILE_NAMED("AddAssetsToScene");
     for (const auto& path : paths) {
         UUID uuid = AssetIO::Import(path, *this);
         if (uuid != 0 && assets[uuid]->type == ObjectType::SceneAsset) {

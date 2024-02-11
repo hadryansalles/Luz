@@ -4,6 +4,7 @@
 #include "AssetManager.hpp"
 #include "Camera.hpp"
 #include "VulkanWrapper.h"
+#include "Window.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
@@ -13,7 +14,7 @@
 struct EditorImpl {
     std::vector<Ref<Node>> selectedNodes;
     std::vector<Ref<Node>> copiedNodes;
-    bool fullscreen = false;
+    bool profilerPopup = true;
 
 #define LUZ_SCENE_ICON ICON_FA_GLOBE_AMERICAS
 #define LUZ_MESH_ICON ICON_FA_CUBE
@@ -148,8 +149,8 @@ Editor::~Editor() {
 void Editor::BeginFrame() {
     vkw::BeginImGui();
     ImGui::NewFrame();
-    //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 }
 
 ImDrawData* Editor::EndFrame() {
@@ -269,9 +270,6 @@ void Editor::DemoPanel() {
 }
 
 void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
-    if (impl->fullscreen) {
-        return;
-    }
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -443,7 +441,9 @@ void Editor::AssetsPanel(AssetManager& manager) {
 
 bool Editor::ViewportPanel(vkw::Image& image, glm::ivec2& newViewportSize) {
     bool hovered = false;
-    if (ImGui::Begin("Viewport", 0)) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, 0 });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    if (ImGui::Begin("Viewport")) {
         ImGui::BeginChild("##ChildViewport");
         newViewportSize = { ImGui::GetWindowSize().x, ImGui::GetWindowSize().y };
         ImGui::Image(image.ImGuiRID(), ImGui::GetWindowSize());
@@ -452,33 +452,45 @@ bool Editor::ViewportPanel(vkw::Image& image, glm::ivec2& newViewportSize) {
         hovered = ImGui::IsWindowHovered() && !ImGuizmo::IsUsing();
         ImGui::EndChild();
     }
+    ImGui::PopStyleVar(2);
     ImGui::End();
     return hovered;
 }
 
 void Editor::ProfilerPanel() {
-    if (ImGui::Begin("Profiler")) {
-        std::map<std::string, float> timeTable;
-        vkw::GetTimeStamps(timeTable);
-        for (const auto& pair : timeTable) {
-            ImGui::Text("%s: %.3f", pair.first.c_str(), pair.second);
-        }
-    }
-    ImGui::End();
 }
 
 void Editor::ProfilerPopup() {
+    if (ImGui::IsKeyPressed(ImGuiKey_F10)) {
+        impl->profilerPopup = !impl->profilerPopup;
+    }
+    if (!impl->profilerPopup) {
+        return;
+    }
     ImGuiWindowFlags flags = 0;
     flags |= ImGuiWindowFlags_NoNav;
     flags |= ImGuiWindowFlags_NoDecoration;
     flags |= ImGuiWindowFlags_NoInputs;
+    flags |= ImGuiWindowFlags_AlwaysAutoResize;
     if (ImGui::Begin("ProfilerPopup", 0, flags)) {
-        ImGui::SetWindowPos(ImVec2(0, 0));
         std::map<std::string, float> timeTable;
         vkw::GetTimeStamps(timeTable);
+        ImGui::SeparatorText("GPU (ms)");
         for (const auto& pair : timeTable) {
             ImGui::Text("%s: %.3f", pair.first.c_str(), pair.second);
         }
+        ImGui::SeparatorText("CPU (ms)");
+        const auto& cpuTimes = TimeScope::GetCPUTimes();
+        for (const auto& pair : cpuTimes) {
+            ImGui::Text("%s: %.3f", pair.first.c_str(), pair.second);
+        }
+        ImGui::Separator();
+        ImGui::Text("F5  - Reload Shaders");
+        ImGui::Text("F10 - Profiler");
+        ImGui::Text("F11 - Fullscreen");
+        ImVec2 maxPos = ImGui::GetMainViewport()->Size;
+        ImVec2 panelSize = ImGui::GetWindowSize();
+        ImGui::SetWindowPos({ maxPos.x - panelSize.x, maxPos.y - panelSize.y });
     }
     ImGui::End();
 }

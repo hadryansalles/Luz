@@ -31,7 +31,7 @@ void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
 
 void LightPass(LightConstants constants);
-void ComposePass();
+void ComposePass(bool separatePass);
 void BeginOpaquePass();
 void EndPass();
 void OnImgui(int numFrame);
