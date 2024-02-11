@@ -53,7 +53,6 @@ Editor::Editor() {
     config.GlyphMinAdvanceX = iconSize;
     static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
     io.Fonts->AddFontFromFileTTF("assets/fontawesome.otf", iconSize, &config, icon_ranges);
-    //io.Fonts->AddFontFromFileTTF("assets/fontawesome-webfont.ttf", iconSize, &config, icon_ranges);
 
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
@@ -265,6 +264,10 @@ void EditorImpl::Select(Ref<Node>& node) {
     }
 }
 
+void Editor::Select(AssetManager& manager, const std::vector<Ref<Node>>& nodes) {
+    impl->selectedNodes = nodes;
+}
+
 void Editor::DemoPanel() {
     ImGui::ShowDemoWindow();
 }
@@ -317,7 +320,6 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
             ImGui::DragInt("Samples##AO", (int*)&scene->aoSamples, 1, 0, 256);
             ImGui::DragFloat("Min##AO", &scene->aoMin, 0.01f, 0.000f, 10.0f);
             ImGui::DragFloat("Max##AO", &scene->aoMax, 0.1f, 0.000f, 1000.0f);
-            ImGui::DragFloat("Power##AO", &scene->aoPower, 0.01f, 0.000f, 100.0f);
             ImGui::SeparatorText("Lights");
             ImGui::DragFloat("Exposure##lights", &scene->exposure, 0.01, 0, 10);
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
@@ -486,6 +488,7 @@ void Editor::ProfilerPopup() {
         }
         ImGui::Separator();
         ImGui::Text("F5  - Reload Shaders");
+        ImGui::Text("F7  - Change Output Mode");
         ImGui::Text("F10 - Profiler");
         ImGui::Text("F11 - Fullscreen");
         ImVec2 maxPos = ImGui::GetMainViewport()->Size;

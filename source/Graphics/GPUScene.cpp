@@ -178,7 +178,6 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     s.ambientLightIntensity = scene->ambientLight;
     s.aoMax = scene->aoMax;
     s.aoMin = scene->aoMin;
-    s.aoPower = scene->aoPower;
     s.aoNumSamples = scene->aoSamples;
     s.exposure = scene->exposure;
     s.camPos = camera.GetPosition();

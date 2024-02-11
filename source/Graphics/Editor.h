@@ -6,6 +6,7 @@ struct EditorImpl;
 struct Camera;
 struct AssetManager;
 struct SceneAsset;
+struct Node;
 
 namespace vkw {
 struct Image;
@@ -26,6 +27,7 @@ struct Editor {
     void ProfilerPanel();
     void ProfilerPopup();
     bool ViewportPanel(vkw::Image& image, glm::ivec2& newSize);
+    void Select(AssetManager& assetManager, const std::vector<Ref<Node>>& uuids);
 private:
     EditorImpl* impl;
 };

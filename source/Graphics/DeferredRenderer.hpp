@@ -26,15 +26,25 @@ struct LightConstants {
     int depthRID;
 };
 
+enum Output : uint32_t {
+    Light,
+    Albedo,
+    Normal,
+    Material,
+    Emission,
+    Depth,
+    All,
+    Count
+};
+
 void CreateShaders();
 void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
 
 void LightPass(LightConstants constants);
-void ComposePass(bool separatePass);
+void ComposePass(bool separatePass, Output output);
 void BeginOpaquePass();
 void EndPass();
-void OnImgui(int numFrame);
 
 vkw::Image& GetComposedImage();
 

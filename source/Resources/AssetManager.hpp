@@ -194,14 +194,12 @@ struct CameraNode : Node {
 
 struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
-    // todo: scene properties, background color, hdr, etc
     glm::vec3 ambientLightColor = glm::vec3(1);
     float ambientLight = 0.01f;
     uint32_t aoSamples = 32;
     uint32_t lightSamples = 16;
     float aoMin = 0.0001f;
     float aoMax = 1.0000f;
-    float aoPower = 2.0f;
     float exposure = 2.0f;
 
     template<typename T>
@@ -216,8 +214,6 @@ struct SceneAsset : Asset {
     }
 
     void DeleteRecursive(const Ref<Node>& node);
-
-    void Merge(AssetManager& manager, const Ref<SceneAsset>& rhs);
 
     template<typename T>
     void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
@@ -253,7 +249,7 @@ struct SceneAsset : Asset {
 };
 
 struct AssetManager {
-    void AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
+    std::vector<Ref<Node>> AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
     void LoadProject(const std::filesystem::path& path);
     void SaveProject(const std::filesystem::path& path);
     Ref<SceneAsset> GetInitialScene();

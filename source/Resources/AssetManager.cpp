@@ -94,9 +94,9 @@ void SceneAsset::Serialize(Serializer& s) {
     s("ambientLightColor", ambientLightColor);
     s("lightSamples", lightSamples);
     s("aoSamples", aoSamples);
-    s("aoPower", aoPower);
     s("aoMin", aoMin);
     s("aoMax", aoMax);
+    s("exposure", exposure);
 }
 
 void Node::Serialize(Serializer& s) {
@@ -186,21 +186,21 @@ UUID AssetManager::NewUUID() {
     return dist(eng);
 }
 
-void AssetManager::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths) {
+std::vector<Ref<Node>> AssetManager::AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths) {
     LUZ_PROFILE_NAMED("AddAssetsToScene");
+    std::vector<Ref<Node>> newNodes;
     for (const auto& path : paths) {
         UUID uuid = AssetIO::Import(path, *this);
         if (uuid != 0 && assets[uuid]->type == ObjectType::SceneAsset) {
-            scene->Merge(*this, Get<SceneAsset>(uuid));
+            auto sceneAsset = Get<SceneAsset>(uuid);
+            for (auto& node : sceneAsset->nodes) {
+                Ref<Node> nodeClone = Node::Clone(node);
+                scene->nodes.push_back(nodeClone);
+                newNodes.push_back(nodeClone);
+            }
         }
     }
-}
-
-void SceneAsset::Merge(AssetManager& manager, const Ref<SceneAsset>& rhs) {
-    for (auto& node : rhs->nodes) {
-        Ref<Node> nodeClone = Node::Clone(node);
-        nodes.push_back(nodeClone);
-    }
+    return newNodes;
 }
 
 void SceneAsset::DeleteRecursive(const Ref<Node>& node) {

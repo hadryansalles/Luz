@@ -65,16 +65,13 @@ struct SceneBlock {
 
     float aoMin;
     float aoMax;
-    float aoPower;
+    float exposure;
     int aoNumSamples;
 
     int useBlueNoise;
     int whiteTexture;
     int blackTexture;
     int tlasRid;
-
-    float exposure;
-    float pad[3];
 };
 
 #if !defined(LUZ_ENGINE)

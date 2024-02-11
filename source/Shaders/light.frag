@@ -153,14 +153,11 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
 
         while(rayQueryProceedEXT(rayQuery)) {}
 
-        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-            ao += rayQueryGetIntersectionTEXT(rayQuery, true)/(tMax*scene.aoNumSamples);
-        } else {
-            ao += 1.0/float(scene.aoNumSamples);
-            // ao += 1;
+        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
+            ao += 1.0;
         }
     }
-    return clamp(pow(ao, scene.aoPower), 0.0, 1.0);
+    return ao/scene.aoNumSamples;
 }
 
 void main() {
@@ -169,6 +166,10 @@ void main() {
     vec4 material = texture(textures[materialRID], fragTexCoord);
     vec4 emission = texture(textures[emissionRID], fragTexCoord);
     float depth = texture(textures[depthRID], fragTexCoord).r;
+    if (length(N) == 0.0f) {
+        outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
+        return;
+    }
     // float depth = 1.0;
     float occlusion = material.b;
     float roughness = material.r;

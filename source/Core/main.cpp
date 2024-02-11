@@ -37,6 +37,7 @@ private:
     Camera mainCamera;
     bool viewportHovered = false;
     bool fullscreen = false;
+    DeferredShading::Output outputMode = DeferredShading::Output::Light;
 
     void WaitToInit(float seconds) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -79,7 +80,12 @@ private:
             LUZ_PROFILE_FRAME();
             LUZ_PROFILE_NAMED("Total");
             Window::Update();
-            assetManager.AddAssetsToScene(scene, Window::GetAndClearPaths());
+            if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
+                auto newNodes = assetManager.AddAssetsToScene(scene, paths);
+                if (newNodes.size()) {
+                    editor.Select(assetManager, newNodes);
+                }
+            }
             gpuScene.AddAssets(assetManager);
             // todo: focus camera on selected object
             mainCamera.Update(nullptr, viewportHovered);
@@ -129,6 +135,9 @@ private:
                 Window::SetMode(WindowMode::Windowed);
                 glfwSetInputMode(Window::GetGLFWwindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_F7)) {
+            outputMode = DeferredShading::Output((outputMode + 1) % DeferredShading::Output::Count);
         }
 
         editor.BeginFrame();
@@ -187,9 +196,9 @@ private:
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {
             vkw::CmdBeginPresent();
-            DeferredShading::ComposePass(false);
+            DeferredShading::ComposePass(false, outputMode);
         }  else {
-            DeferredShading::ComposePass(true);
+            DeferredShading::ComposePass(true, outputMode);
             vkw::CmdBeginPresent();
         }
         vkw::CmdEndTimeStamp(composeTS);

@@ -9,9 +9,6 @@
 namespace DeferredShading {
 
 struct Context {
-    const char* presentTypes[7] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth", "All"};
-    int presentType = 0;
-
     vkw::Pipeline opaquePipeline;
     vkw::Pipeline lightPipeline;
     vkw::Pipeline composePipeline;
@@ -170,7 +167,7 @@ void LightPass(LightConstants constants) {
     vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
-void ComposePass(bool separatePass) {
+void ComposePass(bool separatePass, Output output) {
     ComposeConstant constants;
     constants.lightRID = ctx.light.RID();
     constants.albedoRID = ctx.albedo.RID();
@@ -178,7 +175,7 @@ void ComposePass(bool separatePass) {
     constants.materialRID = ctx.material.RID();
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
-    constants.imageType = ctx.presentType;
+    constants.imageType = uint32_t(output);
 
     if (separatePass) {
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
@@ -191,21 +188,6 @@ void ComposePass(bool separatePass) {
         vkw::CmdEndRendering();
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
     }
-}
-
-void OnImgui(int numFrame) {
-    if (ImGui::Begin("Deferred Renderer")) {
-        if (ImGui::BeginCombo("Present", ctx.presentTypes[ctx.presentType])) {
-            for (int i = 0; i < COUNT_OF(ctx.presentTypes); i++) {
-                bool selected = ctx.presentType == i;
-                if (ImGui::Selectable(ctx.presentTypes[i], &selected)) {
-                    ctx.presentType = i;
-                }
-            }
-            ImGui::EndCombo();
-        }
-    }
-    ImGui::End();
 }
 
 vkw::Image& GetComposedImage() {
