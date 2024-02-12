@@ -107,7 +107,6 @@ void GPUScene::ClearAssets() {
 }
 
 void GPUScene::AddAssets(const AssetManager& assets) {
-    LUZ_PROFILE_NAMED("GPUAddAssets");
     const auto& meshes = assets.GetAll<MeshAsset>(ObjectType::MeshAsset);
     for (auto& mesh : meshes) {
         if (mesh->gpuDirty) {
@@ -125,6 +124,7 @@ void GPUScene::AddAssets(const AssetManager& assets) {
 }
 
 void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
+    LUZ_PROFILE_NAMED("UpdateResourcesGPU");
     std::vector<Ref<MeshNode>> meshNodes;
     scene->GetAll<MeshNode>(ObjectType::MeshNode, meshNodes);
     impl->modelsBlock.clear();
@@ -178,7 +178,7 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     s.ambientLightIntensity = scene->ambientLight;
     s.aoMax = scene->aoMax;
     s.aoMin = scene->aoMin;
-    s.aoNumSamples = scene->aoSamples;
+    s.aoNumSamples = scene->aoSamples > 0 ? scene->aoSamples : 0;
     s.exposure = scene->exposure;
     s.camPos = camera.GetPosition();
     s.projView = camera.GetProj() * camera.GetView();

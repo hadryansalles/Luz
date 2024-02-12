@@ -52,7 +52,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        //assetManager.LoadProject("assets/default.luz");
+        assetManager.LoadProject("assets/default.luz");
         scene = assetManager.GetInitialScene();
     }
 
@@ -78,7 +78,6 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
-            LUZ_PROFILE_NAMED("Total");
             Window::Update();
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);
@@ -172,13 +171,18 @@ private:
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 
+
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredShading::BeginOpaquePass();
 
-        for (GPUModel& model : gpuScene.GetMeshModels()) {
-            constants.modelID = model.modelRID;
-            vkw::CmdPushConstants(&constants, sizeof(constants));
-            vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
+        {
+            LUZ_PROFILE_NAMED("RenderModels");
+            auto& allModels = gpuScene.GetMeshModels();
+            for (GPUModel& model : allModels) {
+                constants.modelID = model.modelRID;
+                vkw::CmdPushConstants(&constants, sizeof(constants));
+                vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
+            }
         }
 
         // todo: light gizmos

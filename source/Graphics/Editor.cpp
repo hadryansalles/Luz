@@ -77,7 +77,7 @@ Editor::Editor() {
         const ImVec4 textDisabledColor = ColorFromBytes(151, 151, 151);
         const ImVec4 borderColor       = ColorFromBytes(78, 78, 78);
 
-        colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, 0.25f);
+        colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, 0.65f);
         colors[ImGuiCol_Text]                 = textColor;
         colors[ImGuiCol_TextDisabled]         = textDisabledColor;
         colors[ImGuiCol_TextSelectedBg]       = panelActiveColor;
@@ -162,6 +162,7 @@ void EditorImpl::OnNode(Ref<Node> node) {
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
     if (node->children.size() == 0) {
         flags |= ImGuiTreeNodeFlags_Leaf;
+        flags |= ImGuiTreeNodeFlags_Bullet;
     }
     if (FindSelected(node) != -1) {
         flags |= ImGuiTreeNodeFlags_Selected;
@@ -277,10 +278,6 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
         ImGui::SameLine();
-        if (ImGui::Button("Empty")) {
-            
-        }
-        ImGui::SameLine();
         if (ImGui::Button("Mesh")) {
             auto node = scene->Add<MeshNode>();
             node->name = "New Mesh";
@@ -313,15 +310,21 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
             }
         }
         if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Exposure", &scene->exposure, 0.01, 0, 10);
             ImGui::SeparatorText("Ambient Light");
             ImGui::ColorEdit3("Color", glm::value_ptr(scene->ambientLightColor));
             ImGui::DragFloat("Intesity", &scene->ambientLight, 0.01f, 0.0f, 100.0f);
             ImGui::SeparatorText("Ambient Occlusion");
-            ImGui::DragInt("Samples##AO", (int*)&scene->aoSamples, 1, 0, 256);
+            bool aoEnable = scene->aoSamples >= 0;
+            if (ImGui::Checkbox("Enable##AO", &aoEnable)) {
+                scene->aoSamples *= -1;
+            }
+            if (aoEnable) {
+                ImGui::DragInt("Samples##AO", (int*)&scene->aoSamples, 1, 0, 256);
+            }
             ImGui::DragFloat("Min##AO", &scene->aoMin, 0.01f, 0.000f, 10.0f);
             ImGui::DragFloat("Max##AO", &scene->aoMax, 0.1f, 0.000f, 1000.0f);
             ImGui::SeparatorText("Lights");
-            ImGui::DragFloat("Exposure##lights", &scene->exposure, 0.01, 0, 10);
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
         }
         camera.OnImgui();

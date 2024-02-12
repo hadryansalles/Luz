@@ -147,7 +147,7 @@ struct Node : Object {
 
     static void UpdateChildrenParent(Ref<Node>& node) {
         for (auto& child : node->children) {
-            SetParent(child, node);
+            child->parent = node;
             UpdateChildrenParent(child);
         }
     }
@@ -196,8 +196,8 @@ struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
     glm::vec3 ambientLightColor = glm::vec3(1);
     float ambientLight = 0.01f;
-    uint32_t aoSamples = 32;
-    uint32_t lightSamples = 16;
+    int aoSamples = 32;
+    int lightSamples = 16;
     float aoMin = 0.0001f;
     float aoMax = 1.0000f;
     float exposure = 2.0f;
