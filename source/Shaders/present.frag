@@ -2,7 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
-#include "base.glsl"
+#include "LuzCommon.h"
 
 layout(push_constant) uniform PresentConstants {
     int presentMode;

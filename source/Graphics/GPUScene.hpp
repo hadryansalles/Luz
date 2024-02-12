@@ -2,6 +2,12 @@
 
 #include "Base.hpp"
 #include "VulkanWrapper.h"
+#include "AssetManager.hpp"
+#include "Camera.hpp"
+
+#include <unordered_map>
+
+struct GPUSceneImpl;
 
 struct GPUMesh {
     vkw::Buffer vertexBuffer;
@@ -9,13 +15,38 @@ struct GPUMesh {
     u32 vertexCount;
     u32 indexCount;
     vkw::BLAS blas;
-}
+};
+
+struct GPUTexture {
+    vkw::Image image;
+};
 
 struct GPUModel {
-
-}
+    GPUMesh mesh;
+    uint32_t modelRID;
+    Ref<MeshNode> node;
+};
 
 struct GPUScene {
-    void UpdateResources()
-    std::vector<GPUMesh> meshes;
-}
+    GPUScene();
+    ~GPUScene();
+    
+    void Create();
+    void Destroy();
+
+    void AddMesh(const Ref<MeshAsset>& asset);
+    void AddTexture(const Ref<TextureAsset>& asset);
+    void AddAssets(const AssetManager& assets);
+    void ClearAssets();
+
+    void UpdateResources(Ref<SceneAsset>& asset, Camera& camera);
+    void UpdateResourcesGPU();
+
+    std::vector<GPUModel>& GetMeshModels();
+
+    RID GetSceneBuffer();
+    RID GetModelsBuffer();
+
+private:
+    GPUSceneImpl* impl;
+};

@@ -1,17 +1,14 @@
 #include "Luzpch.hpp"
 
 #include "DeferredRenderer.hpp"
-#include "AssetManager.hpp"
 #include "VulkanWrapper.h"
 
 #include "FileManager.hpp"
+#include <imgui/ImGuizmo.h>
 
 namespace DeferredShading {
 
 struct Context {
-    const char* presentTypes[7] = { "Light", "Albedo", "Normal", "Material", "Emission", "Depth", "All"};
-    int presentType = 0;
-
     vkw::Pipeline opaquePipeline;
     vkw::Pipeline lightPipeline;
     vkw::Pipeline composePipeline;
@@ -72,7 +69,7 @@ void CreateShaders() {
         },
         .name = "Present Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {vkw::Format::RGBA8_unorm},
+        .colorFormats = {vkw::Format::BGRA8_unorm},
         .useDepth = false,
     });
 }
@@ -123,7 +120,7 @@ void CreateImages(uint32_t width, uint32_t height) {
     ctx.compose = vkw::CreateImage({
         .width = width,
         .height = height,
-        .format = vkw::Format::RGBA8_unorm,
+        .format = vkw::Format::BGRA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
@@ -131,11 +128,6 @@ void CreateImages(uint32_t width, uint32_t height) {
 
 void Destroy() {
     ctx = {};
-}
-
-void RenderMesh(RID meshId) {
-    MeshResource& mesh = AssetManager::meshes[meshId];
-    vkw::CmdDrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
 }
 
 void BeginOpaquePass() {
@@ -171,12 +163,11 @@ void LightPass(LightConstants constants) {
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();
     vkw::CmdEndRendering();
+
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
-void ComposePass() {
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
-    vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
-
+void ComposePass(bool separatePass, Output output) {
     ComposeConstant constants;
     constants.lightRID = ctx.light.RID();
     constants.albedoRID = ctx.albedo.RID();
@@ -184,38 +175,23 @@ void ComposePass() {
     constants.materialRID = ctx.material.RID();
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
-    constants.imageType = ctx.presentType;
+    constants.imageType = uint32_t(output);
 
-    vkw::CmdBeginRendering({ ctx.compose });
+    if (separatePass) {
+        vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
+        vkw::CmdBeginRendering({ ctx.compose });
+    }
     vkw::CmdBindPipeline(ctx.composePipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();
-    vkw::CmdEndRendering();
-
-    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
-}
-
-void BeginPresentPass() {
-    vkw::CmdBeginPresent();
-}
-
-void EndPresentPass() {
-    vkw::CmdEndPresent();
-}
-
-void OnImgui(int numFrame) {
-    if (ImGui::Begin("Deferred Renderer")) {
-        if (ImGui::BeginCombo("Present", ctx.presentTypes[ctx.presentType])) {
-            for (int i = 0; i < COUNT_OF(ctx.presentTypes); i++) {
-                bool selected = ctx.presentType == i;
-                if (ImGui::Selectable(ctx.presentTypes[i], &selected)) {
-                    ctx.presentType = i;
-                }
-            }
-            ImGui::EndCombo();
-        }
+    if (separatePass) {
+        vkw::CmdEndRendering();
+        vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
     }
-    ImGui::End();
+}
+
+vkw::Image& GetComposedImage() {
+    return ctx.compose;
 }
 
 void ViewportOnImGui() {

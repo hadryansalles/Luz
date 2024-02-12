@@ -23,7 +23,6 @@ endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 if(WIN32)
     if (CMAKE_GENERATOR MATCHES "Visual Studio")
         add_compile_options("/MP")
-        # set_property(GLOBAL PROPERTY USE_FOLDERS ON)
     endif()
 endif()
 
@@ -44,12 +43,13 @@ set(LIBS_DIR ${CMAKE_SOURCE_DIR}/lib/${CMAKE_CFG_INTDIR})
 
 # Luz
 file(GLOB_RECURSE GLSL_SOURCE "source/*.vert" "source/*.frag" "source/*.rchit" "source/*.rgen" "source/*.rmiss")
-file(GLOB_RECURSE SOURCE "source/*.cpp")
+file(GLOB_RECURSE SOURCE "source/*.cpp" "source/*.hpp" "source/*.h")
 file(GLOB HEADERS "source/*")
 add_executable(${PROJECT_NAME} ${SOURCE} ${GLSL_SOURCE})
 source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCE} ${GLSL_SOURCE})
 include_directories(${HEADERS})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+target_precompile_headers(${PROJECT_NAME} PRIVATE "source/Core/Luzpch.hpp")
 
 # glfw
 add_subdirectory("deps/glfw")

@@ -12,8 +12,7 @@ layout(push_constant) uniform PresentConstants {
     int depthRID;
 };
 
-#include "base.glsl"
-
+#include "LuzCommon.h"
 
 layout(location = 0) in vec2 fragTexCoord;
 
@@ -88,6 +87,15 @@ vec4 BlueNoiseSample(int i) {
     return vec4(1, 0, 0, 0);
 }
 
+vec3 aces(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     if(numSamples == 0) {
         return 0;
@@ -145,14 +153,11 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
 
         while(rayQueryProceedEXT(rayQuery)) {}
 
-        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-            ao += rayQueryGetIntersectionTEXT(rayQuery, true)/(tMax*scene.aoNumSamples);
-        } else {
-            ao += 1.0/float(scene.aoNumSamples);
-            // ao += 1;
+        if(rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
+            ao += 1.0;
         }
     }
-    return clamp(pow(ao, scene.aoPower), 0.0, 1.0);
+    return ao/scene.aoNumSamples;
 }
 
 void main() {
@@ -161,6 +166,10 @@ void main() {
     vec4 material = texture(textures[materialRID], fragTexCoord);
     vec4 emission = texture(textures[emissionRID], fragTexCoord);
     float depth = texture(textures[depthRID], fragTexCoord).r;
+    if (length(N) == 0.0f) {
+        outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
+        return;
+    }
     // float depth = 1.0;
     float occlusion = material.b;
     float roughness = material.r;
@@ -170,7 +179,7 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);
     vec3 Lo = vec3(0.0);
-    float shadowBias = 0.01;
+    float shadowBias = 0.1;
     vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     for(int i = 0; i < scene.numLights; i++) {
         LightBlock light = scene.lights[i];
@@ -217,6 +226,12 @@ void main() {
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
     vec3 color = ambient + Lo;
     color = color / (color + vec3(1.0));
-    outColor = vec4(pow(color, vec3(1.0/2.2)) + emission.rgb, 1.0);
-    // outColor = vec4(step(depth, 10));
+    vec3 totalRadiance = color + emission.rgb;
+
+    // exposure tone mapping
+    vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
+    mapped = aces(mapped);
+    
+    // gamma correction 
+    outColor = vec4(pow(mapped, vec3(1.0 / 1.0)), 1);
 }

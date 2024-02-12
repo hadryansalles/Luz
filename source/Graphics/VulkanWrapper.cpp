@@ -1,9 +1,14 @@
 #include "Luzpch.hpp"
 
+#ifdef _DEBUG
+#define IMGUI_VULKAN_DEBUG_REPORT
+#endif
+
 #include "VulkanWrapper.h"
 
-#include "common.h"
+#include "LuzCommon.h"
 #include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
 #include <GLFW/glfw3.h>
 
 #define VMA_IMPLEMENTATION
@@ -199,6 +204,8 @@ struct Context {
     void CreateDevice();
     void DestroyDevice();
 
+    void CreateImGui(GLFWwindow* window);
+
     void CreateSurfaceFormats();
 
     void CreateSwapChain(uint32_t width, uint32_t height);
@@ -226,6 +233,8 @@ struct Context {
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+
+    vkw::Buffer dummyVertexBuffer;
 };
 
 static Context _ctx;
@@ -333,6 +342,7 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
     _ctx.CreateDevice();
     _ctx.CreateSurfaceFormats();
     _ctx.CreateSwapChain(width, height);
+    _ctx.CreateImGui(window);
 }
 
 void ImGuiCheckVulkanResult(VkResult res) {
@@ -345,7 +355,7 @@ void ImGuiCheckVulkanResult(VkResult res) {
     }
 }
 
-void InitImGui() {
+void Context::CreateImGui(GLFWwindow* window) {
     ImGui_ImplVulkan_InitInfo initInfo{};
     initInfo.Instance = _ctx.instance;
     initInfo.PhysicalDevice = _ctx.physicalDevice;
@@ -363,6 +373,7 @@ void InitImGui() {
     initInfo.ColorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
     ImGui_ImplVulkan_Init(&initInfo, nullptr);
     ImGui_ImplVulkan_CreateFontsTexture();
+    ImGui_ImplGlfw_InitForVulkan(window, true);
 }
 
 void OnSurfaceUpdate(uint32_t width, uint32_t height) {
@@ -372,6 +383,8 @@ void OnSurfaceUpdate(uint32_t width, uint32_t height) {
 }
 
 void Destroy() {
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     _ctx.DestroySwapChain();
     _ctx.DestroyDevice();
     _ctx.DestroyInstance();
@@ -610,6 +623,14 @@ TLAS CreateTLAS(uint32_t maxInstances, const std::string& name) {
     createInfo.buffer = tlasRes->buffer.resource->buffer;
     _ctx.vkCreateAccelerationStructureKHR(device, &createInfo, _ctx.allocator, &tlasRes->accel);
 
+    VkDebugUtilsObjectNameInfoEXT vkName = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
+    .objectHandle = (uint64_t)tlasRes->accel,
+    .pObjectName = name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &vkName);
+
     VkWriteDescriptorSetAccelerationStructureKHR descriptorAccelerationStructure{};
     descriptorAccelerationStructure.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     descriptorAccelerationStructure.accelerationStructureCount = 1;
@@ -714,14 +735,20 @@ BLAS CreateBLAS(const BLASDesc& desc) {
     createInfo.buffer = res->buffer.resource->buffer;
     _ctx.vkCreateAccelerationStructureKHR(device, &createInfo, nullptr, &res->accel);
 
+    VkDebugUtilsObjectNameInfoEXT vkName = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
+    .objectHandle = (uint64_t)res->accel,
+    .pObjectName = desc.name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &vkName);
+
     if (_ctx.asScratchBuffer.size < res->sizeInfo.buildScratchSize) {
         _ctx.asScratchBuffer = vkw::CreateBuffer(res->sizeInfo.buildScratchSize, vkw::BufferUsage::Storage, vkw::Memory::GPU);
     }
     
     res->buildInfo.dstAccelerationStructure = res->accel; // Setting where the build lands
     res->buildInfo.scratchData.deviceAddress = _ctx.asScratchAddress; // All build are using the same scratch buffer
-
-    LOG_INFO("Created BLAS.");
 
     return blas;
 }
@@ -1116,7 +1143,10 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount)
 }
 
 void CmdDrawPassThrough() {
-    vkCmdDraw(_ctx.GetCurrentCommandResources().buffer, 6, 1, 0, 0);
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &_ctx.dummyVertexBuffer.resource->buffer, offsets);
+    vkCmdDraw(cmd.buffer, 6, 1, 0, 0);
 }
 
 void CmdDrawImGui(ImDrawData* data) {
@@ -1156,6 +1186,11 @@ void CmdBindPipeline(Pipeline& pipeline) {
 void CmdPushConstants(void* data, uint32_t size) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
+}
+
+void BeginImGui() {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
 }
 
 void BeginCommandBuffer(Queue queue) {
@@ -1525,7 +1560,6 @@ void Context::CreatePhysicalDevice() {
 void Context::CreateDevice() {
     LUZ_PROFILE_FUNC();
 
-
     std::set<uint32_t> uniqueFamilies;
     for (int q = 0; q < Queue::Count; q++) {
         uniqueFamilies.emplace(queues[q].family);
@@ -1672,8 +1706,8 @@ void Context::CreateDevice() {
 
     // create bindless resources
     {
-        const u32 MAX_STORAGE = physicalProperties.limits.maxPerStageDescriptorStorageBuffers;
-        const u32 MAX_SAMPLEDIMAGES = physicalProperties.limits.maxPerStageDescriptorSampledImages;
+        const u32 MAX_STORAGE = 4096;
+        const u32 MAX_SAMPLEDIMAGES = 4096;
         const u32 MAX_ACCELERATIONSTRUCTURE = 64;
 
         for (int i = 0; i < MAX_STORAGE; i++) {
@@ -1764,9 +1798,17 @@ void Context::CreateDevice() {
     scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     scratchInfo.buffer = asScratchBuffer.resource->buffer;
     asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+
+    dummyVertexBuffer = vkw::CreateBuffer(
+        6 * 3 * sizeof(float),
+        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::Memory::GPU,
+        "VertexBuffer#Dummy"
+    );
 }
 
 void Context::DestroyDevice() {
+    dummyVertexBuffer = {};
     currentPipeline = {};
     asScratchBuffer = {};
     vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);

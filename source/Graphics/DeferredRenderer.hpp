@@ -2,6 +2,12 @@
 
 #include "Base.hpp"
 
+namespace vkw {
+
+struct Image;
+
+}
+
 namespace DeferredShading {
 
 struct OpaqueConstants {
@@ -20,19 +26,26 @@ struct LightConstants {
     int depthRID;
 };
 
+enum Output : uint32_t {
+    Light,
+    Albedo,
+    Normal,
+    Material,
+    Emission,
+    Depth,
+    All,
+    Count
+};
+
 void CreateShaders();
 void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
 
-void RenderMesh(RID meshId);
 void LightPass(LightConstants constants);
-void ComposePass();
+void ComposePass(bool separatePass, Output output);
 void BeginOpaquePass();
 void EndPass();
-void BeginPresentPass();
-void EndPresentPass();
-void OnImgui(int numFrame);
 
-void ViewportOnImGui();
+vkw::Image& GetComposedImage();
 
 }
