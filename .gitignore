@@ -10,4 +10,7 @@ assets/ignore/
 .vs
 .vscode
 assets/*
+!assets/roboto.ttf
+!assets/fontawesome.otf
+!assets/default.luz
 *.ngfx-proj
