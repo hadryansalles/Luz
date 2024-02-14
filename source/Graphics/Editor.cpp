@@ -358,7 +358,20 @@ void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
 
 void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
     ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
-    ImGui::DragFloat("Intensity", &node->intensity, 0.01, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::BeginCombo("Type", LightNode::typeNames[node->lightType])) {
+        for (int i = 0; i < LightNode::LightType::Count; i++) {
+            bool selected = node->lightType == i;
+            if (ImGui::Selectable(LightNode::typeNames[i], &selected)) {
+                node->lightType = (LightNode::LightType)i;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    if (node->lightType == LightNode::LightType::Spot) {
+        ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
+        ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);
+    }
+    ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
     ImGui::Checkbox("Shadow", &node->shadows);
 }

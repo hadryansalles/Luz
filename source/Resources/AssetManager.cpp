@@ -116,7 +116,9 @@ void LightNode::Serialize(Serializer& s) {
     Node::Serialize(s);
     s("color", color);
     s("intensity", intensity);
-    s("lightType", type);
+    s("lightType", lightType);
+    s("innerAngle", innerAngle);
+    s("outerAngle", outerAngle);
     s("shadows", shadows);
     s("radius", radius);
 }

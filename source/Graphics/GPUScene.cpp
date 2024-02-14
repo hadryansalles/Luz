@@ -167,10 +167,10 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.color = light->color;
         block.intensity = light->intensity;
         block.position = light->GetWorldPosition();
-        block.innerAngle = 0;
-        block.outerAngle = 0;
-        block.direction = { 0, 0, 1 };
-        block.type = LightNode::LightType::Point;
+        block.innerAngle = glm::radians(light->innerAngle);
+        block.direction = light->GetWorldTransform() * glm::vec4(0, -1, 0, 0);
+        block.outerAngle = glm::radians(light->outerAngle);
+        block.type = light->lightType;
         block.numShadowSamples = light->shadows ? scene->lightSamples : 0;
         block.radius = light->radius;
     }

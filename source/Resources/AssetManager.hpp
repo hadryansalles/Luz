@@ -173,7 +173,8 @@ struct LightNode : Node {
     enum LightType {
         Point = 0,
         Spot = 1,
-        Directional = 2
+        Directional = 2,
+        Count = 3,
     };
     inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
     glm::vec3 color = glm::vec3(1);
@@ -181,8 +182,8 @@ struct LightNode : Node {
     LightType lightType = LightType::Point;
     bool shadows = true;
     float radius = 2.0f;
-    float innerAngle = 2.0;
-    float outerAngle = 2.0;
+    float innerAngle = 60.f;
+    float outerAngle = 50.f;
 
     LightNode();
     virtual void Serialize(Serializer& s);
