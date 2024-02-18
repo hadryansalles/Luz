@@ -43,6 +43,7 @@ struct GPUScene {
     void UpdateResourcesGPU();
 
     std::vector<GPUModel>& GetMeshModels();
+    vkw::Image& GetShadowMap(UUID uuid);
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();

@@ -30,7 +30,7 @@ struct LightBlock {
     int type;
     int numShadowSamples;
     float radius;
-    float pad;
+    int shadowMap;
 };
 
 struct ModelBlock {
@@ -72,6 +72,15 @@ struct SceneBlock {
     int whiteTexture;
     int blackTexture;
     int tlasRid;
+};
+
+struct ShadowMapConstants {
+    mat4 lightProj;
+    mat4 lightView;
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int modelID;
+    int pad;
 };
 
 #if !defined(LUZ_ENGINE)

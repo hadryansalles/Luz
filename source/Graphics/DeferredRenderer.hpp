@@ -8,6 +8,10 @@ struct Image;
 
 }
 
+struct LightNode;
+struct SceneAsset;
+struct GPUScene;
+
 namespace DeferredShading {
 
 struct OpaqueConstants {
@@ -41,6 +45,7 @@ void CreateShaders();
 void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
 
+void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
 void LightPass(LightConstants constants);
 void ComposePass(bool separatePass, Output output);
 void BeginOpaquePass();

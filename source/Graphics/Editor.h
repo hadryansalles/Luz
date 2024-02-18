@@ -7,6 +7,7 @@ struct Camera;
 struct AssetManager;
 struct SceneAsset;
 struct Node;
+struct GPUScene;
 
 namespace vkw {
 struct Image;
@@ -20,7 +21,7 @@ struct Editor {
     void BeginFrame();
     ImDrawData* EndFrame();
 
-    void InspectorPanel(AssetManager& assetManager, Camera& camera);
+    void InspectorPanel(AssetManager& assetManager, Camera& camera, GPUScene& gpuScene);
     void DemoPanel();
     void ScenePanel(Ref<SceneAsset>& scene, Camera& camera);
     void AssetsPanel(AssetManager& assetManager);

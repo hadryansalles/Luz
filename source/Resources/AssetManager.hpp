@@ -158,6 +158,7 @@ struct Node : Object {
     glm::mat4 GetWorldTransform();
     glm::vec3 GetWorldPosition();
     glm::mat4 GetParentTransform();
+    glm::vec3 GetWorldFront();
     static glm::mat4 ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scl, glm::mat4 parent = glm::mat4(1));
 };
 
@@ -174,13 +175,20 @@ struct LightNode : Node {
         Point = 0,
         Spot = 1,
         Directional = 2,
-        Count = 3,
+        LightTypeCount = 3,
+    };
+    enum ShadowType {
+        Disabled = 0,
+        RayTraced = 1,
+        Map = 2,
+        ShadowTypeCount = 3,
     };
     inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
+    inline static const char* shadowNames[] = { "Disabled", "RayTraced", "Map" };
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
     LightType lightType = LightType::Point;
-    bool shadows = true;
+    ShadowType shadowType = ShadowType::RayTraced;
     float radius = 2.0f;
     float innerAngle = 60.f;
     float outerAngle = 50.f;

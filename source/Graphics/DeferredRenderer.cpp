@@ -1,7 +1,10 @@
 #include "Luzpch.hpp"
 
+#include "GPUScene.hpp"
+#include "AssetManager.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
+#include "LuzCommon.h"
 
 #include "FileManager.hpp"
 #include <imgui/ImGuizmo.h>
@@ -12,6 +15,7 @@ struct Context {
     vkw::Pipeline opaquePipeline;
     vkw::Pipeline lightPipeline;
     vkw::Pipeline composePipeline;
+    vkw::Pipeline shadowMapPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -60,6 +64,18 @@ void CreateShaders() {
         .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
         .useDepth = true,
         .depthFormat = {ctx.depth.format}
+    });
+    ctx.shadowMapPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "shadowMap.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "shadowMap.frag"},
+        },
+        .name = "ShadowMap Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
+        .colorFormats = { },
+        .useDepth = true,
+        .depthFormat = { vkw::Format::D32_sfloat },
     });
     ctx.composePipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,
@@ -142,6 +158,39 @@ void BeginOpaquePass() {
 
 void EndPass() {
     vkw::CmdEndRendering();
+}
+
+void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
+    if (light->shadowType != LightNode::ShadowType::Map) {
+        return;
+    }
+
+    vkw::Image& img = gpuScene.GetShadowMap(light->uuid);
+    vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
+
+    ShadowMapConstants constants;
+            // glm::mat4 view = glm::lookAt(transform.position, transform.position + transform.GetGlobalFront(), glm::vec3(.0f, 1.0f, .0f));
+            // glm::mat4 proj = glm::ortho(p0.x, p1.x, p0.y, p1.y, p0.z, p1.z);
+            // return proj * view;
+    constants.lightProj = glm::ortho(-10.0f, 10.0f, 10.0f, -10.0f, 0.0f, 2000.0f);
+    constants.lightView = glm::lookAt(light->GetWorldPosition(), light->GetWorldPosition() + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
+    //constants.lightView = glm::lookAt(glm::vec3(0, 0, -10), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+
+    vkw::CmdBeginRendering({}, {img});
+    vkw::CmdBindPipeline(ctx.shadowMapPipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+
+    auto& allModels = gpuScene.GetMeshModels();
+    for (GPUModel& model : allModels) {
+        constants.modelID = model.modelRID;
+        vkw::CmdPushConstants(&constants, sizeof(constants));
+        vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
+    }
+
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(img, vkw::Layout::DepthRead);
 }
 
 void LightPass(LightConstants constants) {

@@ -147,7 +147,7 @@ private:
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
             editor.ScenePanel(scene, mainCamera);
-            editor.InspectorPanel(assetManager, mainCamera);
+            editor.InspectorPanel(assetManager, mainCamera, gpuScene);
         } else {
             newViewportSize = { Window::GetWidth(), Window::GetHeight() };
             viewportHovered = true;
@@ -189,6 +189,10 @@ private:
 
         DeferredShading::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
+
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredShading::ShadowMapPass(light, scene, gpuScene);
+        }
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
         DeferredShading::LightConstants lightPassConstants;

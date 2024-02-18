@@ -56,6 +56,10 @@ glm::vec3 Node::GetWorldPosition() {
     return GetParentTransform() * glm::vec4(position, 1);
 }
 
+glm::vec3 Node::GetWorldFront() {
+    return GetWorldTransform() * glm::vec4(0, -1, 0, 0);
+}
+
 MeshNode::MeshNode() {
     type = ObjectType::MeshNode;
 }
@@ -119,7 +123,7 @@ void LightNode::Serialize(Serializer& s) {
     s("lightType", lightType);
     s("innerAngle", innerAngle);
     s("outerAngle", outerAngle);
-    s("shadows", shadows);
+    s("shadowType", shadowType);
     s("radius", radius);
 }
 
@@ -212,7 +216,6 @@ void SceneAsset::DeleteRecursive(const Ref<Node>& node) {
     if (it != nodes.end()) {
         nodes.erase(it);
     }
-    // todo: fix parents
 }
 
 Ref<Node> Node::Clone(Ref<Node>& node) {

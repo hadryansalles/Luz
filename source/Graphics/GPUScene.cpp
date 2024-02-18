@@ -25,6 +25,7 @@ struct GPUSceneImpl {
     };
 
     std::vector<GPUModel> meshModels;
+    std::unordered_map<UUID, vkw::Image> shadowMaps;
 
     std::unordered_map<UUID, GPUMesh> meshes;
     std::unordered_map<UUID, GPUTexture> textures;
@@ -48,6 +49,7 @@ void GPUScene::Destroy() {
     impl->tlas = {};
     impl->sceneBuffer = {};
     impl->modelsBuffer = {};
+    impl->shadowMaps = {};
     ClearAssets();
 }
 
@@ -171,8 +173,19 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.direction = light->GetWorldTransform() * glm::vec4(0, -1, 0, 0);
         block.outerAngle = glm::radians(light->outerAngle);
         block.type = light->lightType;
-        block.numShadowSamples = light->shadows ? scene->lightSamples : 0;
+        block.numShadowSamples = light->shadowType == LightNode::ShadowType::RayTraced ? scene->lightSamples : 0;
         block.radius = light->radius;
+
+        if (light->shadowType == LightNode::ShadowType::Map && impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
+            // todo: add shadow map settings to scene and recreate if changed
+            impl->shadowMaps[light->uuid] = vkw::CreateImage({
+                .width = 1024,
+                .height = 1024,
+                .format = vkw::Format::D32_sfloat,
+                .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
+                .name = "ShadowMap" + std::to_string(light->uuid),
+            });
+        }
     }
     s.ambientLightColor = scene->ambientLightColor;
     s.ambientLightIntensity = scene->ambientLight;
@@ -208,6 +221,11 @@ void GPUScene::UpdateResourcesGPU() {
         }
         vkw::CmdBuildTLAS(impl->tlas, vkwInstances);
     });
+}
+
+vkw::Image& GPUScene::GetShadowMap(UUID uuid) {
+    ASSERT(impl->shadowMaps.find(uuid) != impl->shadowMaps.end(), "Couldn't find shadow map");
+    return impl->shadowMaps[uuid];
 }
 
 std::vector<GPUModel>& GPUScene::GetMeshModels() {

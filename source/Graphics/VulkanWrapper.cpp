@@ -907,7 +907,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 
     VkPushConstantRange pushConstant{};
     pushConstant.offset = 0;
-    pushConstant.size = 128;
+    pushConstant.size = 256;
     pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -1062,6 +1062,10 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
     if (colorAttachs.size() > 0) {
         extent.x = colorAttachs[0].width;
         extent.y = colorAttachs[0].height;
+    }
+    else if (depthAttach.resource) {
+        extent.x = depthAttach.width;
+        extent.y = depthAttach.height;
     }
 
     VkRenderingInfoKHR renderingInfo{};

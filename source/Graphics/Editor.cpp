@@ -1,6 +1,7 @@
 #include "Editor.h"
 #include "Luzpch.hpp"
 
+#include "GPUScene.hpp"
 #include "AssetManager.hpp"
 #include "Camera.hpp"
 #include "VulkanWrapper.h"
@@ -29,7 +30,7 @@ struct EditorImpl {
     std::string assetNameFilter = "";
     void OnNode(Ref<Node> node);
     void InspectMeshNode(AssetManager& manager, Ref<MeshNode> node);
-    void InspectLightNode(AssetManager& manager, Ref<LightNode> node);
+    void InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene);
     void InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material);
     void OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
     void Select(Ref<Node>& node);
@@ -332,7 +333,7 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
     ImGui::End();
 }
 
-void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
+void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera, GPUScene& gpuScene) {
     bool open = ImGui::Begin("Inspector");
     if (open && impl->selectedNodes.size() > 0) {
         // todo: handle multi selection
@@ -349,17 +350,17 @@ void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
                 impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
                 break;
             case ObjectType::LightNode:
-                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
+                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected), gpuScene);
                 break;
         }
     }
     ImGui::End();
 }
 
-void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
+void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene) {
     ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
     if (ImGui::BeginCombo("Type", LightNode::typeNames[node->lightType])) {
-        for (int i = 0; i < LightNode::LightType::Count; i++) {
+        for (int i = 0; i < LightNode::LightType::LightTypeCount; i++) {
             bool selected = node->lightType == i;
             if (ImGui::Selectable(LightNode::typeNames[i], &selected)) {
                 node->lightType = (LightNode::LightType)i;
@@ -373,7 +374,18 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
-    ImGui::Checkbox("Shadow", &node->shadows);
+    if (ImGui::BeginCombo("Shadows", LightNode::shadowNames[node->shadowType])) {
+        for (int i = 0; i < LightNode::ShadowType::ShadowTypeCount; i++) {
+            bool selected = node->shadowType == i;
+            if (ImGui::Selectable(LightNode::shadowNames[i], &selected)) {
+                node->shadowType = (LightNode::ShadowType)i;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    if (node->lightType == LightNode::ShadowType::Map) {
+        ImGui::Image(gpuScene.GetShadowMap(node->uuid).ImGuiRID(), ImVec2(400, 400));
+    }
 }
 
 void EditorImpl::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
