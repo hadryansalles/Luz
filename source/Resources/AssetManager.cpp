@@ -101,6 +101,7 @@ void SceneAsset::Serialize(Serializer& s) {
     s("aoMin", aoMin);
     s("aoMax", aoMax);
     s("exposure", exposure);
+    s("shadowType", shadowType);
 }
 
 void Node::Serialize(Serializer& s) {
@@ -123,7 +124,6 @@ void LightNode::Serialize(Serializer& s) {
     s("lightType", lightType);
     s("innerAngle", innerAngle);
     s("outerAngle", outerAngle);
-    s("shadowType", shadowType);
     s("radius", radius);
 }
 

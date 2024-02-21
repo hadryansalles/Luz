@@ -5,8 +5,7 @@
 #include "LuzCommon.h"
 
 layout(push_constant) uniform Constants {
-    mat4 lightProj;
-    mat4 lightView;
+    mat4 lightViewProj;
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
@@ -22,6 +21,6 @@ layout(location = 0) out float depth;
 
 void main() {
     vec4 fragPos = model.modelMat * vec4(inPosition, 1.0);
-    gl_Position = lightProj * lightView * fragPos;
+    gl_Position = lightViewProj * fragPos;
     depth = gl_Position.z;
 }

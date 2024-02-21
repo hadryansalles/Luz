@@ -75,8 +75,7 @@ struct SceneBlock {
 };
 
 struct ShadowMapConstants {
-    mat4 lightProj;
-    mat4 lightView;
+    mat4 lightViewProj;
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;

@@ -173,10 +173,10 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.direction = light->GetWorldTransform() * glm::vec4(0, -1, 0, 0);
         block.outerAngle = glm::radians(light->outerAngle);
         block.type = light->lightType;
-        block.numShadowSamples = light->shadowType == LightNode::ShadowType::RayTraced ? scene->lightSamples : 0;
+        block.numShadowSamples = scene->shadowType == ShadowType::ShadowRayTraced ? scene->lightSamples : 0;
         block.radius = light->radius;
 
-        if (light->shadowType == LightNode::ShadowType::Map && impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
+        if (impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
             // todo: add shadow map settings to scene and recreate if changed
             impl->shadowMaps[light->uuid] = vkw::CreateImage({
                 .width = 1024,

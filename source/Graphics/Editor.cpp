@@ -327,6 +327,16 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
             ImGui::DragFloat("Max##AO", &scene->aoMax, 0.1f, 0.000f, 1000.0f);
             ImGui::SeparatorText("Lights");
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
+            ImGui::SeparatorText("Shadows");
+            if (ImGui::BeginCombo("Type###Shadow", ShadowTypeNames[(int)scene->shadowType].c_str())) {
+                for (int i = 0; i < ShadowType::ShadowTypeCount; i++) {
+                    bool selected = scene->shadowType == i;
+                    if (ImGui::Selectable(ShadowTypeNames[i].c_str(), &selected)) {
+                        scene->shadowType = (ShadowType)i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
         camera.OnImgui();
     }
@@ -374,16 +384,9 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
-    if (ImGui::BeginCombo("Shadows", LightNode::shadowNames[node->shadowType])) {
-        for (int i = 0; i < LightNode::ShadowType::ShadowTypeCount; i++) {
-            bool selected = node->shadowType == i;
-            if (ImGui::Selectable(LightNode::shadowNames[i], &selected)) {
-                node->shadowType = (LightNode::ShadowType)i;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (node->lightType == LightNode::ShadowType::Map) {
+    if (node->lightType == ShadowType::ShadowMap) {
+        ImGui::DragFloat("Range##Shadow", &node->shadowMapRange, 0.01f);
+        ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
         ImGui::Image(gpuScene.GetShadowMap(node->uuid).ImGuiRID(), ImVec2(400, 400));
     }
 }

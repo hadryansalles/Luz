@@ -35,6 +35,15 @@ inline std::string ObjectTypeName[] = {
     "Count",
 };
 
+enum ShadowType {
+    ShadowDisabled = 0,
+    ShadowRayTraced = 1,
+    ShadowMap = 2,
+    ShadowTypeCount = 3,
+};
+
+inline std::string ShadowTypeNames[] = { "Disabled", "RayTraced", "Map" };
+
 struct Object {
     std::string name = "Unintialized";
     UUID uuid = 0;
@@ -177,21 +186,16 @@ struct LightNode : Node {
         Directional = 2,
         LightTypeCount = 3,
     };
-    enum ShadowType {
-        Disabled = 0,
-        RayTraced = 1,
-        Map = 2,
-        ShadowTypeCount = 3,
-    };
     inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
-    inline static const char* shadowNames[] = { "Disabled", "RayTraced", "Map" };
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
     LightType lightType = LightType::Point;
-    ShadowType shadowType = ShadowType::RayTraced;
     float radius = 2.0f;
     float innerAngle = 60.f;
     float outerAngle = 50.f;
+
+    float shadowMapRange = 3.0f;
+    float shadowMapFar = 2000.0f;
 
     LightNode();
     virtual void Serialize(Serializer& s);
@@ -210,6 +214,7 @@ struct SceneAsset : Asset {
     float aoMin = 0.0001f;
     float aoMax = 1.0000f;
     float exposure = 2.0f;
+    ShadowType shadowType = ShadowType::ShadowRayTraced;
 
     template<typename T>
     Ref<T> Add() {

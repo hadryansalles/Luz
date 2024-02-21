@@ -161,7 +161,7 @@ void EndPass() {
 }
 
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
-    if (light->shadowType != LightNode::ShadowType::Map) {
+    if (scene->shadowType != ShadowType::ShadowMap) {
         return;
     }
 
@@ -169,12 +169,12 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
 
     ShadowMapConstants constants;
-            // glm::mat4 view = glm::lookAt(transform.position, transform.position + transform.GetGlobalFront(), glm::vec3(.0f, 1.0f, .0f));
-            // glm::mat4 proj = glm::ortho(p0.x, p1.x, p0.y, p1.y, p0.z, p1.z);
-            // return proj * view;
-    constants.lightProj = glm::ortho(-10.0f, 10.0f, 10.0f, -10.0f, 0.0f, 2000.0f);
-    constants.lightView = glm::lookAt(light->GetWorldPosition(), light->GetWorldPosition() + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
-    //constants.lightView = glm::lookAt(glm::vec3(0, 0, -10), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    if (light->lightType == LightNode::LightType::Directional) {
+        float r = light->shadowMapRange;
+        glm::mat4 view = glm::lookAt(light->GetWorldPosition(), light->GetWorldPosition() + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
+        glm::mat4 proj = glm::ortho(-r, r, r, -r, 0.0f, light->shadowMapFar);
+        constants.lightViewProj = proj * view;
+    }
     constants.modelBufferIndex = gpuScene.GetModelsBuffer();
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
 
