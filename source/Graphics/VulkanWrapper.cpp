@@ -1054,18 +1054,18 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach) {
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, glm::ivec2 offset, glm::ivec2 extent) {
     auto& cmd = _ctx.GetCurrentCommandResources();
 
-    glm::ivec2 extent = { 0, 0 };
-    glm::ivec2 offset = { 0, 0 };
-    if (colorAttachs.size() > 0) {
-        extent.x = colorAttachs[0].width;
-        extent.y = colorAttachs[0].height;
-    }
-    else if (depthAttach.resource) {
-        extent.x = depthAttach.width;
-        extent.y = depthAttach.height;
+    if (extent == glm::ivec2(0, 0)) {
+        if (colorAttachs.size() > 0) {
+            extent.x = colorAttachs[0].width;
+            extent.y = colorAttachs[0].height;
+        }
+        else if (depthAttach.resource) {
+            extent.x = depthAttach.width;
+            extent.y = depthAttach.height;
+        }
     }
 
     VkRenderingInfoKHR renderingInfo{};
@@ -1114,7 +1114,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
     VkRect2D scissor = {};
-    scissor.offset = { 0, 0 };
+    scissor.offset = { offset.x, offset.y };
     scissor.extent.width = extent.x;
     scissor.extent.height = extent.y;
     vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);

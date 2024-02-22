@@ -102,6 +102,7 @@ void SceneAsset::Serialize(Serializer& s) {
     s("aoMax", aoMax);
     s("exposure", exposure);
     s("shadowType", shadowType);
+    s("shadowResolution", shadowResolution);
 }
 
 void Node::Serialize(Serializer& s) {

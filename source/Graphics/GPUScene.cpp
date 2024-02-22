@@ -178,9 +178,13 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
 
         if (impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
             // todo: add shadow map settings to scene and recreate if changed
+            uint32_t shadowHeight = scene->shadowResolution;
+            if (light->lightType == LightNode::LightType::Point) {
+                shadowHeight *= 2;
+            }
             impl->shadowMaps[light->uuid] = vkw::CreateImage({
-                .width = 1024,
-                .height = 1024,
+                .width = scene->shadowResolution,
+                .height = shadowHeight,
                 .format = vkw::Format::D32_sfloat,
                 .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
                 .name = "ShadowMap" + std::to_string(light->uuid),

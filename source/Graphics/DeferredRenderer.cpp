@@ -169,28 +169,33 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
 
     ShadowMapConstants constants;
-    if (light->lightType == LightNode::LightType::Directional) {
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+
+    if (light->lightType == LightNode::LightType::Point) {
+    } else {
         float r = light->shadowMapRange;
         glm::mat4 view = glm::lookAt(light->GetWorldPosition(), light->GetWorldPosition() + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
         glm::mat4 proj = glm::ortho(-r, r, r, -r, 0.0f, light->shadowMapFar);
         constants.lightViewProj = proj * view;
     }
-    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
-
-    vkw::CmdBeginRendering({}, {img});
-    vkw::CmdBindPipeline(ctx.shadowMapPipeline);
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-
-    auto& allModels = gpuScene.GetMeshModels();
-    for (GPUModel& model : allModels) {
-        constants.modelID = model.modelRID;
+    uint32_t numLayers = light->lightType == LightNode::LightType::Point ? 2 : 1; 
+    for (int i = 0; i < numLayers; i++) {
+        vkw::CmdBeginRendering({}, {img}, {0, i * scene->shadowResolution}, {scene->shadowResolution, scene->shadowResolution});
+        vkw::CmdBindPipeline(ctx.shadowMapPipeline);
         vkw::CmdPushConstants(&constants, sizeof(constants));
-        vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
+
+        auto& allModels = gpuScene.GetMeshModels();
+        for (GPUModel& model : allModels) {
+            constants.modelID = model.modelRID;
+            vkw::CmdPushConstants(&constants, sizeof(constants));
+            vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
+        }
+
+        vkw::CmdEndRendering();
+        vkw::CmdBarrier(img, vkw::Layout::DepthRead);
     }
 
-    vkw::CmdEndRendering();
-    vkw::CmdBarrier(img, vkw::Layout::DepthRead);
 }
 
 void LightPass(LightConstants constants) {

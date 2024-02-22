@@ -215,6 +215,7 @@ struct SceneAsset : Asset {
     float aoMax = 1.0000f;
     float exposure = 2.0f;
     ShadowType shadowType = ShadowType::ShadowRayTraced;
+    uint32_t shadowResolution = 1024;
 
     template<typename T>
     Ref<T> Add() {
