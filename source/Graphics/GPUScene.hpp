@@ -9,6 +9,12 @@
 
 struct GPUSceneImpl;
 
+struct ShadowMapData {
+    vkw::Image img0;
+    vkw::Image img1;
+    bool readable = false;
+};
+
 struct GPUMesh {
     vkw::Buffer vertexBuffer;
     vkw::Buffer indexBuffer;
@@ -43,7 +49,7 @@ struct GPUScene {
     void UpdateResourcesGPU();
 
     std::vector<GPUModel>& GetMeshModels();
-    vkw::Image& GetShadowMap(UUID uuid);
+    ShadowMapData& GetShadowMap(UUID uuid);
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();

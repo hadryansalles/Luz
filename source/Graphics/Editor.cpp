@@ -150,7 +150,6 @@ void Editor::BeginFrame() {
     vkw::BeginImGui();
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-    //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 }
 
 ImDrawData* Editor::EndFrame() {
@@ -386,8 +385,8 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
     ImGui::DragFloat("Range##Shadow", &node->shadowMapRange, 0.01f);
     ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
-    if (gpuScene.GetShadowMap(node->uuid).layout == vkw::Layout::DepthRead) {
-        auto& img = gpuScene.GetShadowMap(node->uuid);
+    if (gpuScene.GetShadowMap(node->uuid).readable) {
+        auto& img = gpuScene.GetShadowMap(node->uuid).img0;
         ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
     }
 }

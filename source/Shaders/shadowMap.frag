@@ -15,5 +15,5 @@ layout(push_constant) uniform Constants {
 layout(location = 0) in float depth;
 
 void main() {
-    gl_FragDepth = depth*50;
+    gl_FragDepth = depth;
 }

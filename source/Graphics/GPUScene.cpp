@@ -25,7 +25,7 @@ struct GPUSceneImpl {
     };
 
     std::vector<GPUModel> meshModels;
-    std::unordered_map<UUID, vkw::Image> shadowMaps;
+    std::unordered_map<UUID, ShadowMapData> shadowMaps;
 
     std::unordered_map<UUID, GPUMesh> meshes;
     std::unordered_map<UUID, GPUTexture> textures;
@@ -178,13 +178,18 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
 
         if (impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
             // todo: add shadow map settings to scene and recreate if changed
-            uint32_t shadowHeight = scene->shadowResolution;
-            if (light->lightType == LightNode::LightType::Point) {
-                shadowHeight *= 2;
-            }
-            impl->shadowMaps[light->uuid] = vkw::CreateImage({
+            impl->shadowMaps[light->uuid].img0 = vkw::CreateImage({
                 .width = scene->shadowResolution,
-                .height = shadowHeight,
+                .height = scene->shadowResolution,
+                .format = vkw::Format::D32_sfloat,
+                .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
+                .name = "ShadowMap" + std::to_string(light->uuid),
+            });
+        }
+        if (light->lightType == LightNode::LightType::Point && !impl->shadowMaps[light->uuid].img1.width) {
+            impl->shadowMaps[light->uuid].img1 = vkw::CreateImage({
+                .width = scene->shadowResolution,
+                .height = scene->shadowResolution,
                 .format = vkw::Format::D32_sfloat,
                 .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
                 .name = "ShadowMap" + std::to_string(light->uuid),
@@ -227,7 +232,7 @@ void GPUScene::UpdateResourcesGPU() {
     });
 }
 
-vkw::Image& GPUScene::GetShadowMap(UUID uuid) {
+ShadowMapData& GPUScene::GetShadowMap(UUID uuid) {
     ASSERT(impl->shadowMaps.find(uuid) != impl->shadowMaps.end(), "Couldn't find shadow map");
     return impl->shadowMaps[uuid];
 }
