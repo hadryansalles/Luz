@@ -259,17 +259,24 @@ struct ImageResource : Resource {
     VkImageView view;
     VmaAllocation allocation;
     bool fromSwapchain = false;
-    ImTextureID imguiRID = nullptr;
+    std::vector<VkImageView> layersView;
+    std::vector<ImTextureID> imguiRIDs;
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
+            for (VkImageView layerView : layersView) {
+                vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
+            }
+            layersView.clear();
             vkDestroyImageView(_ctx.device, view, _ctx.allocator);
             vmaDestroyImage(_ctx.vmaAllocator, image, allocation);
             if (rid >= 0) {
                 _ctx.availableImageRID.push_back(rid);
-                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+                for (ImTextureID imguiRID : imguiRIDs) {
+                    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+                }
                 rid = -1;
-                imguiRID = nullptr;
+                imguiRIDs.clear();
             }
         }
     }
@@ -330,10 +337,17 @@ uint32_t Image::RID() {
 }
 
 ImTextureID Image::ImGuiRID() {
-    if (!resource || resource->rid == -1) {
+    if (!resource || resource->rid == -1 || resource->imguiRIDs.size() == 0) {
         return nullptr;
     }
-    return resource->imguiRID;
+    return resource->imguiRIDs[0];
+}
+
+ImTextureID Image::ImGuiRID(uint32_t layer) {
+    if (!resource || resource->rid == -1 || resource->imguiRIDs.size() <= layer) {
+        return nullptr;
+    }
+    return resource->imguiRIDs[layer];
 }
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
@@ -465,7 +479,7 @@ Image CreateImage(const ImageDesc& desc) {
     imageInfo.extent.height = desc.height;
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = desc.layers;
     imageInfo.format = (VkFormat)desc.format;
     // tiling defines how the texels lay in memory
     // optimal tiling is implementation dependent for more efficient memory access
@@ -476,7 +490,9 @@ Image CreateImage(const ImageDesc& desc) {
     imageInfo.usage = (VkImageUsageFlags)desc.usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.flags = 0;
+    if (desc.layers == 6) {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
 
     VmaAllocationCreateInfo allocInfo = {};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -496,16 +512,31 @@ Image CreateImage(const ImageDesc& desc) {
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = res->image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    if (desc.layers == 1) {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    } else {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    }
     viewInfo.format = (VkFormat)desc.format;
     viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.layerCount = desc.layers;
 
     result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
     DEBUG_VK(result, "Failed to create image view!");
+
+    if (desc.layers > 1) {
+        viewInfo.subresourceRange.layerCount = 1;
+        res->layersView.resize(desc.layers);
+        for (int i = 0; i < desc.layers; i++) {
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.subresourceRange.baseArrayLayer = i;
+            result = vkCreateImageView(device, &viewInfo, allocator, &res->layersView[i]);
+            DEBUG_VK(result, "Failed to create image view!");
+        }
+    }
 
     Image image = {
         .resource = res,
@@ -515,6 +546,7 @@ Image CreateImage(const ImageDesc& desc) {
         .format = desc.format,
         .layout = Layout::Undefined,
         .aspect = aspect,
+        .layers = desc.layers,
     };
 
     if (desc.usage & ImageUsage::Sampled) {
@@ -524,7 +556,14 @@ Image CreateImage(const ImageDesc& desc) {
         } else if (aspect == Aspect::Depth) {
             newLayout = Layout::DepthRead;
         }
-        res->imguiRID = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        res->imguiRIDs.resize(desc.layers);
+        if (desc.layers > 1) {
+            for (int i = 0; i < desc.layers; i++) {
+                res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+            }
+        } else {
+            res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        }
         res->rid = _ctx.availableImageRID.back();
         _ctx.availableImageRID.pop_back();
 
@@ -950,7 +989,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = 2;
+    pipelineInfo.stageCount = shaderStages.size();
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -1054,24 +1093,23 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, glm::ivec2 offset, glm::ivec2 extent) {
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount) {
     auto& cmd = _ctx.GetCurrentCommandResources();
 
-    if (extent == glm::ivec2(0, 0)) {
-        if (colorAttachs.size() > 0) {
-            extent.x = colorAttachs[0].width;
-            extent.y = colorAttachs[0].height;
-        }
-        else if (depthAttach.resource) {
-            extent.x = depthAttach.width;
-            extent.y = depthAttach.height;
-        }
+    glm::ivec2 offset(0, 0);
+    glm::ivec2 extent(0, 0);
+    if (colorAttachs.size() > 0) {
+        extent.x = colorAttachs[0].width;
+        extent.y = colorAttachs[0].height;
+    } else if (depthAttach.resource) {
+        extent.x = depthAttach.width;
+        extent.y = depthAttach.height;
     }
 
     VkRenderingInfoKHR renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
     renderingInfo.viewMask = 0;
-    renderingInfo.layerCount = 1;
+    renderingInfo.layerCount = layerCount;
     renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y) };
     renderingInfo.renderArea.offset = { offset.x, offset.y };
     renderingInfo.flags = 0;
@@ -1586,6 +1624,7 @@ void Context::CreateDevice() {
     // logical device features
     VkPhysicalDeviceFeatures2 features2 = {};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features2.features.geometryShader = VK_TRUE;
     if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
     if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
     if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }

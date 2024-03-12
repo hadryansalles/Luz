@@ -31,6 +31,10 @@ struct LightBlock {
     int numShadowSamples;
     float radius;
     int shadowMap;
+
+    mat4 viewProj[6];
+    float zFar;
+    float pad[3];
 };
 
 struct ModelBlock {
@@ -75,16 +79,14 @@ struct SceneBlock {
 };
 
 struct ShadowMapConstants {
-    mat4 lightViewProj;
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
-    int pad;
+    int lightIndex;
 };
 
 #if !defined(LUZ_ENGINE)
 
-#extension GL_KHR_vulkan_glsl : enable
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_ray_tracing : enable

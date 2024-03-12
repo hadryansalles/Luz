@@ -125,8 +125,10 @@ struct Image {
     Format format;
     Layout::ImageLayout layout;
     AspectFlags aspect;
+    uint32_t layers = 1;
     uint32_t RID();
     ImTextureID ImGuiRID();
+    ImTextureID ImGuiRID(uint32_t layer);
 };
 
 enum Queue {
@@ -142,6 +144,7 @@ struct ImageDesc {
     Format format;
     ImageUsageFlags usage;
     std::string name = "";
+    uint32_t layers = 1;
 };
 
 namespace PipelinePoint {
@@ -225,7 +228,7 @@ void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, glm::ivec2 offset = glm::ivec2(0, 0), glm::ivec2 extent = glm::ivec2(0, 0));
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
 void CmdEndRendering();
 void CmdBeginPresent();
 void CmdEndPresent();

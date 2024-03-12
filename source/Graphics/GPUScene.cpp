@@ -160,7 +160,6 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         }
         block.modelMat = node->GetWorldTransform();
     }
-    // todo: scene, lights
 
     SceneBlock& s = impl->sceneBlock;
     s.numLights = 0;
@@ -175,26 +174,42 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.type = light->lightType;
         block.numShadowSamples = scene->shadowType == ShadowType::ShadowRayTraced ? scene->lightSamples : 0;
         block.radius = light->radius;
+        block.zFar = light->shadowMapFar;
+
+        glm::vec3 pos = light->GetWorldPosition();
+        if (light->lightType == LightNode::LightType::Point) {
+            glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.0f, light->shadowMapFar);
+            //float r = light->shadowMapRange;
+            //glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
+            proj[1][1] *= -1.0;
+            block.viewProj[0] = proj * glm::lookAt(pos, pos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
+            block.viewProj[1] = proj * glm::lookAt(pos, pos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0));
+            block.viewProj[2] = proj * glm::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
+            block.viewProj[3] = proj * glm::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
+            block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
+            block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
+        } else {
+            float r = light->shadowMapRange;
+            glm::mat4 view = glm::lookAt(pos, pos + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
+            glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
+            proj[1][1] *= -1.0;
+            block.viewProj[0] = proj * view;
+        }
 
         if (impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
             // todo: add shadow map settings to scene and recreate if changed
-            impl->shadowMaps[light->uuid].img0 = vkw::CreateImage({
+            impl->shadowMaps[light->uuid].img = vkw::CreateImage({
                 .width = scene->shadowResolution,
                 .height = scene->shadowResolution,
                 .format = vkw::Format::D32_sfloat,
                 .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
                 .name = "ShadowMap" + std::to_string(light->uuid),
+                .layers = light->lightType == LightNode::LightType::Point ? 6u : 1u,
             });
         }
-        if (light->lightType == LightNode::LightType::Point && !impl->shadowMaps[light->uuid].img1.width) {
-            impl->shadowMaps[light->uuid].img1 = vkw::CreateImage({
-                .width = scene->shadowResolution,
-                .height = scene->shadowResolution,
-                .format = vkw::Format::D32_sfloat,
-                .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
-                .name = "ShadowMap" + std::to_string(light->uuid),
-            });
-        }
+
+        impl->shadowMaps[light->uuid].readable = true;
+        impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
     }
     s.ambientLightColor = scene->ambientLightColor;
     s.ambientLightIntensity = scene->ambientLight;

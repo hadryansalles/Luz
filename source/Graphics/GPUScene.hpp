@@ -10,9 +10,9 @@
 struct GPUSceneImpl;
 
 struct ShadowMapData {
-    vkw::Image img0;
-    vkw::Image img1;
+    vkw::Image img;
     bool readable = false;
+    int lightIndex = -1;
 };
 
 struct GPUMesh {

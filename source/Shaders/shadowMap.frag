@@ -5,15 +5,20 @@
 #include "LuzCommon.h"
 
 layout(push_constant) uniform Constants {
-    mat4 lightViewProj;
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
-    int pad;
+    int lightIndex;
 };
 
-layout(location = 0) in float depth;
+layout(location = 0) in vec4 fragPos;
 
 void main() {
-    gl_FragDepth = depth;
+    LightBlock light = scene.lights[lightIndex];
+    if (light.type == 0) {
+        gl_FragDepth = 100*length(fragPos.xyz - light.position) / light.zFar;
+        // gl_FragDepth = 0;
+    } else {
+        gl_FragDepth = fragPos.z / light.zFar;
+    }
 }

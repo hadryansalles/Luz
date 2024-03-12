@@ -69,6 +69,7 @@ void CreateShaders() {
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
             {.stage = vkw::ShaderStage::Vertex, .path = "shadowMap.vert"},
+            {.stage = vkw::ShaderStage::Geometry, .path = "shadowMap.geom"},
             {.stage = vkw::ShaderStage::Fragment, .path = "shadowMap.frag"},
         },
         .name = "ShadowMap Pipeline",
@@ -166,22 +167,17 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     }
 
     ShadowMapData& shadowMap = gpuScene.GetShadowMap(light->uuid);
-    vkw::Image& img = shadowMap.img0;
+    vkw::Image& img = shadowMap.img;
     vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
 
     ShadowMapConstants constants;
     constants.modelBufferIndex = gpuScene.GetModelsBuffer();
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.lightIndex = shadowMap.lightIndex;
 
-    float r = light->shadowMapRange;
-    glm::mat4 view = glm::lookAt(light->GetWorldPosition(), light->GetWorldPosition() + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
-    glm::mat4 proj = glm::ortho(-r, r, r, -r, 0.0f, light->shadowMapFar);
-    if (light->lightType == LightNode::LightType::Point) {
-        proj = glm::perspective(glm::radians(179.0f), 1.0f, 0.0f, light->shadowMapFar);
-        proj[1][1] *= -1;
-    }
-    constants.lightViewProj = proj * view;
-    vkw::CmdBeginRendering({}, {img});
+    uint32_t layers = light->lightType == LightNode::LightType::Point ? 6u : 1u;
+
+    vkw::CmdBeginRendering({}, {img}, layers);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     auto& allModels = gpuScene.GetMeshModels();
