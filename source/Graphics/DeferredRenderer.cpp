@@ -77,6 +77,7 @@ void CreateShaders() {
         .colorFormats = { },
         .useDepth = true,
         .depthFormat = { vkw::Format::D32_sfloat },
+        .cullFront = true,
     });
     ctx.composePipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,

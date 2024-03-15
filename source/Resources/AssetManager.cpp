@@ -126,6 +126,8 @@ void LightNode::Serialize(Serializer& s) {
     s("innerAngle", innerAngle);
     s("outerAngle", outerAngle);
     s("radius", radius);
+    s("shadowMapRange", shadowMapRange);
+    s("shadowMapFar", shadowMapFar);
 }
 
 Ref<SceneAsset> AssetManager::GetInitialScene() {

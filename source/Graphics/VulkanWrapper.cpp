@@ -840,7 +840,11 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     // line thickness in terms of number of fragments
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    if (desc.cullFront) {
+        rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+    } else {
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    }
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
@@ -1833,8 +1837,6 @@ void Context::CreateDevice() {
         result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
         DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
     }
-
-    
 
     asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
     VkBufferDeviceAddressInfo scratchInfo{};

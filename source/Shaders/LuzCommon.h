@@ -17,6 +17,9 @@ using mat4 = glm::mat4;
 #define LUZ_LIGHT_TYPE_SPOT 1
 #define LUZ_LIGHT_TYPE_DIRECTIONAL 2
 
+#define SHADOW_TYPE_RAYTRACING 1
+#define SHADOW_TYPE_MAP 2
+
 struct LightBlock {
     vec3 color;
     float intensity;
@@ -76,6 +79,8 @@ struct SceneBlock {
     int whiteTexture;
     int blackTexture;
     int tlasRid;
+
+    int shadowType;
 };
 
 struct ShadowMapConstants {

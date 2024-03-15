@@ -184,6 +184,7 @@ struct PipelineDesc {
     std::vector<Format> colorFormats;
     bool useDepth = false;
     Format depthFormat;
+    bool cullFront = false;
 };
 
 struct BLAS {

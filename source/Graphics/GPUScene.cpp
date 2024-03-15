@@ -175,12 +175,13 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         block.numShadowSamples = scene->shadowType == ShadowType::ShadowRayTraced ? scene->lightSamples : 0;
         block.radius = light->radius;
         block.zFar = light->shadowMapFar;
+        block.shadowMap = -1;
 
+        bool isPoint = false;
         glm::vec3 pos = light->GetWorldPosition();
         if (light->lightType == LightNode::LightType::Point) {
+            isPoint = true;
             glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.0f, light->shadowMapFar);
-            //float r = light->shadowMapRange;
-            //glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
             proj[1][1] *= -1.0;
             block.viewProj[0] = proj * glm::lookAt(pos, pos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
             block.viewProj[1] = proj * glm::lookAt(pos, pos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0));
@@ -192,11 +193,12 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
             float r = light->shadowMapRange;
             glm::mat4 view = glm::lookAt(pos, pos + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
             glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
-            proj[1][1] *= -1.0;
+            //proj[1][1] *= -1.0;
             block.viewProj[0] = proj * view;
         }
-
-        if (impl->shadowMaps.find(light->uuid) == impl->shadowMaps.end()) {
+        
+        auto it = impl->shadowMaps.find(light->uuid);
+        if (it == impl->shadowMaps.end() || (isPoint && it->second.img.layers != 6) ) {
             // todo: add shadow map settings to scene and recreate if changed
             impl->shadowMaps[light->uuid].img = vkw::CreateImage({
                 .width = scene->shadowResolution,
@@ -206,10 +208,15 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
                 .name = "ShadowMap" + std::to_string(light->uuid),
                 .layers = light->lightType == LightNode::LightType::Point ? 6u : 1u,
             });
+            impl->shadowMaps[light->uuid].readable = true;
         }
 
-        impl->shadowMaps[light->uuid].readable = true;
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
+        if (scene->shadowType == ShadowType::ShadowMap) {
+            block.shadowMap = impl->shadowMaps[light->uuid].img.RID();
+        } else {
+            block.shadowMap = -1;
+        }
     }
     s.ambientLightColor = scene->ambientLightColor;
     s.ambientLightIntensity = scene->ambientLight;
@@ -225,6 +232,7 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     s.useBlueNoise = false;
     s.whiteTexture = -1;
     s.blackTexture = -1;
+    s.shadowType = scene->shadowType;
 }
 
 void GPUScene::UpdateResourcesGPU() {

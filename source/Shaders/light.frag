@@ -160,6 +160,42 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     return ao/scene.aoNumSamples;
 }
 
+vec3 gridSamplingDisk[20] = vec3[]
+(
+   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
+   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
+   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
+   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
+);
+
+float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
+    float shadowBias = 0.2;
+    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
+    float dist = length(light.position - fragPos.xyz);
+    if (scene.shadowType == SHADOW_TYPE_RAYTRACING) {
+        if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+            return TraceShadowRay(shadowOrigin, light.direction*dot(light.direction, L)*dist, light.numShadowSamples, light.radius);
+        } else {
+            return TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
+        }
+    } else if (scene.shadowType == SHADOW_TYPE_MAP && light.shadowMap != -1) {
+        if (light.type == LIGHT_TYPE_POINT) {
+        } else {
+            vec4 fragInLight = (light.viewProj[0] * vec4(shadowOrigin, 1));
+            float shadowDepth = texture(textures[light.shadowMap], (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+            if (fragInLight.z >= shadowDepth) {
+                return 1.0f;
+            } else {
+                return 0.0f;
+            }
+        }
+        return 0.5f;
+    } else {
+        return 1.0f;
+    }
+}
+
 void main() {
     vec4 albedo = texture(textures[albedoRID], fragTexCoord);
     vec3 N = texture(textures[normalRID], fragTexCoord).xyz;
@@ -179,29 +215,26 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);
     vec3 Lo = vec3(0.0);
-    float shadowBias = 0.1;
-    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     for(int i = 0; i < scene.numLights; i++) {
         LightBlock light = scene.lights[i];
         vec3 L_ = light.position - fragPos.xyz;
         vec3 L = normalize(L_);
         float attenuation = 1;
-        float shadowFactor = 0.0;
         if(light.type == LIGHT_TYPE_DIRECTIONAL) {
             L = normalize(-light.direction);
-            shadowFactor = TraceShadowRay(shadowOrigin, L*10000, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_SPOT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
             float theta = dot(L, normalize(-light.direction));
             float epsilon = light.innerAngle - light.outerAngle;
             attenuation *= clamp((theta - light.outerAngle)/epsilon, 0.0, 1.0);
-            shadowFactor = TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
-            shadowFactor = TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         }
+        float shadowFactor = EvaluateShadow(light, L, N, fragPos);
+        // outColor = vec4(shadowFactor, .0f, .0f, 1.0f);
+        // return;
         vec3 radiance = light.color * light.intensity * attenuation * (1.0 - shadowFactor);
 
         vec3 H = normalize(V + L);
@@ -221,6 +254,8 @@ void main() {
         Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
     }
 
+    float shadowBias = 0.1;
+    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     float rayTracedAo = TraceAORays(shadowOrigin, N);
     // float rayTracedAo = 1;
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
