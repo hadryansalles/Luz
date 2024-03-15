@@ -11,5 +11,12 @@ layout(push_constant) uniform Constants {
     int lightIndex;
 };
 
+layout(location = 0) in vec4 fragPos;
+
 void main() {
+    LightBlock light = scene.lights[lightIndex];
+    if (light.type == LIGHT_TYPE_POINT) {
+        gl_FragDepth = length(light.position - fragPos.xyz) / light.zFar;
+    }
+    gl_FragDepth = gl_FragDepth;
 }

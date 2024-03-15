@@ -170,7 +170,7 @@ vec3 gridSamplingDisk[20] = vec3[]
 );
 
 float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
-    float shadowBias = 0.2;
+    float shadowBias = length(fragPos - scene.camPos) * 0.001;
     vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     float dist = length(light.position - fragPos.xyz);
     if (scene.shadowType == SHADOW_TYPE_RAYTRACING) {
@@ -181,6 +181,13 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
         }
     } else if (scene.shadowType == SHADOW_TYPE_MAP && light.shadowMap != -1) {
         if (light.type == LIGHT_TYPE_POINT) {
+            vec3 lightToFrag = fragPos - light.position;
+            float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+            if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
+                return 1.0f;
+            } else {
+                return 0.0f;
+            }
         } else {
             vec4 fragInLight = (light.viewProj[0] * vec4(shadowOrigin, 1));
             float shadowDepth = texture(textures[light.shadowMap], (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
@@ -190,7 +197,7 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
                 return 0.0f;
             }
         }
-        return 0.5f;
+        return 0.0f;
     } else {
         return 1.0f;
     }
@@ -254,7 +261,7 @@ void main() {
         Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
     }
 
-    float shadowBias = 0.1;
+    float shadowBias = length(fragPos - scene.camPos) * 0.01;
     vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     float rayTracedAo = TraceAORays(shadowOrigin, N);
     // float rayTracedAo = 1;

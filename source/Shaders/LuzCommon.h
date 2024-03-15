@@ -105,6 +105,7 @@ struct ShadowMapConstants {
 #define GOLDEN_RATIO 2.118033988749895
 
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler2D textures[];
+layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBuffer {
     SceneBlock block;

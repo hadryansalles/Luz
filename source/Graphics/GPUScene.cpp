@@ -182,7 +182,6 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
         if (light->lightType == LightNode::LightType::Point) {
             isPoint = true;
             glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.0f, light->shadowMapFar);
-            proj[1][1] *= -1.0;
             block.viewProj[0] = proj * glm::lookAt(pos, pos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
             block.viewProj[1] = proj * glm::lookAt(pos, pos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0));
             block.viewProj[2] = proj * glm::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
@@ -193,7 +192,6 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
             float r = light->shadowMapRange;
             glm::mat4 view = glm::lookAt(pos, pos + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
             glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
-            //proj[1][1] *= -1.0;
             block.viewProj[0] = proj * view;
         }
         
