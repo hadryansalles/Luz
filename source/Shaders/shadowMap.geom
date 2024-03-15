@@ -31,8 +31,8 @@ void main() {
     } else {
         gl_Layer = 0;
         for(int i = 0; i < 3; i++) {
-            fragPos = gl_in[i].gl_Position;
-            gl_Position = light.viewProj[0] * gl_in[i].gl_Position;
+            fragPos = light.viewProj[0] * gl_in[i].gl_Position;
+            gl_Position = fragPos;
             EmitVertex();
         }
         EndPrimitive();

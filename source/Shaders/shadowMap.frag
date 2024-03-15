@@ -17,6 +17,7 @@ void main() {
     LightBlock light = scene.lights[lightIndex];
     if (light.type == LIGHT_TYPE_POINT) {
         gl_FragDepth = length(light.position - fragPos.xyz) / light.zFar;
+    } else {
+        gl_FragDepth = gl_FragCoord.z;
     }
-    gl_FragDepth = gl_FragDepth;
 }

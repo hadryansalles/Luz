@@ -170,7 +170,7 @@ vec3 gridSamplingDisk[20] = vec3[]
 );
 
 float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
-    float shadowBias = length(fragPos - scene.camPos) * 0.001;
+    float shadowBias = max(length(fragPos - scene.camPos) * 0.01, 0.05);
     vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     float dist = length(light.position - fragPos.xyz);
     if (scene.shadowType == SHADOW_TYPE_RAYTRACING) {
