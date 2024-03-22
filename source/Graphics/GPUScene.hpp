@@ -3,7 +3,6 @@
 #include "Base.hpp"
 #include "VulkanWrapper.h"
 #include "AssetManager.hpp"
-#include "Camera.hpp"
 
 #include <unordered_map>
 
@@ -45,7 +44,7 @@ struct GPUScene {
     void AddAssets(const AssetManager& assets);
     void ClearAssets();
 
-    void UpdateResources(Ref<SceneAsset>& asset, Camera& camera);
+    void UpdateResources(const Ref<SceneAsset>& asset, const Ref<CameraNode>& camera);
     void UpdateResourcesGPU();
 
     std::vector<GPUModel>& GetMeshModels();

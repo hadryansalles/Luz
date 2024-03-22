@@ -137,6 +137,15 @@ Ref<SceneAsset> AssetManager::GetInitialScene() {
     return Get<SceneAsset>(initialScene);
 }
 
+Ref<CameraNode> AssetManager::GetMainCamera(Ref<SceneAsset>& scene) {
+    if (!scene->mainCamera) {
+        auto cam = scene->Add<CameraNode>();
+        cam->name = "Default Camera";
+        return cam;
+    }
+    return scene->mainCamera;
+}
+
 void AssetManager::LoadProject(const std::filesystem::path& path) {
     TimeScope t("AssetManager::LoadProject", true);
     if (!std::ifstream(path)) {
@@ -231,4 +240,61 @@ Ref<Node> Node::Clone(Ref<Node>& node) {
         SetParent(childClone, clone);
     }
     return clone;
+}
+
+// CameraNode
+CameraNode::CameraNode() {
+    type = ObjectType::CameraNode;
+}
+
+void CameraNode::Serialize(Serializer& s) {
+    Node::Serialize(s);
+    s("cameraType", cameraType);
+    s("mode", mode);
+    s("eye", eye);
+    s("center", center);
+    s("rotation", rotation);
+    s("zoom", zoom);
+    s("farDistance", farDistance);
+    s("nearDistance", nearDistance);
+    s("horizontalFov", horizontalFov);
+    s("orthoFarDistance", orthoFarDistance);
+    s("orthoNearDistance", orthoNearDistance);
+}
+
+glm::mat4 CameraNode::GetView() {
+    glm::vec3 rads;
+    if (mode == CameraMode::Orbit) {
+        rads = glm::radians(rotation + glm::vec3(90.0f, 90.0f, 0.0f));
+        glm::vec3 viewDir;
+        viewDir.x = std::cos(-rads.y) * std::sin(rads.x);
+        viewDir.z = std::sin(-rads.y) * std::sin(rads.x);
+        viewDir.y = std::cos(rads.x);
+        if (cameraType == CameraType::Perspective) {
+            viewDir *= zoom;
+        }
+        eye = center - viewDir;
+        return glm::lookAt(eye, center, glm::vec3(.0f, 1.0f, .0f));
+    } else {
+        rads = glm::radians(rotation + glm::vec3(.0f, 180.0f, .0f));
+        glm::mat4 rot(1.0f);
+        rot = glm::rotate(rot, rads.z, glm::vec3(.0f, .0f, 1.0f));
+        rot = glm::rotate(rot, rads.y, glm::vec3(.0f, 1.0f, .0f));
+        rot = glm::rotate(rot, rads.x, glm::vec3(1.0f, .0f, .0f));
+        return glm::lookAt(eye, eye + glm::vec3(rot[2]), glm::vec3(.0f, 1.0f, .0f));
+    }
+}
+
+glm::mat4 CameraNode::GetProj() {
+    glm::mat4 proj;
+    if (cameraType == CameraType::Perspective) {
+        proj = glm::perspective(glm::radians(horizontalFov), extent.x / extent.y, nearDistance, farDistance);
+    } else {
+        glm::vec2 size = glm::vec2(1.0, extent.y / extent.x) * zoom;
+        proj = glm::ortho(-size.x, size.x, -size.y, size.y, orthoNearDistance, orthoFarDistance);
+    }
+    // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
+    // the easiest way to fix this is fliping the scaling factor of the y axis
+    proj[1][1] *= -1;
+    return proj;
 }

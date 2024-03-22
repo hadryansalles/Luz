@@ -126,7 +126,7 @@ void GPUScene::AddAssets(const AssetManager& assets) {
     }
 }
 
-void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
+void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera) {
     LUZ_PROFILE_NAMED("UpdateResourcesGPU");
     std::vector<Ref<MeshNode>> meshNodes;
     scene->GetAll<MeshNode>(ObjectType::MeshNode, meshNodes);
@@ -223,10 +223,10 @@ void GPUScene::UpdateResources(Ref<SceneAsset>& scene, Camera& camera) {
     s.aoMin = scene->aoMin;
     s.aoNumSamples = scene->aoSamples > 0 ? scene->aoSamples : 0;
     s.exposure = scene->exposure;
-    s.camPos = camera.GetPosition();
-    s.projView = camera.GetProj() * camera.GetView();
-    s.inverseProj = glm::inverse(camera.GetProj());
-    s.inverseView = glm::inverse(camera.GetView());
+    s.camPos = camera->eye;
+    s.projView = camera->GetProj() * camera->GetView();
+    s.inverseProj = glm::inverse(camera->GetProj());
+    s.inverseView = glm::inverse(camera->GetView());
     s.tlasRid = impl->tlas.RID();
     s.useBlueNoise = false;
     s.whiteTexture = -1;

@@ -3,7 +3,6 @@
 
 #include "GPUScene.hpp"
 #include "AssetManager.hpp"
-#include "Camera.hpp"
 #include "VulkanWrapper.h"
 #include "Window.hpp"
 
@@ -32,7 +31,7 @@ struct EditorImpl {
     void InspectMeshNode(AssetManager& manager, Ref<MeshNode> node);
     void InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene);
     void InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material);
-    void OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
+    void OnTransform(const Ref<CameraNode>& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
     void Select(Ref<Node>& node);
     int FindSelected(Ref<Node>& node);
 };
@@ -183,7 +182,7 @@ void EditorImpl::OnNode(Ref<Node> node) {
     ImGui::PopID();
 }
 
-void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent) {
+void EditorImpl::OnTransform(const Ref<CameraNode>& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent) {
     // todo: use parent transform to allow World option
     bool open = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
     if (!open) {
@@ -235,10 +234,11 @@ void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rot
         currentGizmoMode = ImGuizmo::LOCAL;
     }
     glm::mat4 modelMat = Node::ComposeTransform(position, rotation, scale, parent);
-    glm::mat4 guizmoProj(camera.GetProj());
+    glm::mat4 guizmoProj(camera->GetProj());
     guizmoProj[1][1] *= -1;
     ImGuiIO& io = ImGui::GetIO();
-    ImGuizmo::Manipulate(glm::value_ptr(camera.GetView()), glm::value_ptr(guizmoProj), currentGizmoOperation, currentGizmoMode, glm::value_ptr(modelMat));
+    glm::mat4 camView = camera->GetView();
+    ImGuizmo::Manipulate(glm::value_ptr(camView), glm::value_ptr(guizmoProj), currentGizmoOperation, currentGizmoMode, glm::value_ptr(modelMat));
     modelMat = glm::inverse(parent) * modelMat;
     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(modelMat), glm::value_ptr(position), glm::value_ptr(rotation), glm::value_ptr(scale));
     ImGui::Separator();
@@ -273,7 +273,7 @@ void Editor::DemoPanel() {
     ImGui::ShowDemoWindow();
 }
 
-void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
+void Editor::ScenePanel(Ref<SceneAsset>& scene) {
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -337,12 +337,12 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
                 ImGui::EndCombo();
             }
         }
-        camera.OnImgui();
+        // todo: scene camera prameters, speed, etc
     }
     ImGui::End();
 }
 
-void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera, GPUScene& gpuScene) {
+void Editor::InspectorPanel(AssetManager& assetManager, const Ref<CameraNode>& camera, GPUScene& gpuScene) {
     bool open = ImGui::Begin("Inspector");
     if (open && impl->selectedNodes.size() > 0) {
         // todo: handle multi selection

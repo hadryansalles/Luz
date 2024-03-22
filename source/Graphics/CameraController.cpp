@@ -1,81 +1,21 @@
 #include "Luzpch.hpp"
 
-#include "Camera.hpp"
+#include "CameraController.hpp"
 #include "Window.hpp"
-#include "Transform.hpp"
-#include <imgui/imgui.h>
 
-Camera::Camera() {
-    UpdateView();
-}
+#include "AssetManager.hpp"
 
-void Camera::UpdateView() {
-    rotation.x = std::max(-179.9f, std::min(179.9f, rotation.x));
-    glm::vec3 rads;
-    switch (mode) {
-    case Control::Orbit:
-        rads = glm::radians(rotation + glm::vec3(90.0f, 90.0f, 0.0f));
-        glm::vec3 viewDir;
-        viewDir.x = std::cos(-rads.y) * std::sin(rads.x);
-        viewDir.z = std::sin(-rads.y) * std::sin(rads.x);
-        viewDir.y = std::cos(rads.x);
-        if (type == Type::Perspective) {
-            viewDir *= zoom;
-        }
-        eye = center - viewDir;
-        view = glm::lookAt(eye, center, glm::vec3(.0f, 1.0f, .0f));
-        break;
-    case Control::Fly:
-        rads = glm::radians(rotation + glm::vec3(.0f, 180.0f, .0f));
-        glm::mat4 rot(1.0f);
-        rot = glm::rotate(rot, rads.z, glm::vec3(.0f, .0f, 1.0f));
-        rot = glm::rotate(rot, rads.y, glm::vec3(.0f, 1.0f, .0f));
-        rot = glm::rotate(rot, rads.x, glm::vec3(1.0f, .0f, .0f));
-        view = glm::lookAt(eye, eye + glm::vec3(rot[2]), glm::vec3(.0f, 1.0f, .0f));
-        break;
-    }
-}
-
-void Camera::UpdateProj(){
-    switch (type) {
-    case Camera::Type::Perspective:
-        proj = glm::perspective(glm::radians(horizontalFov), extent.x / extent.y, nearDistance, farDistance);
-        break;
-    case Camera::Type::Orthographic:
-        glm::vec2 size = glm::vec2(1.0, extent.y / extent.x) * zoom;
-        proj = glm::ortho(-size.x, size.x, -size.y, size.y, orthoNearDistance, orthoFarDistance);
-        break;
-    }
-    // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-    // the easiest way to fix this is fliping the scaling factor of the y axis
-    proj[1][1] *= -1;
-}
-
-void Camera::Update(Transform* selectedTransform, bool viewportHovered) {
+void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNode>& cam, bool viewportHovered) {
     if (!viewportHovered) {
        return;
     }
-    bool viewDirty = false;
-    bool projDirty = false;
     glm::vec2 drag(.0f);
     glm::vec2 move(.0f);
     if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyDown(GLFW_KEY_1)) {
-        mode = Camera::Control::Orbit;
+        cam->mode = CameraNode::CameraMode::Orbit;
     }
     if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyDown(GLFW_KEY_2)) {
-        mode = Camera::Control::Fly;
-    }
-    if (Window::IsKeyDown(GLFW_KEY_SPACE)) {
-        if (selectedTransform != nullptr) {
-            zoom = 1.0f;
-            if (selectedTransform->parent != nullptr) {
-                center = selectedTransform->parent->GetMatrix()*glm::vec4(selectedTransform->position, 1.0f);
-            }
-            else {
-                center = selectedTransform->position;
-            }
-            viewDirty = true;
-        }
+        cam->mode = CameraNode::CameraMode::Fly;
     }
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_1) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {
         drag = -Window::GetDeltaMouse();
@@ -83,33 +23,28 @@ void Camera::Update(Transform* selectedTransform, bool viewportHovered) {
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) {
         move = -Window::GetDeltaMouse();
     }
-    if (autoOrbit) {
+    if (scene->autoOrbit) {
         drag.x = 1*Window::GetDeltaTime();
     }
     float scroll = Window::GetDeltaScroll();
     float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1 : 1;
-    switch (mode) {
-    case Camera::Control::Orbit:
+    switch (cam->mode) {
+    case CameraNode::CameraMode::Orbit:
         if (drag.x != 0 || drag.y != 0) {
-            rotation.x = std::max(-89.9f, std::min(89.9f, rotation.x + drag.y * rotationSpeed * slowDown));
-            rotation.y -=  drag.x * rotationSpeed * slowDown; 
-            viewDirty = true;
+            cam->rotation.x = std::max(-89.9f, std::min(89.9f, cam->rotation.x + drag.y * scene->rotationSpeed * slowDown));
+            cam->rotation.y -=  drag.x * scene->rotationSpeed * slowDown; 
         }
         if (scroll != 0) {
-            zoom *= std::pow(10, -scroll * zoomSpeed * slowDown);
-            viewDirty = true;
-            if (type == Type::Orthographic) {
-                projDirty = true;
-            }
+            cam->zoom *= std::pow(10, -scroll * scene->zoomSpeed * slowDown);
         }
         if (move.x != 0 || move.y != 0) {
+            glm::mat4 view = cam->GetView();
             glm::vec3 right = glm::vec3(view[0][0], view[1][0], view[2][0]);
             glm::vec3 up = glm::vec3(view[0][1], view[1][1], view[2][1]);
-            center -= (right * move.x - up * move.y) * speed * slowDown;
-            viewDirty = true;
+            cam->center -= (right * move.x - up * move.y) * scene->camSpeed * slowDown;
         }
         break;
-    case Camera::Control::Fly:
+    case CameraNode::CameraMode::Fly:
         glm::vec2 fpsMove(.0f, .0f);
         if (Window::IsKeyDown(GLFW_KEY_W)) {
             fpsMove.y += 1;
@@ -124,39 +59,26 @@ void Camera::Update(Transform* selectedTransform, bool viewportHovered) {
             fpsMove.x -= 1;
         }
         if (fpsMove.x != 0 || fpsMove.y != 0) {
+            glm::mat4 view = cam->GetView();
             fpsMove = glm::normalize(fpsMove);
             glm::vec3 right = glm::vec3(view[0][0], view[1][0], view[2][0]);
             glm::vec3 front = glm::vec3(view[0][2], view[1][2], view[2][2]);
-            eye += (right * fpsMove.x - front * fpsMove.y) * 0.5f * speed * slowDown * Window::GetDeltaTime();
-            viewDirty = true;
+            cam->eye += (right * fpsMove.x - front * fpsMove.y) * 0.5f * scene->camSpeed * slowDown * Window::GetDeltaTime();
         }
         if (scroll != 0) {
+            glm::mat4 view = cam->GetView();
             glm::vec3 up = glm::vec3(view[0][1], view[1][1], view[2][1]);
-            eye += up * scroll * speed * 25.0f * slowDown;
-            viewDirty = true;
+            cam->eye += up * scroll * scene->camSpeed * 25.0f * slowDown;
         }
         if (drag.x != 0 || drag.y != 0) {
-            rotation += glm::vec3(drag.y, -drag.x, 0) * rotationSpeed * slowDown;
-            rotation.x = std::max(-89.9f, std::min(89.9f, rotation.x));
-            viewDirty = true;
+            cam->rotation += glm::vec3(drag.y, -drag.x, 0) * scene->rotationSpeed * slowDown;
+            cam->rotation.x = std::max(-89.9f, std::min(89.9f, cam->rotation.x));
         }
         break;
     }
-
-    if (viewDirty) {
-        UpdateView();
-    }
-    if (projDirty) {
-        UpdateProj();
-    }
 }
 
-void Camera::SetControl(Camera::Control newControl) {
-    mode = newControl;
-    if (newControl == Control::Orbit) {
-        center = eye - zoom*glm::vec3(view[0][2], view[1][2], view[2][2]);
-    }
-}
+/*
 
 void Camera::OnImgui() {
     float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -284,8 +206,4 @@ void Camera::OnImgui() {
     }
 }
 
-void Camera::SetExtent(float width, float height) {
-    extent.x = width;
-    extent.y = height;
-    UpdateProj();
-}
+*/

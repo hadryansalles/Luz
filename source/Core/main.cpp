@@ -1,7 +1,7 @@
 #include "Luzpch.hpp"
 
 #include "Window.hpp"
-#include "Camera.hpp"
+#include "CameraController.hpp"
 #include "FileManager.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
@@ -33,8 +33,9 @@ private:
     AssetManager assetManager;
     GPUScene gpuScene;
     Ref<SceneAsset> scene;
+    Ref<CameraNode> camera;
     Editor editor;
-    Camera mainCamera;
+    CameraController cameraController;
     bool viewportHovered = false;
     bool fullscreen = false;
     DeferredShading::Output outputMode = DeferredShading::Output::Light;
@@ -54,6 +55,7 @@ private:
         IMGUI_CHECKVERSION();
         assetManager.LoadProject("assets/default.luz");
         scene = assetManager.GetInitialScene();
+        camera = assetManager.GetMainCamera(scene);
     }
 
     void Create() {
@@ -63,7 +65,7 @@ private:
         DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         DeferredShading::CreateShaders();
         gpuScene.Create();
-        mainCamera.SetExtent(viewportSize.x, viewportSize.y);
+        camera->extent = { viewportSize.x, viewportSize.y };
     }
 
     void Finish() {
@@ -87,7 +89,7 @@ private:
             }
             gpuScene.AddAssets(assetManager);
             // todo: focus camera on selected object
-            mainCamera.Update(nullptr, viewportHovered);
+            cameraController.Update(scene, camera, viewportHovered);
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
@@ -113,7 +115,7 @@ private:
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = mainCamera.GetProj() * mainCamera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = camera->GetProj() * camera->GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         glm::ivec2 ext = viewportSize;
         screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
@@ -146,8 +148,8 @@ private:
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
-            editor.ScenePanel(scene, mainCamera);
-            editor.InspectorPanel(assetManager, mainCamera, gpuScene);
+            editor.ScenePanel(scene);
+            editor.InspectorPanel(assetManager, camera, gpuScene);
         } else {
             newViewportSize = { Window::GetWidth(), Window::GetHeight() };
             viewportHovered = true;
@@ -158,7 +160,7 @@ private:
     }
 
     void RenderFrame() {
-        gpuScene.UpdateResources(scene, mainCamera);
+        gpuScene.UpdateResources(scene, camera);
         LUZ_PROFILE_FUNC();
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
         gpuScene.UpdateResourcesGPU();
@@ -251,9 +253,7 @@ private:
             vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         }
         DeferredShading::CreateImages(viewportSize.x, viewportSize.y);
-        // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-        // the easiest way to fix this is fliping the scaling factor of the y axis
-        mainCamera.SetExtent(viewportSize.x, viewportSize.y);
+        camera->extent = {viewportSize.x, viewportSize.y};
     }
 
     void FinishImgui() {

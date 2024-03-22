@@ -20,6 +20,7 @@ enum class ObjectType {
     Node,
     MeshNode,
     LightNode,
+    CameraNode,
     Count,
 };
 
@@ -32,6 +33,7 @@ inline std::string ObjectTypeName[] = {
     "Node",
     "MeshNode",
     "LightNode",
+    "CameraNode",
     "Count",
 };
 
@@ -202,7 +204,41 @@ struct LightNode : Node {
 };
 
 struct CameraNode : Node {
+    enum CameraMode {
+        Orbit,
+        Fly
+    };
+    inline static const char* modeNames[] = { "Orbit", "Fly" };
 
+    enum class CameraType {
+        Perspective,
+        Orthographic
+    };
+    inline static const char* typeNames[] = { "Perspective", "Orthographic" };
+
+    CameraType cameraType = CameraType::Perspective;
+    CameraMode mode = CameraMode::Orbit;
+
+    glm::vec3 eye = glm::vec3(0);
+    glm::vec3 center = glm::vec3(0);
+    glm::vec3 rotation = glm::vec3(0);
+
+    float zoom = 10.0f;
+
+    float farDistance = 1000.0f;
+    float nearDistance = 0.01f;
+    float horizontalFov = 60.0f;
+
+    float orthoFarDistance = 10.0f;
+    float orthoNearDistance = -100.0f;
+
+    glm::vec2 extent = glm::vec2(1.0f);
+
+    CameraNode();
+    virtual void Serialize(Serializer& s);
+
+    glm::mat4 GetView();
+    glm::mat4 GetProj();
 };
 
 struct SceneAsset : Asset {
@@ -216,6 +252,12 @@ struct SceneAsset : Asset {
     float exposure = 2.0f;
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
+
+    float camSpeed = 0.01;
+    float zoomSpeed = 0.1;
+    float rotationSpeed = 0.3;
+    bool autoOrbit = false;
+    Ref<CameraNode> mainCamera;
 
     template<typename T>
     Ref<T> Add() {
@@ -268,6 +310,7 @@ struct AssetManager {
     void LoadProject(const std::filesystem::path& path);
     void SaveProject(const std::filesystem::path& path);
     Ref<SceneAsset> GetInitialScene();
+    Ref<CameraNode> GetMainCamera(Ref<SceneAsset>& scene);
     void OnImgui();
 
     template<typename T>
@@ -333,6 +376,7 @@ struct AssetManager {
             case ObjectType::Node: return CreateObject<Node>(name, uuid);
             case ObjectType::MeshNode: return CreateObject<MeshNode>(name, uuid);
             case ObjectType::LightNode: return CreateObject<LightNode>(name, uuid);
+            case ObjectType::CameraNode: return CreateObject<CameraNode>(name, uuid);
             default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
@@ -363,6 +407,7 @@ struct AssetManager {
             case ObjectType::Node: return CloneObject<Node>(rhs);
             case ObjectType::MeshNode: return CloneObject<MeshNode>(rhs);
             case ObjectType::LightNode: return CloneObject<LightNode>(rhs);
+            case ObjectType::CameraNode: return CloneObject<CameraNode>(rhs);
             default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
