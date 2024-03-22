@@ -118,4 +118,17 @@ struct Serializer {
             object = manager.Get<T>(j[field]);
         }
     }
+
+    template <typename T>
+    void Node(const std::string& field, Ref<T>& node, SceneAsset* scene) {
+        if (dir == SAVE) {
+            if (node) {
+                j[field] = node->uuid;
+            } else {
+                j[field] = 0;
+            }
+        } else if (j.contains(field) && j[field] != 0) {
+            node = scene->Get<T>(j[field]);
+        }
+    }
 };

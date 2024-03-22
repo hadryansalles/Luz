@@ -103,6 +103,7 @@ void SceneAsset::Serialize(Serializer& s) {
     s("exposure", exposure);
     s("shadowType", shadowType);
     s("shadowResolution", shadowResolution);
+    s.Node("mainCamera", mainCamera, this);
 }
 
 void Node::Serialize(Serializer& s) {
@@ -139,8 +140,9 @@ Ref<SceneAsset> AssetManager::GetInitialScene() {
 
 Ref<CameraNode> AssetManager::GetMainCamera(Ref<SceneAsset>& scene) {
     if (!scene->mainCamera) {
-        auto cam = scene->Add<CameraNode>();
-        cam->name = "Default Camera";
+        auto cam = CreateObject<CameraNode>("Default Camera");
+        scene->Add(cam);
+        scene->mainCamera = cam;
         return cam;
     }
     return scene->mainCamera;

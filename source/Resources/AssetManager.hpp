@@ -273,6 +273,17 @@ struct SceneAsset : Asset {
     void DeleteRecursive(const Ref<Node>& node);
 
     template<typename T>
+    Ref<T> Get(UUID id) {
+        // todo: search recursively
+        for (auto& node : nodes) {
+            if (node->uuid == id) {
+                return std::dynamic_pointer_cast<T>(node);
+            }
+        }
+        return {};
+    }
+
+    template<typename T>
     void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
         for (auto& node : nodes) {
             if (node->type == type) {
