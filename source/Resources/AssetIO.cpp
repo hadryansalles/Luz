@@ -48,6 +48,21 @@ std::string ReadFile(const std::filesystem::path& path) {
     return buffer.str();
 }
 
+std::vector<u8> ReadFileBytes(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    std::vector<u8> bytes((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
+    input.close();
+    return bytes;
+}
+
+void WriteFileBytes(const std::filesystem::path& path, const std::vector<u8>& content) {
+    std::ofstream file(path, std::ofstream::binary);
+    if (file.is_open()) {
+        file.write((char*)content.data(), content.size());
+        file.close();
+    }
+}
+
 void WriteFile(const std::filesystem::path& path, const std::string& content) {
     std::ofstream file(path, std::ofstream::out);
     if (file.is_open()) {
@@ -423,6 +438,8 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     }
 
     Ref<SceneAsset> scene = manager.CreateAsset<SceneAsset>(filename);
+    Ref<Node> parentNode = manager.CreateObject<Node>(filename);
+    scene->Add(parentNode);
     for (size_t i = 0; i < shapes.size(); i++) {
         std::unordered_map<MeshAsset::MeshVertex, uint32_t> uniqueVertices{};
         int splittedShapeIndex = 0;
@@ -469,7 +486,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                 if (faceId >= shapes[i].mesh.material_ids.size() || shapes[i].mesh.material_ids[faceId] != lastMaterialId) {
                     asset->name += "_" + std::to_string(splittedShapeIndex);
                     Ref<MeshNode> model = manager.CreateObject<MeshNode>(asset->name);
-                    scene->nodes.push_back(model);
+                    Node::SetParent(model, parentNode);
                     model->mesh = asset;
                     if (lastMaterialId != -1) {
                         model->material = materialAssets[lastMaterialId];

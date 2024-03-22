@@ -207,7 +207,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
                 .name = "ShadowMap" + std::to_string(light->uuid),
                 .layers = light->lightType == LightNode::LightType::Point ? 6u : 1u,
             });
-            impl->shadowMaps[light->uuid].readable = true;
         }
 
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
@@ -255,8 +254,11 @@ void GPUScene::UpdateResourcesGPU() {
 }
 
 ShadowMapData& GPUScene::GetShadowMap(UUID uuid) {
-    ASSERT(impl->shadowMaps.find(uuid) != impl->shadowMaps.end(), "Couldn't find shadow map");
-    return impl->shadowMaps[uuid];
+    static ShadowMapData invalidData;
+    if (impl->shadowMaps.find(uuid) != impl->shadowMaps.end()) {
+        return impl->shadowMaps[uuid];
+    }
+    return invalidData;
 }
 
 std::vector<GPUModel>& GPUScene::GetMeshModels() {

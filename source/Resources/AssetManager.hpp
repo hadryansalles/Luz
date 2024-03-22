@@ -318,8 +318,8 @@ struct SceneAsset : Asset {
 
 struct AssetManager {
     std::vector<Ref<Node>> AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
-    void LoadProject(const std::filesystem::path& path);
-    void SaveProject(const std::filesystem::path& path);
+    void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    void SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
     Ref<SceneAsset> GetInitialScene();
     Ref<CameraNode> GetMainCamera(Ref<SceneAsset>& scene);
     void OnImgui();

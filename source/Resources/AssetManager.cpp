@@ -148,17 +148,19 @@ Ref<CameraNode> AssetManager::GetMainCamera(Ref<SceneAsset>& scene) {
     return scene->mainCamera;
 }
 
-void AssetManager::LoadProject(const std::filesystem::path& path) {
+void AssetManager::LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
     TimeScope t("AssetManager::LoadProject", true);
     if (!std::ifstream(path)) {
         return;
     }
     Json j;
+    BinaryStorage storage;
     int dir = Serializer::LOAD;
     j = Json::parse(AssetIO::ReadFile(path));
+    storage.data = AssetIO::ReadFileBytes(binPath);
     for (auto& assetJson : j["assets"]) {
         Ref<Asset> asset;
-        Serializer s = Serializer(assetJson, dir, *this);
+        Serializer s = Serializer(assetJson, storage, dir, *this);
         s.Serialize(asset);
     }
     initialScene = j["initialScene"];
@@ -167,9 +169,10 @@ void AssetManager::LoadProject(const std::filesystem::path& path) {
     }
 }
 
-void AssetManager::SaveProject(const std::filesystem::path& path) {
+void AssetManager::SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
     TimeScope t("AssetManager::SaveProject", true);
     Json j;
+    BinaryStorage storage;
     int dir = Serializer::SAVE;
     std::vector<Ref<Asset>> assetsOrdered;
     assetsOrdered.reserve(assets.size());
@@ -181,12 +184,13 @@ void AssetManager::SaveProject(const std::filesystem::path& path) {
     });
     for (Ref<Asset> asset : assetsOrdered) {
         Json assetJson;
-        Serializer s = Serializer(assetJson, dir, *this);
+        Serializer s = Serializer(assetJson, storage, dir, *this);
         s.Serialize(asset);
         j["assets"].push_back(assetJson);
     }
     j["initialScene"] = initialScene;
-    AssetIO::WriteFile(path, j.dump(2));
+    AssetIO::WriteFile(path, j.dump(0));
+    AssetIO::WriteFileBytes(binPath, storage.data);
 }
 
 void AssetManager::OnImgui() {

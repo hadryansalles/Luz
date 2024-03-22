@@ -53,7 +53,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        assetManager.LoadProject("assets/default.luz");
+        //assetManager.LoadProject("assets/default.luz", "assets/default.luzbin");
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -93,7 +93,7 @@ private:
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
-                assetManager.SaveProject("assets/default.luz");
+                assetManager.SaveProject("assets/default.luz", "assets/default.luzbin");
             }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
