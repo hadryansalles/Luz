@@ -317,6 +317,8 @@ struct SceneAsset : Asset {
 };
 
 struct AssetManager {
+    AssetManager();
+    ~AssetManager();
     std::vector<Ref<Node>> AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
     void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
     void SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
@@ -424,6 +426,7 @@ struct AssetManager {
     }
 
 private:
+    struct AssetManagerImpl* impl;
     std::unordered_map<UUID, Ref<Asset>> assets;
     static UUID NewUUID();
     UUID initialScene = 0;

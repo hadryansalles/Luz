@@ -3,9 +3,11 @@
 #include "AssetManager.hpp"
 #include "Serializer.hpp"
 #include "AssetIO.hpp"
+#include "Util.hpp"
 
 #include <imgui/imgui.h>
 #include <random>
+#include <utility>
 
 Object::~Object()
 {}
@@ -131,6 +133,21 @@ void LightNode::Serialize(Serializer& s) {
     s("shadowMapFar", shadowMapFar);
 }
 
+// Asset Manager
+
+struct AssetManagerImpl {
+    u32 lastAssetsHash = 0;
+    Json lastJson;
+};
+
+AssetManager::AssetManager() {
+    impl = new AssetManagerImpl;
+}
+
+AssetManager::~AssetManager() {
+    delete impl;
+}
+
 Ref<SceneAsset> AssetManager::GetInitialScene() {
     if (!initialScene) {
         CreateAsset<SceneAsset>("DefaultScene");
@@ -158,39 +175,68 @@ void AssetManager::LoadProject(const std::filesystem::path& path, const std::fil
     int dir = Serializer::LOAD;
     j = Json::parse(AssetIO::ReadFile(path));
     storage.data = AssetIO::ReadFileBytes(binPath);
+    std::vector<UUID> uuids;
     for (auto& assetJson : j["assets"]) {
         Ref<Asset> asset;
         Serializer s = Serializer(assetJson, storage, dir, *this);
         s.Serialize(asset);
+        uuids.push_back(asset->uuid);
+    }
+    for (auto& assetJson : j["scenes"]) {
+        Ref<Asset> asset;
+        Serializer s = Serializer(assetJson, storage, dir, *this);
+        s.Serialize(asset);
+        uuids.push_back(asset->uuid);
     }
     initialScene = j["initialScene"];
     for (auto& scene : GetAll<SceneAsset>(ObjectType::SceneAsset)) {
         scene->UpdateParents();
     }
+    impl->lastJson = std::move(j);
+    impl->lastAssetsHash = HashUUID(uuids);
 }
 
 void AssetManager::SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
     TimeScope t("AssetManager::SaveProject", true);
-    Json j;
     BinaryStorage storage;
     int dir = Serializer::SAVE;
     std::vector<Ref<Asset>> assetsOrdered;
+    std::vector<UUID> assetsUUIDs;
     assetsOrdered.reserve(assets.size());
     for (auto& assetPair : assets) {
         assetsOrdered.push_back(assetPair.second);
+        assetsUUIDs.push_back(assetPair.first);
     }
-    std::sort(assetsOrdered.begin(), assetsOrdered.end(), [&](const Ref<Asset>& a, const Ref<Asset>& b) {
-        return a->type < b->type;
-    });
-    for (Ref<Asset> asset : assetsOrdered) {
-        Json assetJson;
+    u32 assetsHash = HashUUID(assetsUUIDs);
+    if (assetsHash != impl->lastAssetsHash) {
+        Log::Info("Serializing assets..");
+        Json j;
+        j["scenes"] = Json::object();
+        // serialize assets
+        std::sort(assetsOrdered.begin(), assetsOrdered.end(), [&](const Ref<Asset>& a, const Ref<Asset>& b) {
+            return a->type < b->type;
+            });
+        for (Ref<Asset> asset : assetsOrdered) {
+            if (asset->type == ObjectType::SceneAsset) {
+                continue;
+            }
+            Json assetJson;
+            Serializer s = Serializer(assetJson, storage, dir, *this);
+            s.Serialize(asset);
+            j["assets"].push_back(assetJson);
+        }
+        AssetIO::WriteFileBytes(binPath, storage.data);
+        impl->lastJson = std::move(j);
+    }
+    // always serialize scenes
+    for (auto& scene : GetAll<SceneAsset>(ObjectType::SceneAsset)) {
+        Json& assetJson = impl->lastJson["scenes"][std::to_string(scene->uuid)];
         Serializer s = Serializer(assetJson, storage, dir, *this);
-        s.Serialize(asset);
-        j["assets"].push_back(assetJson);
+        s.Serialize(scene);
     }
-    j["initialScene"] = initialScene;
-    AssetIO::WriteFile(path, j.dump(0));
-    AssetIO::WriteFileBytes(binPath, storage.data);
+    impl->lastJson["initialScene"] = initialScene;
+    AssetIO::WriteFile(path, impl->lastJson.dump());
+    impl->lastAssetsHash = assetsHash;
 }
 
 void AssetManager::OnImgui() {
