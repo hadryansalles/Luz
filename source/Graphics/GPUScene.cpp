@@ -87,6 +87,7 @@ void GPUScene::AddMesh(const Ref<MeshAsset>& asset) {
 
 void GPUScene::AddTexture(const Ref<TextureAsset>& asset) {
     GPUTexture& texture = impl->textures[asset->uuid];
+    ASSERT(asset->channels == 4, "Invalid number of channels");
     texture.image = vkw::CreateImage({
         .width = uint32_t(asset->width),
         .height = uint32_t(asset->height),
@@ -96,7 +97,7 @@ void GPUScene::AddTexture(const Ref<TextureAsset>& asset) {
     });
     vkw::BeginCommandBuffer(vkw::Queue::Graphics);
     vkw::CmdBarrier(texture.image, vkw::Layout::TransferDst);
-    vkw::CmdCopy(texture.image, asset->data.data(), asset->width * asset->height * 4);
+    vkw::CmdCopy(texture.image, asset->data.data(), asset->width * asset->height * asset->channels);
     vkw::CmdBarrier(texture.image, vkw::Layout::ShaderRead);
     vkw::EndCommandBuffer();
     vkw::WaitQueue(vkw::Queue::Graphics);

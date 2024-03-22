@@ -69,8 +69,9 @@ UUID Import(const std::filesystem::path& path, AssetManager& assets) {
 
 void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     u8* indata = stbi_load(path.string().c_str(), &t->width, &t->height, &t->channels, 4);
-    t->data.resize(t->width * t->height * t->channels);
+    t->data.resize(t->width * t->height * 4);
     memcpy(t->data.data(), indata, t->data.size());
+    t->channels = 4;
 }
 
 UUID ImportTexture(const std::filesystem::path& path, AssetManager& assets) {
@@ -398,6 +399,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     // convert obj material to my material
     auto avg = [](const tinyobj::real_t value[3]) {return (value[0] + value[1] + value[2]) / 3.0f; };
     std::vector<Ref<MaterialAsset>> materialAssets;
+    std::unordered_map<std::string, Ref<TextureAsset>> textureAssets;
     for (size_t i = 0; i < materials.size(); i++) {
         Ref<MaterialAsset> asset = manager.CreateAsset<MaterialAsset>(filename + ":" + materials[i].name);
         materialAssets.push_back(asset);
@@ -410,8 +412,13 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
             asset->roughness = materials[i].roughness;
         }
         if (materials[i].diffuse_texname != "") {
-            asset->colorMap = manager.CreateAsset<TextureAsset>(materials[i].diffuse_texname);
-            ImportTexture(parentPath + materials[i].diffuse_texname, asset->colorMap);
+            if (textureAssets.find(materials[i].diffuse_texname) == textureAssets.end()) {
+                asset->colorMap = manager.CreateAsset<TextureAsset>(materials[i].diffuse_texname);
+                ImportTexture(parentPath + materials[i].diffuse_texname, asset->colorMap);
+                textureAssets[materials[i].diffuse_texname] = asset->colorMap;
+            } else {
+                asset->colorMap = textureAssets[materials[i].diffuse_texname];
+            }
         }
     }
 
