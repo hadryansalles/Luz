@@ -2,7 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
-layout(early_fragment_tests) in;
+// layout(early_fragment_tests) in;
 
 layout(push_constant) uniform ConstantsBlock {
     int sceneBufferIndex;
@@ -23,9 +23,9 @@ layout(location = 2) out vec4 outMaterial;
 layout(location = 3) out vec4 outEmission;
 
 void main() {
-    vec4 albedo = model.color;
+    vec4 albedo = vec4(0.0);
     if (model.colorMap >= 0) {
-        albedo *= texture(textures[model.colorMap], fragTexCoord);
+        albedo = texture(textures[model.colorMap], fragTexCoord);
     }
     if(albedo.a < 0.5) {
         discard;

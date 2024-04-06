@@ -53,7 +53,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        //assetManager.LoadProject("assets/default.luz", "assets/default.luzbin");
+        assetManager.LoadProject("assets/default.luz", "assets/default.Luzbin");
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -199,6 +199,7 @@ private:
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
+        lightPassConstants.modelBufferIndex = constants.modelBufferIndex;
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);

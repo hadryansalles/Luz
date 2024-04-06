@@ -21,7 +21,7 @@ struct GPUSceneImpl {
         .colorMap = -1,
         .normalMap = -1,
         .emissionMap = -1,
-        .metallicRoughnessMap = -1
+        .metallicRoughnessMap = -1,
     };
 
     std::vector<GPUModel> meshModels;
@@ -59,13 +59,13 @@ void GPUScene::AddMesh(const Ref<MeshAsset>& asset) {
     mesh.indexCount = asset->indices.size();
     mesh.vertexBuffer = vkw::CreateBuffer(
         sizeof(MeshAsset::MeshVertex) * asset->vertices.size(),
-        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput | vkw::BufferUsage::Storage,
         vkw::Memory::GPU,
         ("VertexBuffer#" + std::to_string(asset->uuid))
     );
     mesh.indexBuffer = vkw::CreateBuffer(
         sizeof(uint32_t) * asset->indices.size(),
-        vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput,
+        vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput | vkw::BufferUsage::Storage,
         vkw::Memory::GPU,
         ("IndexBuffer#" + std::to_string(asset->uuid))
     );
@@ -159,6 +159,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
                 block.emissionMap = impl->textures[material->emissionMap->uuid].image.RID();
             }
         }
+        block.vertexBuffer = impl->meshes[node->mesh->uuid].vertexBuffer.RID();
+        block.indexBuffer = impl->meshes[node->mesh->uuid].indexBuffer.RID();
         block.modelMat = node->GetWorldTransform();
     }
 

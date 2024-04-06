@@ -54,7 +54,8 @@ struct ModelBlock {
 
     int emissionMap;
     int metallicRoughnessMap;
-    int pad[2];
+    int vertexBuffer;
+    int indexBuffer;
 };
 
 struct SceneBlock {
@@ -115,10 +116,19 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {
     ModelBlock models[LUZ_MAX_MODELS];
 } modelsBuffers[];
 
+layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer VertexBuffer {
+    float data[];
+} vertexBuffers[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer IndexBuffer {
+    uint indices[];
+} indexBuffers[];
+
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 
 #define tlas tlasBuffer[scene.tlasRid]
 #define scene sceneBuffers[sceneBufferIndex].block
 #define model modelsBuffers[modelBufferIndex].models[modelID]
+#define vertexBuffer vertexBuffers[model.vertexBuffer]
 
 #endif

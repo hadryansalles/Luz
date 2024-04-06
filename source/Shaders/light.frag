@@ -4,6 +4,7 @@
 
 layout(push_constant) uniform PresentConstants {
     int sceneBufferIndex;
+    int modelBufferIndex;
     int frame;
     int albedoRID;
     int normalRID;
@@ -204,7 +205,7 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
 }
 
 void main() {
-    vec4 albedo = texture(textures[albedoRID], fragTexCoord);
+    vec4 albedo = pow(texture(textures[albedoRID], fragTexCoord), vec4(2.2));
     vec3 N = texture(textures[normalRID], fragTexCoord).xyz;
     vec4 material = texture(textures[materialRID], fragTexCoord);
     vec4 emission = texture(textures[emissionRID], fragTexCoord);
@@ -213,7 +214,7 @@ void main() {
         outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
         return;
     }
-    // float depth = 1.0;
+
     float occlusion = material.b;
     float roughness = material.r;
     float metallic = material.g;
@@ -222,6 +223,7 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);
     vec3 Lo = vec3(0.0);
+
     for(int i = 0; i < scene.numLights; i++) {
         LightBlock light = scene.lights[i];
         vec3 L_ = light.position - fragPos.xyz;
@@ -240,8 +242,6 @@ void main() {
             attenuation = 1.0 / (dist*dist);
         }
         float shadowFactor = EvaluateShadow(light, L, N, fragPos);
-        // outColor = vec4(shadowFactor, .0f, .0f, 1.0f);
-        // return;
         vec3 radiance = light.color * light.intensity * attenuation * (1.0 - shadowFactor);
 
         vec3 H = normalize(V + L);
@@ -264,16 +264,18 @@ void main() {
     float shadowBias = length(fragPos - scene.camPos) * 0.01;
     vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     float rayTracedAo = TraceAORays(shadowOrigin, N);
-    // float rayTracedAo = 1;
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
-    vec3 color = ambient + Lo;
+    vec3 color = ambient + Lo + emission.rgb;
+
     color = color / (color + vec3(1.0));
-    vec3 totalRadiance = color + emission.rgb;
+    color = pow(color, vec3(1.0/2.2));
+
+    // vec3 totalRadiance = color + emission.rgb;
 
     // exposure tone mapping
-    vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
-    mapped = aces(mapped);
+    // vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
+    // mapped = aces(mapped);
     
     // gamma correction 
-    outColor = vec4(pow(mapped, vec3(1.0 / 1.0)), 1);
+    outColor = vec4(color, 1.0);
 }

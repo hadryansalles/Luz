@@ -112,6 +112,7 @@ void Window::Update() {
     deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(newTime - lastTime).count();
     deltaTime /= 1000.0f;
     lastTime = newTime;
+    std::this_thread::sleep_for(std::chrono::milliseconds(30 - (int)deltaTime));
     double x, y;
     glfwGetCursorPos(window, &x, &y);
     deltaMousePos = mousePos - glm::vec2(x, y);

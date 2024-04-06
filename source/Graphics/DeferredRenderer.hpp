@@ -22,6 +22,7 @@ struct OpaqueConstants {
 
 struct LightConstants {
     int sceneBufferIndex;
+    int modelBufferIndex;
     int frameID;
     int albedoRID;
     int normalRID;
