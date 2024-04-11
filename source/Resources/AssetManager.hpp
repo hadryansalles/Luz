@@ -189,6 +189,14 @@ struct LightNode : Node {
         LightTypeCount = 3,
     };
     inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
+
+    enum VolumetricType {
+        Disabled = 0,
+        ScreenSpace = 1,
+        VolumetricLightCount = 2,
+    };
+    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace" };
+
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
     LightType lightType = LightType::Point;
@@ -198,6 +206,8 @@ struct LightNode : Node {
 
     float shadowMapRange = 3.0f;
     float shadowMapFar = 2000.0f;
+
+    VolumetricType volumetricType = VolumetricType::ScreenSpace;
 
     LightNode();
     virtual void Serialize(Serializer& s);

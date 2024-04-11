@@ -1,6 +1,7 @@
 #if defined(LUZ_ENGINE)
 #pragma once
 using vec2 = glm::vec2;
+using ivec2 = glm::ivec2;
 using vec3 = glm::vec3;
 using vec4 = glm::vec4;
 using mat4 = glm::mat4;
@@ -9,6 +10,7 @@ using mat4 = glm::mat4;
 #define LUZ_BINDING_TEXTURE 0
 #define LUZ_BINDING_BUFFER 1
 #define LUZ_BINDING_TLAS 2
+#define LUZ_BINDING_STORAGE_IMAGE 3
 
 #define LUZ_MAX_LIGHTS 64
 #define LUZ_MAX_MODELS 8192
@@ -34,6 +36,8 @@ struct LightBlock {
     int numShadowSamples;
     float radius;
     int shadowMap;
+
+    // todo: add volumetric light type here
 
     mat4 viewProj[6];
     float zFar;
@@ -91,12 +95,22 @@ struct ShadowMapConstants {
     int lightIndex;
 };
 
+struct VolumetricLightConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int depthRID;
+    int lightRID;
+    ivec2 imageSize;
+    int pad[2];
+};
+
 #if !defined(LUZ_ENGINE)
 
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_ray_query : enable
+#extension GL_EXT_shader_image_load_formatted : require
 
 #define LIGHT_TYPE_POINT 0
 #define LIGHT_TYPE_DIRECTIONAL 2
@@ -125,10 +139,12 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer IndexBuffer {
 } indexBuffers[];
 
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
+layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 #define tlas tlasBuffer[scene.tlasRid]
 #define scene sceneBuffers[sceneBufferIndex].block
 #define model modelsBuffers[modelBufferIndex].models[modelID]
 #define vertexBuffer vertexBuffers[model.vertexBuffer]
+#define sceneBlock sceneBuffers[ctx.sceneBufferIndex].block
 
 #endif

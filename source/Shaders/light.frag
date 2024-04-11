@@ -267,8 +267,9 @@ void main() {
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
     vec3 color = ambient + Lo + emission.rgb;
 
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));
+    // color = color / (color + vec3(1.0));
+    // color = pow(color, vec3(1.0/2.2));
+    outColor = vec4(color, 1.0);
 
     // vec3 totalRadiance = color + emission.rgb;
 
@@ -277,5 +278,4 @@ void main() {
     // mapped = aces(mapped);
     
     // gamma correction 
-    outColor = vec4(color, 1.0);
 }

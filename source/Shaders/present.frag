@@ -66,7 +66,11 @@ void main() {
         imageRID = depthRID;
     }    
     vec4 value = texture(textures[imageRID], fragCoord);
-    if(imageType == 2) {
+    if (imageType == 0) {
+        vec3 color = value.rgb / (value.rgb + vec3(1.0));
+        color = pow(color, vec3(1.0/2.2));
+        value = vec4(color, 1.0);
+    } else if(imageType == 2) {
         value = (value + 1.0)/2.0;
     } else if(imageType == 5) {
         value = LinearizeDepth(value.r).xxxx;

@@ -169,6 +169,7 @@ struct Pipeline {
     struct Stage {
         ShaderStage::Stage stage;
         std::filesystem::path path;
+        std::string entryPoint = "main";
     };
     PipelinePoint::Point point;
     std::shared_ptr<PipelineResource> resource;
@@ -240,6 +241,7 @@ void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
 void CmdDrawPassThrough();
 void CmdDrawImGui(ImDrawData* data);
+void CmdDispatch(const glm::ivec3& groups);
 
 int CmdBeginTimeStamp(const std::string& name);
 void CmdEndTimeStamp(int timeStampIndex);

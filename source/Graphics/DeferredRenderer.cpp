@@ -16,6 +16,7 @@ struct Context {
     vkw::Pipeline lightPipeline;
     vkw::Pipeline composePipeline;
     vkw::Pipeline shadowMapPipeline;
+    vkw::Pipeline ssvlPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -90,6 +91,13 @@ void CreateShaders() {
         .colorFormats = {vkw::Format::BGRA8_unorm},
         .useDepth = false,
     });
+    ctx.ssvlPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricLight.comp"},
+        },
+        .name = "VolumetricLight Pipeline",
+    });
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
@@ -124,8 +132,8 @@ void CreateImages(uint32_t width, uint32_t height) {
     ctx.light = vkw::CreateImage({
         .width = width,
         .height = height,
-        .format = vkw::Format::RGBA8_unorm,
-        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
         .name = "Light Attachment"
     });
     ctx.depth = vkw::CreateImage({
@@ -190,6 +198,20 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     vkw::CmdEndRendering();
     vkw::CmdBarrier(img, vkw::Layout::DepthRead);
     shadowMap.readable = true;
+}
+
+void VolumetricLightPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.ssvlPipeline);
+    VolumetricLightConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.lightRID = ctx.light.RID();
+    constants.imageSize = {ctx.light.width, ctx.light.height};
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
 void LightPass(LightConstants constants) {
