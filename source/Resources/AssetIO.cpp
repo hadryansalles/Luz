@@ -1,7 +1,7 @@
-#include "Luzpch.hpp"
-
+#include "Util.hpp"
 #include "AssetIO.hpp"
 #include "AssetManager.hpp"
+#include "Log.hpp"
 
 #define TINYGLTF_IMPLEMENTATION
 #include <tiny_gltf.h>
@@ -399,16 +399,18 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string err;
+    std::string warn;
     std::string filename = path.stem().string();
     std::string parentPath = path.parent_path().string() + "/";
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str(),parentPath.c_str(), true)) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(), parentPath.c_str(), true)) {
         LOG_ERROR("{}", err);
+        LOG_WARN("{}", warn);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
 
-    if (err != "") {
-        LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), err);
+    if (warn != "") {
+        LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
     // convert obj material to my material
@@ -417,7 +419,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     std::unordered_map<std::string, Ref<TextureAsset>> textureAssets;
     for (size_t i = 0; i < materials.size(); i++) {
         Ref<MaterialAsset> asset = manager.CreateAsset<MaterialAsset>(filename + ":" + materials[i].name);
-        materialAssets.push_back(asset);
+        //asset->color = glm::vec4(1, 0, 0, 1);
         asset->color = glm::vec4(glm::make_vec3(materials[i].diffuse), 1);
         asset->emission = glm::make_vec3(materials[i].emission);
         asset->metallic = materials[i].metallic;
@@ -435,6 +437,16 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                 asset->colorMap = textureAssets[materials[i].diffuse_texname];
             }
         }
+        if (materials[i].normal_texname != "") {
+            if (textureAssets.find(materials[i].normal_texname) == textureAssets.end()) {
+                asset->normalMap = manager.CreateAsset<TextureAsset>(materials[i].normal_texname);
+                ImportTexture(parentPath + materials[i].normal_texname, asset->normalMap);
+                textureAssets[materials[i].normal_texname] = asset->normalMap;
+            } else {
+                asset->normalMap = textureAssets[materials[i].normal_texname];
+            }
+        }
+        materialAssets.push_back(asset);
     }
 
     Ref<SceneAsset> scene = manager.CreateAsset<SceneAsset>(filename);
@@ -499,6 +511,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
             }
         }
     }
+    Log::Info("Objects: %d", parentNode->children.size());
     return scene->uuid;
 }
 

@@ -99,8 +99,8 @@ struct MeshAsset : Asset {
 struct MaterialAsset : Asset {
     glm::vec4 color = glm::vec4(1.0f);
     glm::vec3 emission = glm::vec3(0.0f);
-    f32 metallic = 1;
-    f32 roughness = 1;
+    f32 metallic = 0;
+    f32 roughness = 0.5;
     Ref<TextureAsset> aoMap;
     Ref<TextureAsset> colorMap;
     Ref<TextureAsset> normalMap;
@@ -255,8 +255,8 @@ struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
     glm::vec3 ambientLightColor = glm::vec3(1);
     float ambientLight = 0.01f;
-    int aoSamples = 32;
-    int lightSamples = 16;
+    int aoSamples = 4;
+    int lightSamples = 2;
     float aoMin = 0.0001f;
     float aoMax = 1.0000f;
     float exposure = 2.0f;

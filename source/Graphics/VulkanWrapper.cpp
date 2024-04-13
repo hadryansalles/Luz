@@ -1794,10 +1794,10 @@ void Context::CreateDevice() {
 
     // create bindless resources
     {
-        const u32 MAX_STORAGE = 4096;
-        const u32 MAX_SAMPLEDIMAGES = 4096;
+        const u32 MAX_STORAGE = 8192;
+        const u32 MAX_SAMPLEDIMAGES = 8192;
         const u32 MAX_ACCELERATIONSTRUCTURE = 64;
-        const u32 MAX_STORAGE_IMAGES = 4096;
+        const u32 MAX_STORAGE_IMAGES = 8192;
 
         for (int i = 0; i < MAX_STORAGE; i++) {
             availableBufferRID.push_back(i);
