@@ -38,16 +38,18 @@ void main() {
             continue;
         }
 
-        vec2 lightToPixel = pixelUV - lightUV;
-        float density = 0.001;
-        float samples = 32; // todo: push constants
-        float decay = 1;
-        for (float t = 0; t < 1.0; t += 1.0 / samples) {
-            vec2 sampleUV = lightUV + lightToPixel * t;
+        float weight = 0.0002;
+        int samples = 128; // todo: push constants
+        float decay = 1.0;
+        float density = 1.094;
+        vec2 deltaUV = (pixelUV - lightUV) * density * (1.0 / float(samples));
+        vec2 sampleUV = pixelUV;
+        for (int i = 0; i < samples; i++) {
+            sampleUV -= deltaUV;
             if (texture(textures[ctx.depthRID], sampleUV).r == 1.0) {
-                radiance += light.color * light.intensity * density * decay;
+                radiance += light.color * light.intensity * weight * decay;
             }
-            decay *= 0.99;
+            decay *= 1.0;
         }
     }
     vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
