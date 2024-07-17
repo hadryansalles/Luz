@@ -453,10 +453,13 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     Ref<Node> parentNode = manager.CreateObject<Node>(filename);
     scene->Add(parentNode);
     for (size_t i = 0; i < shapes.size(); i++) {
+        if (shapes[i].mesh.indices.size() == 0) {
+            continue;
+        }
         std::unordered_map<MeshAsset::MeshVertex, uint32_t> uniqueVertices{};
         int splittedShapeIndex = 0;
         size_t j = 0;
-        size_t lastMaterialId = shapes[i].mesh.material_ids[0];
+        size_t lastMaterialId = shapes[i].mesh.material_ids.size() > 0 ? shapes[i].mesh.material_ids[0] : -1;
         Ref<MeshAsset> asset = manager.CreateAsset<MeshAsset>(filename + ":" + shapes[i].name);
         for (const auto& index : shapes[i].mesh.indices) {
             MeshAsset::MeshVertex vertex{};
