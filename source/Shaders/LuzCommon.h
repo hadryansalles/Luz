@@ -22,6 +22,9 @@ using mat4 = glm::mat4;
 #define SHADOW_TYPE_RAYTRACING 1
 #define SHADOW_TYPE_MAP 2
 
+#define VOLUMETRIC_TYPE_SCREEN_SPACE 1
+#define VOLUMETRIC_TYPE_SHADOW_MAP 2
+
 struct LightBlock {
     vec3 color;
     float intensity;
@@ -37,11 +40,10 @@ struct LightBlock {
     float radius;
     int shadowMap;
 
-    // todo: add volumetric light type here
-
     mat4 viewProj[6];
     float zFar;
-    float pad[3];
+    int volumetricType;
+    float pad[2];
 };
 
 struct ModelBlock {

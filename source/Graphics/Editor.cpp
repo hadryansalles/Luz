@@ -377,6 +377,15 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         }
         ImGui::EndCombo();
     }
+    if (ImGui::BeginCombo("Volumetric", LightNode::volumetricTypeNames[node->volumetricType])) {
+        for (int i = 0; i < LightNode::VolumetricType::VolumetricLightCount; i++) {
+            bool selected = node->volumetricType == i;
+            if (ImGui::Selectable(LightNode::volumetricTypeNames[i], &selected)) {
+                node->volumetricType = (LightNode::VolumetricType)i;
+            }
+        }
+        ImGui::EndCombo();
+    }
     if (node->lightType == LightNode::LightType::Spot) {
         ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
         ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);

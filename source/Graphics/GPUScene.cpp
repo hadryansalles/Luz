@@ -179,6 +179,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         block.radius = light->radius;
         block.zFar = light->shadowMapFar;
         block.shadowMap = -1;
+        block.volumetricType = light->volumetricType;
 
         bool isPoint = false;
         glm::vec3 pos = light->GetWorldPosition();

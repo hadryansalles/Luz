@@ -205,7 +205,8 @@ private:
         vkw::CmdEndTimeStamp(lightTS);
 
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
-        DeferredShading::VolumetricLightPass(gpuScene);
+        DeferredShading::ScreenSpaceVolumetricLightPass(gpuScene);
+        DeferredShading::ShadowMapVolumetricLightPass(gpuScene);
         vkw::CmdEndTimeStamp(volumetricTS);
 
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");

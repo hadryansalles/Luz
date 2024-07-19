@@ -17,6 +17,7 @@ struct Context {
     vkw::Pipeline composePipeline;
     vkw::Pipeline shadowMapPipeline;
     vkw::Pipeline ssvlPipeline;
+    vkw::Pipeline shadowMapVolumetricLightPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -94,9 +95,16 @@ void CreateShaders() {
     ctx.ssvlPipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Compute,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "volumetricLight.comp"},
+            {.stage = vkw::ShaderStage::Compute, .path = "screenSpaceVolumetricLight.comp"},
         },
         .name = "VolumetricLight Pipeline",
+    });
+    ctx.shadowMapVolumetricLightPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "shadowMapVolumetricLight.comp"},
+        },
+        .name = "ShadowMapVolumetricLight Pipeline",
     });
 }
 
@@ -200,9 +208,23 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     shadowMap.readable = true;
 }
 
-void VolumetricLightPass(GPUScene& gpuScene) {
+void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene) {
     vkw::CmdBarrier(ctx.light, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.ssvlPipeline);
+    VolumetricLightConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.lightRID = ctx.light.RID();
+    constants.imageSize = {ctx.light.width, ctx.light.height};
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+}
+
+void ShadowMapVolumetricLightPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.shadowMapVolumetricLightPipeline);
     VolumetricLightConstants constants;
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.modelBufferIndex = gpuScene.GetModelsBuffer();

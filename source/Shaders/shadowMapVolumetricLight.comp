@@ -1,0 +1,61 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    VolumetricLightConstants ctx;
+};
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+// todo: put in some header
+vec3 DepthToWorld(vec2 screenPos, float depth) {
+    vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePos = sceneBlock.inverseProj*clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    vec4 worldSpacePos = sceneBlock.inverseView*viewSpacePos;
+    return worldSpacePos.xyz;
+}
+
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
+        return;
+    }
+
+    vec2 pixelUV = pixelPos / vec2(ctx.imageSize);
+    float pixelDepth = texture(textures[ctx.depthRID], pixelUV).r;
+    vec3 worldPos = DepthToWorld(pixelUV, pixelDepth);
+    vec3 camPos = sceneBlock.camPos;
+    vec3 radiance = vec3(0);
+
+    for (int i = 0; i < sceneBlock.numLights; i++) {
+        LightBlock light = sceneBlock.lights[i];
+        if (light.volumetricType != VOLUMETRIC_TYPE_SHADOW_MAP) {
+            continue;
+        }
+
+        float weight = 0.0002;
+        int samples = 128; // todo: push constants
+        float decay = 1.0;
+        float density = 1.094;
+        vec3 deltaPos = (camPos - worldPos) * density * (1.0 / float(samples));
+        vec3 samplePos = camPos;
+        for (int i = 0; i < samples; i++) {
+            samplePos -= deltaPos;
+
+            vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
+            float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+            if (sampleInLight.z < shadowDepth) {
+                radiance += light.color * light.intensity * weight * decay;
+            }
+
+            decay *= 1.0;
+        }
+    }
+    vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
+    rgba += vec4(radiance, 0);
+    imageStore(images[ctx.lightRID], pixelPos, rgba);
+}
