@@ -218,7 +218,6 @@ Pipeline CreatePipeline(const PipelineDesc& desc);
 TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
 BLAS CreateBLAS(const BLASDesc& desc);
 
-void AcquireImage();
 void SubmitAndPresent();
 bool GetSwapChainDirty();
 

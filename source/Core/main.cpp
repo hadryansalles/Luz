@@ -231,11 +231,10 @@ private:
     void DrawFrame() {
         LUZ_PROFILE_FUNC();
         DrawEditor();
-        vkw::AcquireImage();
+        RenderFrame();
         if (vkw::GetSwapChainDirty()) {
             return;
         }
-        RenderFrame();
         vkw::SubmitAndPresent();
         frameCount = (frameCount + 1) % (1 << 15);
     }

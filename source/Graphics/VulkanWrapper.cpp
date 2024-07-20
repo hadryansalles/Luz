@@ -80,6 +80,8 @@ static const char *VK_ERROR_STRING(VkResult result) {
 
 namespace vkw {
 
+void AcquireImage();
+
 struct Context {
     void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
     void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
@@ -175,7 +177,7 @@ struct Context {
     uint32_t framesInFlight = 3;
     VkFormat depthFormat;
     VkExtent2D swapChainExtent;
-    uint32_t swapChainCurrentFrame;
+    uint32_t swapChainCurrentFrame = 0;
     bool swapChainDirty = true;
     uint32_t currentImageIndex = 0;
 
@@ -218,7 +220,7 @@ struct Context {
         return swapChainImages[currentImageIndex];
     }
     inline CommandResources& GetCurrentCommandResources() {
-        return queues[currentQueue].commands[currentImageIndex];
+        return queues[currentQueue].commands[swapChainCurrentFrame];
     }
 
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
@@ -421,6 +423,10 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     if (usage & BufferUsage::AccelerationStructureInput) {
         usage |= BufferUsage::Address;
         usage |= BufferUsage::TransferDst;
+    }
+
+    if (usage & BufferUsage::AccelerationStructure) {
+        usage |= BufferUsage::Address;
     }
 
     std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
@@ -1211,6 +1217,7 @@ void CmdEndRendering() {
 }
 
 void CmdBeginPresent() {
+    vkw::AcquireImage();
     vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
     vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
 }
@@ -1519,7 +1526,7 @@ void Context::CreateInstance(GLFWwindow* glfwWindow) {
     }
 
     // almost all vulkan functions return VkResult, either VK_SUCCESS or an error code
-    auto res = vkCreateInstance(&createInfo, allocator, &instance); 
+    auto res = vkCreateInstance(&createInfo, allocator, &instance);
     DEBUG_VK(res, "Failed to create Vulkan instance!");
 
     DEBUG_TRACE("Created instance.");
@@ -2168,16 +2175,13 @@ void Context::DestroySwapChain() {
 void AcquireImage() {
     LUZ_PROFILE_FUNC();
 
-    uint32_t imageIndex;
-    auto res = vkAcquireNextImageKHR(_ctx.device, _ctx.swapChain, UINT64_MAX, _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+    auto res = vkAcquireNextImageKHR(_ctx.device, _ctx.swapChain, UINT64_MAX, _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame], VK_NULL_HANDLE, &_ctx.currentImageIndex);
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR) {
         _ctx.swapChainDirty = true;
     } else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
         DEBUG_VK(res, "Failed to acquire swap chain image!");
     }
-
-    _ctx.currentImageIndex = imageIndex;
 }
 
 bool GetSwapChainDirty() {
@@ -2193,35 +2197,26 @@ void SubmitAndPresent() {
 
     auto& cmd = _ctx.GetCurrentCommandResources();
 
+    VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    VkSemaphore waitSemaphores[] = { _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame] };
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.pWaitSemaphores = &_ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame];
+    submitInfo.pWaitDstStageMask = &waitStages;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &(cmd.buffer);
-
-    VkSemaphore signalSemaphores[] = { _ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame] };
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
+    submitInfo.pSignalSemaphores = &_ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame];
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores;
-
-    VkSwapchainKHR swapChains[] = { _ctx.swapChain };
+    presentInfo.pWaitSemaphores = submitInfo.pSignalSemaphores;
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
+    presentInfo.pSwapchains = &_ctx.swapChain;
     presentInfo.pImageIndices = &_ctx.currentImageIndex;
     presentInfo.pResults = nullptr;
 
-    //vkEndCommandBuffer(cmd.buffer);
-    //auto res = vkQueueSubmit(_ctx.queues[_ctx.currentQueue].queue, 1, &submitInfo, cmd.fence);
-    //DEBUG_VK(res, "Failed to submit command buffer");
     _ctx.EndCommandBuffer(submitInfo);
 
     auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
@@ -2307,7 +2302,7 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 }
 
 void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
-    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    CommandResources& cmd = GetCurrentCommandResources();
     if (stagingBufferSize - cmd.stagingOffset < size) {
         LOG_ERROR("not enough size in staging buffer to copy");
         // todo: allocate additional buffer
@@ -2319,7 +2314,7 @@ void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset
 }
 
 void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
-    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    CommandResources& cmd = GetCurrentCommandResources();
     VkBufferCopy copyRegion{};
     copyRegion.srcOffset = srcOffset;
     copyRegion.dstOffset = dstOffset;
@@ -2328,7 +2323,7 @@ void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffse
 }
 
 void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
-    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    CommandResources& cmd = GetCurrentCommandResources();
     if (stagingBufferSize - cmd.stagingOffset < size) {
         LOG_ERROR("not enough size in staging buffer to copy");
         // todo: allocate additional buffer
@@ -2340,7 +2335,7 @@ void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
 }
 
 void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
-    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    CommandResources& cmd = GetCurrentCommandResources();
     VkBufferImageCopy region{};
     region.bufferOffset = srcOffset;
     region.bufferRowLength = 0;
@@ -2356,7 +2351,7 @@ void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset
 }
 
 void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
-    CommandResources& cmd = queues[currentQueue].commands[currentImageIndex];
+    CommandResources& cmd = GetCurrentCommandResources();
     VkImageSubresourceRange range = {};
     range.aspectMask = (VkImageAspectFlags)img.aspect;
     range.baseMipLevel = 0;
