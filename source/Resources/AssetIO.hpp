@@ -15,4 +15,5 @@ namespace AssetIO {
     void WriteFileBytes(const std::filesystem::path& path, const std::vector<u8>& content);
     std::string ReadFile(const std::filesystem::path& path);
     std::vector<u8> ReadFileBytes(const std::filesystem::path& path);
+    void ReadTexture(const std::filesystem::path& path, std::vector<u8>& data, i32& w, i32& h);
 }

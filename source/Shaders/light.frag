@@ -82,10 +82,9 @@ vec3 HemisphereSample(vec2 rng) {
 }
 
 vec4 BlueNoiseSample(int i) {
-    // vec2 blueNoiseSize = textureSize(BLUE_NOISE_TEXTURE, 0);
-    // ivec2 fragUV = ivec2(mod(gl_FragCoord.xy + GOLDEN_RATIO*blueNoiseSize*(frame%64 + i*vec2(5, 7)), blueNoiseSize));
-    // return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
-    return vec4(1, 0, 0, 0);
+    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
+    ivec2 fragUV = ivec2(mod(gl_FragCoord.xy, blueNoiseSize));
+    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + frame%128));
 }
 
 vec3 aces(vec3 x) {
@@ -105,10 +104,12 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     vec3 lightBitangent = normalize(cross(lightTangent, L));
     float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
-        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
-        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
-        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
+        vec2 blueNoise = BlueNoiseSample(i).rg;
+        // vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 rng = (0) * blueNoise + (1 - 0)*whiteNoise;
         // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + numSamples*i));
+        vec2 rng = blueNoise;
         vec2 diskSample = DiskSample(rng, radius);
         // vec2 diskSample = BlueNoiseInDisk[(i+frame)%64];
         // Ray Query for shadow
@@ -140,12 +141,7 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     float tMin = scene.aoMin;
     float tMax = scene.aoMax;
     for(int i = 0; i < scene.aoNumSamples; i++) {
-        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * scene.aoNumSamples + i)));
-        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
-        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
-        // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
-        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
-        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + scene.aoNumSamples*i));
+        vec2 rng = BlueNoiseSample(i).rg;
         vec3 randomVec = HemisphereSample(rng);
         vec3 direction = tangent*randomVec.x + bitangent*randomVec.y + normal*randomVec.z;
         // Ray Query for shadow
@@ -160,15 +156,6 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     }
     return ao/scene.aoNumSamples;
 }
-
-vec3 gridSamplingDisk[20] = vec3[]
-(
-   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
-   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
-   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
-   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
-   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
-);
 
 float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
     float shadowBias = max(length(fragPos - scene.camPos) * 0.01, 0.05);

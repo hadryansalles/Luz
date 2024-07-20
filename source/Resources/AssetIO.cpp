@@ -82,11 +82,20 @@ UUID Import(const std::filesystem::path& path, AssetManager& assets) {
     return 0;
 }
 
+void ReadTexture(const std::filesystem::path& path, std::vector<u8>& data, i32& w, i32& h) {
+    i32 channels = 4;
+    u8* indata = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+    data.resize(w * h * 4);
+    memcpy(data.data(), indata, data.size());
+    stbi_image_free(indata);
+}
+
 void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     u8* indata = stbi_load(path.string().c_str(), &t->width, &t->height, &t->channels, 4);
     t->data.resize(t->width * t->height * 4);
     memcpy(t->data.data(), indata, t->data.size());
     t->channels = 4;
+    stbi_image_free(indata);
 }
 
 UUID ImportTexture(const std::filesystem::path& path, AssetManager& assets) {

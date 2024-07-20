@@ -1,6 +1,7 @@
 #include <imgui/imgui.h>
 #include "GPUScene.hpp"
 #include "LuzCommon.h"
+#include "AssetIO.hpp"
 
 struct GPUSceneImpl {
     vkw::Buffer sceneBuffer;
@@ -29,6 +30,8 @@ struct GPUSceneImpl {
 
     std::unordered_map<UUID, GPUMesh> meshes;
     std::unordered_map<UUID, GPUTexture> textures;
+
+    vkw::Image blueNoise;
 };
 
 GPUScene::GPUScene() {
@@ -43,6 +46,26 @@ void GPUScene::Create() {
     impl->tlas = vkw::CreateTLAS(LUZ_MAX_MODELS, "mainTLAS");
     impl->sceneBuffer = vkw::CreateBuffer(sizeof(SceneBlock), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
     impl->modelsBuffer = vkw::CreateBuffer(sizeof(ModelBlock) * LUZ_MAX_MODELS, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+
+    // create blue noise resource
+    {
+        i32 w, h;
+        std::vector<u8> blueNoiseData;
+        AssetIO::ReadTexture("assets/LDR_RGBA_0.png", blueNoiseData, w, h);
+        impl->blueNoise = vkw::CreateImage({
+            .width = uint32_t(w),
+            .height = uint32_t(h),
+            .format = vkw::Format::RGBA8_unorm,
+            .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+            .name = "Blue Noise Texture",
+        });
+        vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+        vkw::CmdBarrier(impl->blueNoise, vkw::Layout::TransferDst);
+        vkw::CmdCopy(impl->blueNoise, blueNoiseData.data(), w * h * 4);
+        vkw::CmdBarrier(impl->blueNoise, vkw::Layout::ShaderRead);
+        vkw::EndCommandBuffer();
+        vkw::WaitQueue(vkw::Queue::Graphics);
+    }
 }
 
 void GPUScene::Destroy() {
@@ -50,7 +73,9 @@ void GPUScene::Destroy() {
     impl->sceneBuffer = {};
     impl->modelsBuffer = {};
     impl->shadowMaps = {};
+    impl->blueNoise = {};
     ClearAssets();
+    impl = {};
 }
 
 void GPUScene::AddMesh(const Ref<MeshAsset>& asset) {
@@ -230,7 +255,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.inverseProj = glm::inverse(camera->GetProj());
     s.inverseView = glm::inverse(camera->GetView());
     s.tlasRid = impl->tlas.RID();
-    s.useBlueNoise = false;
+    s.blueNoiseTexture = impl->blueNoise.RID();
     s.whiteTexture = -1;
     s.blackTexture = -1;
     s.shadowType = scene->shadowType;

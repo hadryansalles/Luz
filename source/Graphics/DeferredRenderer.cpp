@@ -208,7 +208,7 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     shadowMap.readable = true;
 }
 
-void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene) {
+void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame) {
     vkw::CmdBarrier(ctx.light, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.ssvlPipeline);
     VolumetricLightConstants constants;
@@ -217,12 +217,13 @@ void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene) {
     constants.depthRID = ctx.depth.RID();
     constants.lightRID = ctx.light.RID();
     constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.frame = frame;
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
     vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
-void ShadowMapVolumetricLightPass(GPUScene& gpuScene) {
+void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame) {
     vkw::CmdBarrier(ctx.light, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.shadowMapVolumetricLightPipeline);
     VolumetricLightConstants constants;
@@ -231,6 +232,7 @@ void ShadowMapVolumetricLightPass(GPUScene& gpuScene) {
     constants.depthRID = ctx.depth.RID();
     constants.lightRID = ctx.light.RID();
     constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.frame = frame;
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
     vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);

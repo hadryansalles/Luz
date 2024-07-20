@@ -82,9 +82,9 @@ struct SceneBlock {
     float exposure;
     int aoNumSamples;
 
-    int useBlueNoise;
     int whiteTexture;
     int blackTexture;
+    int blueNoiseTexture;
     int tlasRid;
 
     int shadowType;
@@ -103,7 +103,8 @@ struct VolumetricLightConstants {
     int depthRID;
     int lightRID;
     ivec2 imageSize;
-    int pad[2];
+    int frame;
+    int pad[1];
 };
 
 #if !defined(LUZ_ENGINE)
@@ -145,6 +146,7 @@ layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 #define tlas tlasBuffer[scene.tlasRid]
 #define scene sceneBuffers[sceneBufferIndex].block
+#define scene2 sceneBuffers[ctx.sceneBufferIndex].block
 #define model modelsBuffers[modelBufferIndex].models[modelID]
 #define vertexBuffer vertexBuffers[model.vertexBuffer]
 #define sceneBlock sceneBuffers[ctx.sceneBufferIndex].block

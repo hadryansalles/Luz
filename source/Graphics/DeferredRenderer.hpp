@@ -46,8 +46,8 @@ void CreateShaders();
 void CreateImages(uint32_t width, uint32_t height);
 void Destroy();
 
-void ShadowMapVolumetricLightPass(GPUScene& gpuScene);
-void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene);
+void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame);
+void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame);
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
 void LightPass(LightConstants constants);
 void ComposePass(bool separatePass, Output output);

@@ -19,6 +19,13 @@ vec3 DepthToWorld(vec2 screenPos, float depth) {
     return worldSpacePos.xyz;
 }
 
+// todo: put in some header
+vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
+    vec2 blueNoiseSize = textureSize(textures[scene2.blueNoiseTexture], 0);
+    ivec2 fragUV = ivec2(mod(pixelPos, blueNoiseSize));
+    return fract(texelFetch(textures[scene2.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
+}
+
 void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
@@ -37,12 +44,12 @@ void main() {
             continue;
         }
 
-        float weight = 0.0002;
+        float weight = 0.00005;
         int samples = 128; // todo: push constants
         float decay = 1.0;
         float density = 1.094;
         vec3 deltaPos = (camPos - worldPos) * density * (1.0 / float(samples));
-        vec3 samplePos = camPos;
+        vec3 samplePos = camPos + BlueNoiseSample(pixelPos, 0).r * length(deltaPos);
         for (int i = 0; i < samples; i++) {
             samplePos -= deltaPos;
 
