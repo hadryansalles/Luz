@@ -51,7 +51,7 @@ void GPUScene::Create() {
     {
         i32 w, h;
         std::vector<u8> blueNoiseData;
-        AssetIO::ReadTexture("assets/LDR_RGBA_0.png", blueNoiseData, w, h);
+        AssetIO::ReadTexture("assets/blue_noise.png", blueNoiseData, w, h);
         impl->blueNoise = vkw::CreateImage({
             .width = uint32_t(w),
             .height = uint32_t(h),
@@ -238,11 +238,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         }
 
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
-        if (scene->shadowType == ShadowType::ShadowMap) {
-            block.shadowMap = impl->shadowMaps[light->uuid].img.RID();
-        } else {
-            block.shadowMap = -1;
-        }
+        block.shadowMap = impl->shadowMaps[light->uuid].img.RID();
     }
     s.ambientLightColor = scene->ambientLightColor;
     s.ambientLightIntensity = scene->ambientLight;

@@ -262,7 +262,7 @@ struct SceneAsset : Asset {
     float aoMax = 1.0000f;
     float exposure = 2.0f;
     ShadowType shadowType = ShadowType::ShadowRayTraced;
-    uint32_t shadowResolution = 4096;
+    uint32_t shadowResolution = 1024;
 
     float camSpeed = 0.01;
     float zoomSpeed = 0.1;

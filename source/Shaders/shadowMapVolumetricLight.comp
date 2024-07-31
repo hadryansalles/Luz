@@ -26,6 +26,26 @@ vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
     return fract(texelFetch(textures[scene2.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
 }
 
+float EvaluateShadow(LightBlock light, vec3 samplePos) {
+    if (light.type == LIGHT_TYPE_POINT) {
+        vec3 lightToFrag = samplePos - light.position;
+        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+        if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
+            return 1.0f;
+        } else {
+            return 0.0f;
+        }
+    } else {
+        vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
+        float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+        if (sampleInLight.z >= shadowDepth) {
+            return 1.0f;
+        } else {
+            return 0.0f;
+        }
+    }
+}
+
 void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
@@ -44,7 +64,7 @@ void main() {
             continue;
         }
 
-        float weight = 0.00005;
+        float weight = 0.000005;
         int samples = 128; // todo: push constants
         float decay = 1.0;
         float density = 1.094;
@@ -52,13 +72,7 @@ void main() {
         vec3 samplePos = camPos + BlueNoiseSample(pixelPos, 0).r * length(deltaPos);
         for (int i = 0; i < samples; i++) {
             samplePos -= deltaPos;
-
-            vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
-            float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
-            if (sampleInLight.z < shadowDepth) {
-                radiance += light.color * light.intensity * weight * decay;
-            }
-
+            radiance += (1.0 - EvaluateShadow(light, samplePos)) * light.color * light.intensity * weight * decay;
             decay *= 1.0;
         }
     }

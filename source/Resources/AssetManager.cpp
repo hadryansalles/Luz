@@ -131,6 +131,7 @@ void LightNode::Serialize(Serializer& s) {
     s("radius", radius);
     s("shadowMapRange", shadowMapRange);
     s("shadowMapFar", shadowMapFar);
+    s("volumetricType", volumetricType);
 }
 
 // Asset Manager

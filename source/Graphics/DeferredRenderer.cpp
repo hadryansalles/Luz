@@ -179,10 +179,6 @@ void EndPass() {
 }
 
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
-    if (scene->shadowType != ShadowType::ShadowMap) {
-        return;
-    }
-
     ShadowMapData& shadowMap = gpuScene.GetShadowMap(light->uuid);
     vkw::Image& img = shadowMap.img;
     vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
