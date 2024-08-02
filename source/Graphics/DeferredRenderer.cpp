@@ -28,6 +28,7 @@ struct Context {
     vkw::Image depth;
     vkw::Image light;
     vkw::Image compose;
+    vkw::Image debug;
 };
 
 struct ComposeConstant {
@@ -35,9 +36,11 @@ struct ComposeConstant {
     int lightRID;
     int albedoRID;
     int normalRID;
+
     int materialRID;
     int emissionRID;
     int depthRID;
+    int debugRID;
 };
 
 Context ctx;
@@ -109,11 +112,16 @@ void CreateShaders() {
         .name = "ShadowMapVolumetricLight Pipeline",
     });
     ctx.lineRenderingPipeline = vkw::CreatePipeline({
-        .point = vkw::PipelinePoint::Compute,
+        .point = vkw::PipelinePoint::Graphics,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "lineRendering.comp"},
+            {.stage = vkw::ShaderStage::Vertex, .path = "debug.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "debug.frag"},
         },
-        .name = "LineRendering Pipeline",
+        .name = "DebugDraw Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.albedo.format},
+        .useDepth = false,
+        .lineTopology = true,
     });
 }
 
@@ -124,6 +132,13 @@ void CreateImages(uint32_t width, uint32_t height) {
         .format = vkw::Format::RGBA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Albedo Attachment"
+    });
+    ctx.debug = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Debug Attachment"
     });
     ctx.normal = vkw::CreateImage({
         .width = width,
@@ -275,6 +290,7 @@ void ComposePass(bool separatePass, Output output) {
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
     constants.imageType = uint32_t(output);
+    constants.debugRID = ctx.debug.RID();
 
     if (separatePass) {
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
@@ -290,20 +306,32 @@ void ComposePass(bool separatePass, Output output) {
 }
 
 void LineRenderingPass(GPUScene& gpuScene) {
-    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ ctx.debug });
     vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
+
     LineRenderingConstants constants;
     constants.imageSize = {ctx.light.width, ctx.light.height};
-    constants.linesRID = gpuScene.GetLinesBuffer();
+    constants.linesRID = 0;
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.depthRID = ctx.depth.RID();
     constants.outputRID = ctx.light.RID();
-    uint32_t lineCount = 0;
-    DebugDraw::Get(lineCount);
-    constants.lineCount = int(lineCount);
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({lineCount / 32 + 1, 1, 1});
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+    constants.lineCount = 0;
+
+    auto strips = DebugDraw::Get();
+    int offset = 0;
+    for (const auto& s : strips) {
+        if (!s.config.hide) {
+            constants.color = s.config.color;
+            constants.depthAware = s.config.depthAware;
+            vkw::CmdPushConstants(&constants, sizeof(constants));
+            vkw::CmdDrawLineStrip(gpuScene.GetLinesBuffer(), offset, s.points.size(), s.config.thickness);
+        }
+        offset += s.points.size();
+    }
+
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
 vkw::Image& GetComposedImage() {

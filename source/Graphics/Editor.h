@@ -27,6 +27,7 @@ struct Editor {
     void AssetsPanel(AssetManager& assetManager);
     void ProfilerPanel();
     void ProfilerPopup();
+    void DebugDrawPanel();
     bool ViewportPanel(vkw::Image& image, glm::ivec2& newSize);
     void Select(AssetManager& assetManager, const std::vector<Ref<Node>>& uuids);
 private:

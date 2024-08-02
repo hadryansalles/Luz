@@ -154,6 +154,7 @@ private:
             editor.DemoPanel();
             editor.ScenePanel(scene);
             editor.InspectorPanel(assetManager, camera, gpuScene);
+            editor.DebugDrawPanel();
         } else {
             newViewportSize = { Window::GetWidth(), Window::GetHeight() };
             viewportHovered = true;

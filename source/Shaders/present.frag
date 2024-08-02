@@ -12,6 +12,7 @@ layout(push_constant) uniform PresentConstants {
     int materialRID;
     int emissionRID;
     int depthRID;
+    int debugRID;
 };
 
 layout(location = 0) in vec2 fragTexCoord;
@@ -66,9 +67,11 @@ void main() {
         imageRID = depthRID;
     }    
     vec4 value = texture(textures[imageRID], fragCoord);
+    vec4 debugColor = texture(textures[debugRID], fragCoord);
     if (imageType == 0) {
         vec3 color = value.rgb / (value.rgb + vec3(1.0));
         color = pow(color, vec3(1.0/2.2));
+        color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
         value = vec4(color, 1.0);
     } else if(imageType == 2) {
         value = (value + 1.0)/2.0;

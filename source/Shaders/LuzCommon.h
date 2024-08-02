@@ -129,7 +129,9 @@ struct LineRenderingConstants {
     int depthRID;
     int outputRID;
     int lineCount;
-    int pad;
+    int depthAware;
+
+    vec4 color;
 };
 
 #if !defined(LUZ_ENGINE)

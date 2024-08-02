@@ -985,16 +985,21 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
         vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
 
-        // define the type of input of our pipeline
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        // with this parameter true we can break up lines and triangles in _STRIP topology modes
-        inputAssembly.primitiveRestartEnable = VK_FALSE;
-        
         std::vector<VkDynamicState> dynamicStates;
         dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
         dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+
+        // define the type of input of our pipeline
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        if (desc.lineTopology) {
+            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+            dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
+        } else {
+            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        }
+        // with this parameter true we can break up lines and triangles in _STRIP topology modes
+        inputAssembly.primitiveRestartEnable = VK_FALSE;
 
         VkPipelineDynamicStateCreateInfo dynamicCreate = {};
         dynamicCreate.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -1174,7 +1179,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
         colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachInfos[i].clearValue.color = { 0, 0, 0, 1 };
+        colorAttachInfos[i].clearValue.color = { 0, 0, 0, 0 };
     }
 
     renderingInfo.colorAttachmentCount = colorAttachInfos.size();
@@ -1233,6 +1238,14 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount)
     vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
     vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd.buffer, indexCount, 1, 0, 0, 0);
+}
+
+void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdSetLineWidth(cmd.buffer, thickness);
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
+    vkCmdDraw(cmd.buffer, pointCount, 1, firstPoint, 0);
 }
 
 void CmdDrawPassThrough() {

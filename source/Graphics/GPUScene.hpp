@@ -53,7 +53,7 @@ struct GPUScene {
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();
-    RID GetLinesBuffer();
+    vkw::Buffer GetLinesBuffer();
 
 private:
     GPUSceneImpl* impl;

@@ -48,7 +48,7 @@ void GPUScene::Create() {
     impl->tlas = vkw::CreateTLAS(LUZ_MAX_MODELS, "mainTLAS");
     impl->sceneBuffer = vkw::CreateBuffer(sizeof(SceneBlock), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
     impl->modelsBuffer = vkw::CreateBuffer(sizeof(ModelBlock) * LUZ_MAX_MODELS, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
-    impl->linesBuffer = vkw::CreateBuffer(sizeof(LineBlock) * LUZ_MAX_LINES, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+    impl->linesBuffer = vkw::CreateBuffer(sizeof(LineBlock) * LUZ_MAX_LINES, vkw::BufferUsage::Vertex | vkw::BufferUsage::TransferDst);
 
     // create blue noise resource
     {
@@ -203,6 +203,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
 
     std::vector<glm::vec4> frustumCorners;
     frustumCorners.reserve(8);
+    std::vector<glm::vec3> ps;
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
             for (int k = 0; k < 2; k++) {
@@ -213,9 +214,11 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
                     1.0f
                 );
                 frustumCorners.push_back(pt / pt.w);
+                ps.push_back(glm::vec3(pt / pt.w));
             }
         }
     }
+    DebugDraw::Box("frustum", ps[0], ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], ps[7]);
     glm::vec3 frustumCenter(0.0f);
     for (const glm::vec4& p : frustumCorners) {
         frustumCenter += glm::vec3(p);
@@ -252,12 +255,12 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
         } else {
             float r = light->shadowMapRange;
-            DebugDraw::Line(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
-            //DebugDraw::Config(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
+            // DebugDraw::Config(std::to_string(light->uuid), { .thickness = 4.0f });
+            // DebugDraw::Line(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
+            DebugDraw::Config("DEBUG1", { .color = {1, 0, 0, 1}, .thickness = 4.0f });
+            DebugDraw::Config("DEBUG2", { .color = {0, 1, 0, 1} });
             DebugDraw::Line("DEBUG1", glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
             DebugDraw::Rect("DEBUG2", glm::vec3(4, 0, 0), glm::vec3(4, 1, 0), glm::vec3(4, 1, 1), glm::vec3(4, 0, 1));
-            DebugDraw::Config("DEBUG1", { .color = {1, 0, 0, 1} });
-            DebugDraw::Config("DEBUG2", { .color = {0, 1, 0, 1} });
             glm::mat4 view = glm::lookAt(frustumCenter + light->GetWorldFront(), frustumCenter, glm::vec3(.0f, 1.0f, .0f));
             glm::vec3 frustumMin = frustumCorners[0];
             glm::vec3 frustumMax = frustumCorners[0];
@@ -322,9 +325,8 @@ void GPUScene::UpdateResourcesGPU() {
 }
 
 void GPUScene::UpdateLineResources() {
-    uint32_t count = 0;
-    void* data = DebugDraw::Get(count);
-    vkw::CmdCopy(impl->linesBuffer, data, sizeof(LineBlock)*count);
+    auto points = DebugDraw::GetPoints();
+    vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3)*points.size());
 }
 
 ShadowMapData& GPUScene::GetShadowMap(UUID uuid) {
@@ -347,6 +349,6 @@ RID GPUScene::GetModelsBuffer() {
     return impl->modelsBuffer.RID();
 }
 
-RID GPUScene::GetLinesBuffer() {
-    return impl->linesBuffer.RID();
+vkw::Buffer GPUScene::GetLinesBuffer() {
+    return impl->linesBuffer;
 }

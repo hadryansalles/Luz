@@ -186,6 +186,7 @@ struct PipelineDesc {
     bool useDepth = false;
     Format depthFormat;
     bool cullFront = false;
+    bool lineTopology = false;
 };
 
 struct BLAS {
@@ -238,6 +239,7 @@ void CmdPushConstants(void* data, uint32_t size);
 void CmdBuildBLAS(BLAS& blas);
 void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
+void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
 void CmdDrawPassThrough();
 void CmdDrawImGui(ImDrawData* data);
 void CmdDispatch(const glm::ivec3& groups);

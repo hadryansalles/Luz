@@ -5,6 +5,7 @@
 #include "AssetManager.hpp"
 #include "VulkanWrapper.h"
 #include "Window.hpp"
+#include "DebugDraw.h"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
@@ -506,6 +507,27 @@ bool Editor::ViewportPanel(vkw::Image& image, glm::ivec2& newViewportSize) {
 }
 
 void Editor::ProfilerPanel() {
+}
+
+void Editor::DebugDrawPanel() {
+    if (!ImGui::Begin("Debug Draw")) {
+        ImGui::End();
+        return;
+    }
+    auto data = DebugDraw::Get();
+    for (auto& line : data) {
+        if (ImGui::CollapsingHeader(line.name.c_str())) {
+            bool changed = ImGui::Checkbox("Hide", &line.config.hide);
+            changed |= ImGui::Checkbox("Update", &line.config.update);
+            changed |= ImGui::Checkbox("Depth", &line.config.depthAware);
+            changed |= ImGui::DragFloat("Thickness", &line.config.thickness);
+            changed |= ImGui::ColorPicker4("Color", glm::value_ptr(line.config.color));
+            if (changed) {
+                DebugDraw::Config(line.name, line.config, false);
+            }
+        }
+    }
+    ImGui::End();
 }
 
 void Editor::ProfilerPopup() {
