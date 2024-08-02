@@ -51,6 +51,7 @@ void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame);
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
 void LightPass(LightConstants constants);
 void ComposePass(bool separatePass, Output output);
+void LineRenderingPass(GPUScene& gpuScene);
 void BeginOpaquePass();
 void EndPass();
 

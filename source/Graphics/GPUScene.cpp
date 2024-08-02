@@ -2,10 +2,12 @@
 #include "GPUScene.hpp"
 #include "LuzCommon.h"
 #include "AssetIO.hpp"
+#include "DebugDraw.h"
 
 struct GPUSceneImpl {
     vkw::Buffer sceneBuffer;
     vkw::Buffer modelsBuffer;
+    vkw::Buffer linesBuffer;
 
     vkw::TLAS tlas;
 
@@ -46,6 +48,7 @@ void GPUScene::Create() {
     impl->tlas = vkw::CreateTLAS(LUZ_MAX_MODELS, "mainTLAS");
     impl->sceneBuffer = vkw::CreateBuffer(sizeof(SceneBlock), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
     impl->modelsBuffer = vkw::CreateBuffer(sizeof(ModelBlock) * LUZ_MAX_MODELS, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
+    impl->linesBuffer = vkw::CreateBuffer(sizeof(LineBlock) * LUZ_MAX_LINES, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst);
 
     // create blue noise resource
     {
@@ -72,6 +75,7 @@ void GPUScene::Destroy() {
     impl->tlas = {};
     impl->sceneBuffer = {};
     impl->modelsBuffer = {};
+    impl->linesBuffer = {};
     impl->shadowMaps = {};
     impl->blueNoise = {};
     ClearAssets();
@@ -152,7 +156,7 @@ void GPUScene::AddAssets(const AssetManager& assets) {
 }
 
 void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera) {
-    LUZ_PROFILE_NAMED("UpdateResourcesGPU");
+    LUZ_PROFILE_NAMED("UpdateResources");
     std::vector<Ref<MeshNode>> meshNodes;
     scene->GetAll<MeshNode>(ObjectType::MeshNode, meshNodes);
     impl->modelsBlock.clear();
@@ -191,6 +195,35 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
 
     SceneBlock& s = impl->sceneBlock;
     s.numLights = 0;
+
+    s.camPos = camera->eye;
+    s.projView = camera->GetProj() * camera->GetView();
+    s.inverseProj = glm::inverse(camera->GetProj());
+    s.inverseView = glm::inverse(camera->GetView());
+
+    std::vector<glm::vec4> frustumCorners;
+    frustumCorners.reserve(8);
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            for (int k = 0; k < 2; k++) {
+                const glm::vec4 pt = glm::inverse(s.projView) * glm::vec4(
+                    2.0f * i - 1.0f,
+                    2.0f * j - 1.0f,
+                    2.0f * k - 1.0f,
+                    1.0f
+                );
+                frustumCorners.push_back(pt / pt.w);
+            }
+        }
+    }
+    glm::vec3 frustumCenter(0.0f);
+    for (const glm::vec4& p : frustumCorners) {
+        frustumCenter += glm::vec3(p);
+    }
+    frustumCenter /= float(frustumCorners.size());
+    //frustumCenter = glm::vec3(0);
+    // Log::Info("Center=%.3f %.3f %.3f", frustumCenter.x, frustumCenter.y, frustumCenter.z);
+
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
         LightBlock& block = s.lights[s.numLights++];
         block.color = light->color;
@@ -219,8 +252,23 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
         } else {
             float r = light->shadowMapRange;
-            glm::mat4 view = glm::lookAt(pos, pos + light->GetWorldFront(), glm::vec3(.0f, 1.0f, .0f));
-            glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
+            DebugDraw::Line(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
+            //DebugDraw::Config(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
+            DebugDraw::Line("DEBUG1", glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+            DebugDraw::Rect("DEBUG2", glm::vec3(4, 0, 0), glm::vec3(4, 1, 0), glm::vec3(4, 1, 1), glm::vec3(4, 0, 1));
+            DebugDraw::Config("DEBUG1", { .color = {1, 0, 0, 1} });
+            DebugDraw::Config("DEBUG2", { .color = {0, 1, 0, 1} });
+            glm::mat4 view = glm::lookAt(frustumCenter + light->GetWorldFront(), frustumCenter, glm::vec3(.0f, 1.0f, .0f));
+            glm::vec3 frustumMin = frustumCorners[0];
+            glm::vec3 frustumMax = frustumCorners[0];
+            for (const glm::vec4& p : frustumCorners) {
+                frustumMin = glm::min(glm::vec3(view * p), frustumMin);
+                frustumMax = glm::max(glm::vec3(view * p), frustumMax);
+            }
+            frustumMin.z = frustumMin.z < 0 ? frustumMin.z * r : frustumMin.z / r;
+            frustumMax.z = frustumMax.z < 0 ? frustumMax.z / r : frustumMax.z * r;
+            glm::mat4 proj = glm::ortho(frustumMin.x, frustumMax.x, frustumMin.y, frustumMax.y, frustumMax.z, frustumMin.z);
+            //glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
             block.viewProj[0] = proj * view;
         }
         
@@ -246,10 +294,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.aoMin = scene->aoMin;
     s.aoNumSamples = scene->aoSamples > 0 ? scene->aoSamples : 0;
     s.exposure = scene->exposure;
-    s.camPos = camera->eye;
-    s.projView = camera->GetProj() * camera->GetView();
-    s.inverseProj = glm::inverse(camera->GetProj());
-    s.inverseView = glm::inverse(camera->GetView());
     s.tlasRid = impl->tlas.RID();
     s.blueNoiseTexture = impl->blueNoise.RID();
     s.whiteTexture = -1;
@@ -277,6 +321,12 @@ void GPUScene::UpdateResourcesGPU() {
     });
 }
 
+void GPUScene::UpdateLineResources() {
+    uint32_t count = 0;
+    void* data = DebugDraw::Get(count);
+    vkw::CmdCopy(impl->linesBuffer, data, sizeof(LineBlock)*count);
+}
+
 ShadowMapData& GPUScene::GetShadowMap(UUID uuid) {
     static ShadowMapData invalidData;
     if (impl->shadowMaps.find(uuid) != impl->shadowMaps.end()) {
@@ -295,4 +345,8 @@ RID GPUScene::GetSceneBuffer() {
 
 RID GPUScene::GetModelsBuffer() {
     return impl->modelsBuffer.RID();
+}
+
+RID GPUScene::GetLinesBuffer() {
+    return impl->linesBuffer.RID();
 }

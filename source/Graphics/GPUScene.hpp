@@ -46,12 +46,14 @@ struct GPUScene {
 
     void UpdateResources(const Ref<SceneAsset>& asset, const Ref<CameraNode>& camera);
     void UpdateResourcesGPU();
+    void UpdateLineResources();
 
     std::vector<GPUModel>& GetMeshModels();
     ShadowMapData& GetShadowMap(UUID uuid);
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();
+    RID GetLinesBuffer();
 
 private:
     GPUSceneImpl* impl;

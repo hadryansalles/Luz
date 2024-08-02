@@ -8,6 +8,7 @@
 #include "AssetManager.hpp"
 #include "GPUScene.hpp"
 #include "Editor.h"
+#include "DebugDraw.h"
 
 #include <stb_image.h>
 
@@ -65,11 +66,13 @@ private:
         DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         DeferredShading::CreateShaders();
         gpuScene.Create();
+        DebugDraw::Create();
         camera->extent = { viewportSize.x, viewportSize.y };
     }
 
     void Finish() {
         LUZ_PROFILE_FUNC();
+        DebugDraw::Destroy();
         gpuScene.Destroy();
         DeferredShading::Destroy();
         vkw::Destroy();
@@ -161,9 +164,14 @@ private:
 
     void RenderFrame() {
         gpuScene.UpdateResources(scene, camera);
+        DebugDraw::Update();
+
         LUZ_PROFILE_FUNC();
+
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+
         gpuScene.UpdateResourcesGPU();
+        gpuScene.UpdateLineResources();
 
         vkw::CmdBarrier();
 
@@ -172,7 +180,6 @@ private:
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-
 
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredShading::BeginOpaquePass();
@@ -209,6 +216,10 @@ private:
         DeferredShading::ShadowMapVolumetricLightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(volumetricTS);
 
+        auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
+        DeferredShading::LineRenderingPass(gpuScene);
+        vkw::CmdEndTimeStamp(lineTS);
+
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {
             vkw::CmdBeginPresent();
@@ -225,7 +236,6 @@ private:
 
         vkw::CmdEndPresent();
         vkw::CmdEndTimeStamp(totalTS);
-
     }
 
     void DrawFrame() {

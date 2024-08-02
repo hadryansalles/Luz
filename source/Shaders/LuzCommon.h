@@ -14,6 +14,7 @@ using mat4 = glm::mat4;
 
 #define LUZ_MAX_LIGHTS 64
 #define LUZ_MAX_MODELS 8192
+#define LUZ_MAX_LINES 1024
 
 #define LUZ_LIGHT_TYPE_POINT 0
 #define LUZ_LIGHT_TYPE_SPOT 1
@@ -44,6 +45,19 @@ struct LightBlock {
     float zFar;
     int volumetricType;
     float pad[2];
+};
+
+struct LineBlock {
+    vec4 color;
+
+    vec3 p0;
+    int depthAware;
+
+    vec3 p1;
+    int isPoint;
+
+    float thickness;
+    float pad[3];
 };
 
 struct ModelBlock {
@@ -107,6 +121,17 @@ struct VolumetricLightConstants {
     int pad[1];
 };
 
+struct LineRenderingConstants {
+    ivec2 imageSize;
+    int linesRID;
+    int sceneBufferIndex;
+
+    int depthRID;
+    int outputRID;
+    int lineCount;
+    int pad;
+};
+
 #if !defined(LUZ_ENGINE)
 
 #extension GL_ARB_separate_shader_objects : enable
@@ -129,6 +154,10 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBuffer {
     SceneBlock block;
 } sceneBuffers[];
 
+layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer LineBuffer {
+    LineBlock data[];
+} lineBuffers[];
+
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer ModelBuffer {
     ModelBlock models[LUZ_MAX_MODELS];
 } modelsBuffers[];
@@ -150,5 +179,6 @@ layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
 #define model modelsBuffers[modelBufferIndex].models[modelID]
 #define vertexBuffer vertexBuffers[model.vertexBuffer]
 #define sceneBlock sceneBuffers[ctx.sceneBufferIndex].block
+#define lineBlocks lineBuffers[ctx.linesRID].data
 
 #endif

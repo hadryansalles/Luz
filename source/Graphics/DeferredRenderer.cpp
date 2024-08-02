@@ -5,6 +5,7 @@
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
 #include "LuzCommon.h"
+#include "DebugDraw.h"
 
 #include "FileManager.hpp"
 #include <imgui/ImGuizmo.h>
@@ -18,6 +19,7 @@ struct Context {
     vkw::Pipeline shadowMapPipeline;
     vkw::Pipeline ssvlPipeline;
     vkw::Pipeline shadowMapVolumetricLightPipeline;
+    vkw::Pipeline lineRenderingPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -105,6 +107,13 @@ void CreateShaders() {
             {.stage = vkw::ShaderStage::Compute, .path = "shadowMapVolumetricLight.comp"},
         },
         .name = "ShadowMapVolumetricLight Pipeline",
+    });
+    ctx.lineRenderingPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "lineRendering.comp"},
+        },
+        .name = "LineRendering Pipeline",
     });
 }
 
@@ -278,6 +287,23 @@ void ComposePass(bool separatePass, Output output) {
         vkw::CmdEndRendering();
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
     }
+}
+
+void LineRenderingPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
+    LineRenderingConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.linesRID = gpuScene.GetLinesBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.outputRID = ctx.light.RID();
+    constants.imageSize = {ctx.light.width, ctx.light.height};
+    uint32_t lineCount = 0;
+    DebugDraw::Get(lineCount);
+    constants.lineCount = int(lineCount);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
 vkw::Image& GetComposedImage() {

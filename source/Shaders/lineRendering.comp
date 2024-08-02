@@ -1,0 +1,75 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    LineRenderingConstants ctx;
+};
+
+float point_line_dist(vec2 p, vec2 p0, vec2 p1) {
+    vec2 v = p1 - p0;
+    vec2 w = p - p0;
+    
+    float c1 = dot(w, v);
+    if (c1 <= 0.0) {
+        return length(p - p0);
+    }
+    
+    float c2 = dot(v, v);
+    if (c2 <= c1) {
+        return length(p - p1);
+    }
+    
+    float b = c1 / c2;
+    vec2 pb = p0 + b * v;
+    return length(p - pb);
+}
+
+float point_line_t(vec2 p, vec2 p0, vec2 p1) {
+    vec2 v = p1 - p0;
+    vec2 w = p - p0;
+    
+    float c1 = dot(w, v);
+    if (c1 <= 0.0) {
+        return 0;
+    }
+    
+    float c2 = dot(v, v);
+    if (c2 <= c1) {
+        return 1;
+    }
+    
+    float b = c1 / c2;
+    return b;
+}
+
+layout (local_size_x = 32, local_size_y = 32) in;
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
+        return;
+    }
+    vec2 pixelUV = pixelPos / vec2(ctx.imageSize);
+    float pixelDepth = texture(textures[ctx.depthRID], pixelUV).r;
+    vec4 color = vec4(0, 0, 0, 0);
+    for (int i = 0; i < ctx.lineCount; i++) {
+        LineBlock line = lineBlocks[i];
+        vec4 p0 = scene2.projView * vec4(line.p0, 1.0);
+        p0 /= p0.w;
+        p0.xy = (p0.xy + 1.0) * 0.5;
+        vec4 p1 = scene2.projView * vec4(line.p1, 1.0);
+        p1 /= p1.w;
+        p1.xy = (p1.xy + 1.0) * 0.5;
+        float t = point_line_t(pixelUV, p0.xy, p1.xy);
+        float depth = mix(p0.z, p1.z, t);
+        bool valid = line.depthAware == 0 || depth < pixelDepth;
+        if (valid && point_line_dist(pixelUV, p0.xy, p1.xy) < line.thickness/500.0) {
+            color = line.color;
+        }
+    }
+    vec4 outputColor = imageLoad(images[ctx.outputRID], pixelPos);
+    outputColor = outputColor * (1.0 - color.a) + color.a * color.rgba;
+    imageStore(images[ctx.outputRID], pixelPos, vec4(outputColor.rgb, 1.0));
+}
