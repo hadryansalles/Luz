@@ -293,16 +293,16 @@ void LineRenderingPass(GPUScene& gpuScene) {
     vkw::CmdBarrier(ctx.light, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
     LineRenderingConstants constants;
-    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.imageSize = {ctx.light.width, ctx.light.height};
     constants.linesRID = gpuScene.GetLinesBuffer();
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.depthRID = ctx.depth.RID();
     constants.outputRID = ctx.light.RID();
-    constants.imageSize = {ctx.light.width, ctx.light.height};
     uint32_t lineCount = 0;
     DebugDraw::Get(lineCount);
     constants.lineCount = int(lineCount);
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdDispatch({lineCount / 32 + 1, 1, 1});
     vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
