@@ -53,6 +53,7 @@ struct GPUScene {
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();
+    RID GetFontBitmap();
     vkw::Buffer GetLinesBuffer();
 
 private:

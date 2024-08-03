@@ -20,6 +20,7 @@ struct Context {
     vkw::Pipeline ssvlPipeline;
     vkw::Pipeline shadowMapVolumetricLightPipeline;
     vkw::Pipeline lineRenderingPipeline;
+    vkw::Pipeline fontRenderingPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -117,11 +118,22 @@ void CreateShaders() {
             {.stage = vkw::ShaderStage::Vertex, .path = "debug.vert"},
             {.stage = vkw::ShaderStage::Fragment, .path = "debug.frag"},
         },
-        .name = "DebugDraw Pipeline",
+        .name = "LineRendering Pipeline",
         .vertexAttributes = {vkw::Format::RGB32_sfloat},
-        .colorFormats = {ctx.albedo.format},
+        .colorFormats = {ctx.debug.format},
         .useDepth = false,
         .lineTopology = true,
+    });
+    ctx.fontRenderingPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "font.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "font.frag"},
+        },
+        .name = "FontRendering Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.debug.format},
+        .useDepth = false,
     });
 }
 
@@ -328,6 +340,27 @@ void LineRenderingPass(GPUScene& gpuScene) {
             vkw::CmdDrawLineStrip(gpuScene.GetLinesBuffer(), offset, s.points.size(), s.config.thickness);
         }
         offset += s.points.size();
+    }
+
+    FontRenderingConstants fontCtx;
+    fontCtx.depthRID = ctx.depth.RID();
+    fontCtx.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    vkw::CmdBindPipeline(ctx.fontRenderingPipeline);
+    for (const auto& s : strips) {
+        if (!s.config.hide && s.config.drawTitle && s.points.size() > 0) {
+            fontCtx.color = s.config.color;
+            fontCtx.depthAware = s.config.depthAware;
+            fontCtx.fontRID = gpuScene.GetFontBitmap();
+            fontCtx.fontSize = 0.5f;
+            fontCtx.charSize = 64;
+            fontCtx.pos = s.points[0];
+            for (int i = 0; i < s.name.size(); i++) {
+                fontCtx.charCode = (uint8_t)s.name.c_str()[i];
+                fontCtx.charIndex = i;
+                vkw::CmdPushConstants(&fontCtx, sizeof(fontCtx));
+                vkw::CmdDrawPassThrough();
+            }
+        }
     }
 
     vkw::CmdEndRendering();

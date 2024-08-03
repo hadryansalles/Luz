@@ -84,6 +84,8 @@ struct SceneBlock {
     vec3 ambientLightColor;
     float ambientLightIntensity;
 
+    mat4 proj;
+    mat4 view;
     mat4 projView;
     mat4 inverseProj;
     mat4 inverseView;
@@ -132,6 +134,23 @@ struct LineRenderingConstants {
     int depthAware;
 
     vec4 color;
+};
+
+struct FontRenderingConstants {
+    vec4 color;
+
+    vec3 pos;
+    float pad;
+
+    int charCode;
+    int charSize;
+    int charIndex;
+    int sceneBufferIndex;
+
+    float fontSize;
+    int depthAware;
+    int depthRID;
+    int fontRID;
 };
 
 #if !defined(LUZ_ENGINE)

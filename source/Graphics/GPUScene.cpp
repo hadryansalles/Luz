@@ -34,6 +34,7 @@ struct GPUSceneImpl {
     std::unordered_map<UUID, GPUTexture> textures;
 
     vkw::Image blueNoise;
+    vkw::Image font;
 };
 
 GPUScene::GPUScene() {
@@ -69,6 +70,25 @@ void GPUScene::Create() {
         vkw::EndCommandBuffer();
         vkw::WaitQueue(vkw::Queue::Graphics);
     }
+    // create font bitmap
+    {
+        i32 w, h;
+        std::vector<u8> bitmapData;
+        AssetIO::ReadTexture("assets/font_bitmap.png", bitmapData, w, h);
+        impl->font = vkw::CreateImage({
+            .width = uint32_t(w),
+            .height = uint32_t(h),
+            .format = vkw::Format::RGBA8_unorm,
+            .usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+            .name = "Font Bitmap Texture",
+        });
+        vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+        vkw::CmdBarrier(impl->font, vkw::Layout::TransferDst);
+        vkw::CmdCopy(impl->font, bitmapData.data(), w * h * 4);
+        vkw::CmdBarrier(impl->font, vkw::Layout::ShaderRead);
+        vkw::EndCommandBuffer();
+        vkw::WaitQueue(vkw::Queue::Graphics);
+    }
 }
 
 void GPUScene::Destroy() {
@@ -78,6 +98,7 @@ void GPUScene::Destroy() {
     impl->linesBuffer = {};
     impl->shadowMaps = {};
     impl->blueNoise = {};
+    impl->font = {};
     ClearAssets();
     impl = {};
 }
@@ -197,6 +218,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.numLights = 0;
 
     s.camPos = camera->eye;
+    s.proj = camera->GetProj();
+    s.view = camera->GetView();
     s.projView = camera->GetProj() * camera->GetView();
     s.inverseProj = glm::inverse(camera->GetProj());
     s.inverseView = glm::inverse(camera->GetView());
@@ -218,6 +241,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             }
         }
     }
+    DebugDraw::Config("frustum", {.drawTitle = false});
     DebugDraw::Box("frustum", ps[0], ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], ps[7]);
     glm::vec3 frustumCenter(0.0f);
     for (const glm::vec4& p : frustumCorners) {
@@ -347,6 +371,10 @@ RID GPUScene::GetSceneBuffer() {
 
 RID GPUScene::GetModelsBuffer() {
     return impl->modelsBuffer.RID();
+}
+
+RID GPUScene::GetFontBitmap() {
+    return impl->font.RID();
 }
 
 vkw::Buffer GPUScene::GetLinesBuffer() {

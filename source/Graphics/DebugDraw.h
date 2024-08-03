@@ -10,6 +10,7 @@ struct DebugDraw {
         bool isPoint = false;
         bool update = true;
         bool hide = false;
+        bool drawTitle = true;
     };
     struct DrawData {
         std::vector<glm::vec3> points = {};
