@@ -41,16 +41,6 @@ private:
     bool fullscreen = false;
     DeferredShading::Output outputMode = DeferredShading::Output::Light;
 
-    void WaitToInit(float seconds) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        auto t1 = std::chrono::high_resolution_clock::now();
-        while (std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() < seconds * 1000.0f) {
-            LUZ_PROFILE_FRAME();
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            t1 = std::chrono::high_resolution_clock::now();
-        }
-    }
-
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
@@ -83,7 +73,7 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
             Window::Update();
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);

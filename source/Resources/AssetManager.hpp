@@ -250,6 +250,7 @@ struct CameraNode : Node {
 
     glm::mat4 GetView();
     glm::mat4 GetProj();
+    glm::mat4 GetProj(float zNear, float zFar);
 };
 
 struct SceneAsset : Asset {

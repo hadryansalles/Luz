@@ -339,9 +339,13 @@ glm::mat4 CameraNode::GetView() {
 }
 
 glm::mat4 CameraNode::GetProj() {
+    return GetProj(nearDistance, farDistance);
+}
+
+glm::mat4 CameraNode::GetProj(float zNear, float zFar) {
     glm::mat4 proj;
     if (cameraType == CameraType::Perspective) {
-        proj = glm::perspective(glm::radians(horizontalFov), extent.x / extent.y, nearDistance, farDistance);
+        proj = glm::perspective(glm::radians(horizontalFov), extent.x / extent.y, zNear, zFar);
     } else {
         glm::vec2 size = glm::vec2(1.0, extent.y / extent.x) * zoom;
         proj = glm::ortho(-size.x, size.x, -size.y, size.y, orthoNearDistance, orthoFarDistance);

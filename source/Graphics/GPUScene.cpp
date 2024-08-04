@@ -224,32 +224,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.inverseProj = glm::inverse(camera->GetProj());
     s.inverseView = glm::inverse(camera->GetView());
 
-    std::vector<glm::vec4> frustumCorners;
-    frustumCorners.reserve(8);
-    std::vector<glm::vec3> ps;
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 2; j++) {
-            for (int k = 0; k < 2; k++) {
-                const glm::vec4 pt = glm::inverse(s.projView) * glm::vec4(
-                    2.0f * i - 1.0f,
-                    2.0f * j - 1.0f,
-                    2.0f * k - 1.0f,
-                    1.0f
-                );
-                frustumCorners.push_back(pt / pt.w);
-                ps.push_back(glm::vec3(pt / pt.w));
-            }
-        }
-    }
-    DebugDraw::Config("frustum", {.drawTitle = false});
-    DebugDraw::Box("frustum", ps[0], ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], ps[7]);
-    glm::vec3 frustumCenter(0.0f);
-    for (const glm::vec4& p : frustumCorners) {
-        frustumCenter += glm::vec3(p);
-    }
-    frustumCenter /= float(frustumCorners.size());
-    //frustumCenter = glm::vec3(0);
-    // Log::Info("Center=%.3f %.3f %.3f", frustumCenter.x, frustumCenter.y, frustumCenter.z);
 
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
         LightBlock& block = s.lights[s.numLights++];
@@ -278,13 +252,31 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
             block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
         } else {
+            std::vector<glm::vec4> frustumCorners;
+            auto camProjView = glm::inverse(camera->GetProj(camera->nearDistance, camera->farDistance / light->shadowMapRange) * s.view);
+            frustumCorners.reserve(8);
+            for (int i = 0; i < 2; i++) {
+                for (int j = 0; j < 2; j++) {
+                    for (int k = 0; k < 2; k++) {
+                        const glm::vec4 pt = camProjView * glm::vec4(
+                            2.0f * i - 1.0f,
+                            2.0f * j - 1.0f,
+                            2.0f * k - 1.0f,
+                            1.0f
+                        );
+                        frustumCorners.push_back(pt / pt.w);
+                    }
+                }
+            }
+            glm::vec3 frustumCenter(0.0f);
+            for (const glm::vec4& p : frustumCorners) {
+                frustumCenter += glm::vec3(p);
+            }
+            frustumCenter /= float(frustumCorners.size());
+
             float r = light->shadowMapRange;
-            // DebugDraw::Config(std::to_string(light->uuid), { .thickness = 4.0f });
-            // DebugDraw::Line(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
-            DebugDraw::Config("DEBUG1", { .color = {1, 0, 0, 1}, .thickness = 4.0f });
-            DebugDraw::Config("DEBUG2", { .color = {0, 1, 0, 1} });
-            DebugDraw::Line("DEBUG1", glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-            DebugDraw::Rect("DEBUG2", glm::vec3(4, 0, 0), glm::vec3(4, 1, 0), glm::vec3(4, 1, 1), glm::vec3(4, 0, 1));
+            DebugDraw::Config(std::to_string(light->uuid), { .color = {1, 0, 0, 1}, .thickness = 4.0f });
+            DebugDraw::Line(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
             glm::mat4 view = glm::lookAt(frustumCenter + light->GetWorldFront(), frustumCenter, glm::vec3(.0f, 1.0f, .0f));
             glm::vec3 frustumMin = frustumCorners[0];
             glm::vec3 frustumMax = frustumCorners[0];
@@ -295,7 +287,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             frustumMin.z = frustumMin.z < 0 ? frustumMin.z * r : frustumMin.z / r;
             frustumMax.z = frustumMax.z < 0 ? frustumMax.z / r : frustumMax.z * r;
             glm::mat4 proj = glm::ortho(frustumMin.x, frustumMax.x, frustumMin.y, frustumMax.y, frustumMax.z, frustumMin.z);
-            //glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, light->shadowMapFar);
             block.viewProj[0] = proj * view;
         }
         
