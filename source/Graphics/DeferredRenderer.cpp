@@ -318,6 +318,10 @@ void ComposePass(bool separatePass, Output output) {
 }
 
 void LineRenderingPass(GPUScene& gpuScene) {
+    auto strips = DebugDraw::Get();
+    if (strips.size() == 0) {
+        return;
+    }
     vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
     vkw::CmdBeginRendering({ ctx.debug });
     vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
@@ -330,7 +334,6 @@ void LineRenderingPass(GPUScene& gpuScene) {
     constants.outputRID = ctx.light.RID();
     constants.lineCount = 0;
 
-    auto strips = DebugDraw::Get();
     int offset = 0;
     for (const auto& s : strips) {
         if (!s.config.hide) {

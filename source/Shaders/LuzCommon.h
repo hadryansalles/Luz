@@ -44,7 +44,12 @@ struct LightBlock {
     mat4 viewProj[6];
     float zFar;
     int volumetricType;
-    float pad[2];
+    float volumetricWeight;
+    float volumetricAbsorption;
+
+    float volumetricDensity;
+    int volumetricSamples;
+    int pad[2];
 };
 
 struct LineBlock {

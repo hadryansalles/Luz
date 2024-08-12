@@ -405,6 +405,18 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
             ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
         }
     }
+    // todo: fix maximuns and minimuns
+    if (node->volumetricType == LightNode::VolumetricType::ScreenSpace) {
+        ImGui::DragFloat("Weight##Volumetric", &node->volumetricScreenSpaceParams.weight);
+        ImGui::DragFloat("Absorption##Volumetric", &node->volumetricScreenSpaceParams.absorption);
+        ImGui::DragFloat("Density##Volumetric", &node->volumetricScreenSpaceParams.density);
+        ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples);
+    } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
+        ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight);
+        ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption);
+        ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density);
+        ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples);
+    }
 }
 
 void EditorImpl::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {

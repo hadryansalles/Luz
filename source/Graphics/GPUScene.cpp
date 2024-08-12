@@ -239,6 +239,17 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         block.zFar = light->shadowMapFar;
         block.shadowMap = -1;
         block.volumetricType = light->volumetricType;
+        if (light->volumetricType == LightNode::VolumetricType::ScreenSpace) {
+            block.volumetricWeight = light->volumetricScreenSpaceParams.weight;
+            block.volumetricSamples = light->volumetricScreenSpaceParams.samples;
+            block.volumetricDensity = light->volumetricScreenSpaceParams.density;
+            block.volumetricAbsorption = light->volumetricScreenSpaceParams.absorption;
+        } else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
+            block.volumetricWeight = light->volumetricShadowMapParams.weight;
+            block.volumetricSamples = light->volumetricShadowMapParams.samples;
+            block.volumetricDensity = light->volumetricShadowMapParams.density;
+            block.volumetricAbsorption = light->volumetricShadowMapParams.absorption;
+        }
 
         bool isPoint = false;
         glm::vec3 pos = light->GetWorldPosition();
@@ -275,8 +286,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             frustumCenter /= float(frustumCorners.size());
 
             float r = light->shadowMapRange;
-            DebugDraw::Config(std::to_string(light->uuid), { .color = {1, 0, 0, 1}, .thickness = 4.0f });
-            DebugDraw::Line(std::to_string(light->uuid), frustumCenter + light->GetWorldFront(), frustumCenter);
             glm::mat4 view = glm::lookAt(frustumCenter + light->GetWorldFront(), frustumCenter, glm::vec3(.0f, 1.0f, .0f));
             glm::vec3 frustumMin = frustumCorners[0];
             glm::vec3 frustumMax = frustumCorners[0];
@@ -341,7 +350,9 @@ void GPUScene::UpdateResourcesGPU() {
 
 void GPUScene::UpdateLineResources() {
     auto points = DebugDraw::GetPoints();
-    vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3)*points.size());
+    if (points.size() > 0) {
+        vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3)*points.size());
+    }
 }
 
 ShadowMapData& GPUScene::GetShadowMap(UUID uuid) {
