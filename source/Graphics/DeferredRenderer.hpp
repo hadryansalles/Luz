@@ -54,6 +54,7 @@ void ComposePass(bool separatePass, Output output);
 void LineRenderingPass(GPUScene& gpuScene);
 void BeginOpaquePass();
 void EndPass();
+void PostProcessingPass(GPUScene& gpuScene);
 
 vkw::Image& GetComposedImage();
 

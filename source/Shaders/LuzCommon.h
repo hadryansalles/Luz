@@ -158,6 +158,11 @@ struct FontRenderingConstants {
     int fontRID;
 };
 
+struct PostProcessingConstants {
+    int lightRID;
+    int historyRID;
+};
+
 #if !defined(LUZ_ENGINE)
 
 #extension GL_ARB_separate_shader_objects : enable

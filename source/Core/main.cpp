@@ -208,6 +208,10 @@ private:
         DeferredShading::ShadowMapVolumetricLightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(volumetricTS);
 
+        auto postProcessingTS = vkw::CmdBeginTimeStamp("PostProcessingPass");
+        DeferredShading::PostProcessingPass(gpuScene);
+        vkw::CmdEndTimeStamp(postProcessingTS);
+
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
         DeferredShading::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);

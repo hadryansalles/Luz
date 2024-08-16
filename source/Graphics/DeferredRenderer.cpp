@@ -21,6 +21,7 @@ struct Context {
     vkw::Pipeline shadowMapVolumetricLightPipeline;
     vkw::Pipeline lineRenderingPipeline;
     vkw::Pipeline fontRenderingPipeline;
+    vkw::Pipeline postProcessingPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -28,6 +29,7 @@ struct Context {
     vkw::Image emission;
     vkw::Image depth;
     vkw::Image light;
+    vkw::Image history;
     vkw::Image compose;
     vkw::Image debug;
 };
@@ -135,6 +137,13 @@ void CreateShaders() {
         .colorFormats = {ctx.debug.format},
         .useDepth = false,
     });
+    ctx.postProcessingPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "postProcessing.comp"},
+        },
+        .name = "PostProcessing Pipeline",
+    });
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
@@ -179,6 +188,13 @@ void CreateImages(uint32_t width, uint32_t height) {
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
         .name = "Light Attachment"
+    });
+    ctx.history = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "History Attachment"
     });
     ctx.depth = vkw::CreateImage({
         .width = width,
@@ -368,6 +384,18 @@ void LineRenderingPass(GPUScene& gpuScene) {
 
     vkw::CmdEndRendering();
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
+}
+
+void PostProcessingPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.history, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.postProcessingPipeline);
+    PostProcessingConstants constants;
+    constants.historyRID = ctx.history.RID();
+    constants.lightRID = ctx.light.RID();
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
 vkw::Image& GetComposedImage() {
