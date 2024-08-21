@@ -21,7 +21,8 @@ void main() {
     vec4 history = imageLoad(images[ctx.historyRID], pixelPos);
     vec4 light = imageLoad(images[ctx.lightRID], pixelPos);
 
-    light = 0.1 * light + 0.9 * history;
+    float alpha = 1.0;
+    light = alpha * light + (1.0 - alpha) * history;
 
     imageStore(images[ctx.lightRID], pixelPos, light);
     imageStore(images[ctx.historyRID], pixelPos, light);

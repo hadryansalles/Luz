@@ -211,7 +211,6 @@ struct LightNode : Node {
     struct VolumetricScreenSpaceParams {
         float weight = 0.0001;
         float absorption = 1.0;
-        float density = 1.094;
         int samples = 128;
     } volumetricScreenSpaceParams;
 
