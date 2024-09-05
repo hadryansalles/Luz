@@ -222,8 +222,9 @@ void main() {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
             float theta = dot(L, normalize(-light.direction));
-            float epsilon = light.innerAngle - light.outerAngle;
-            attenuation *= clamp((theta - light.outerAngle)/epsilon, 0.0, 1.0);
+            float cosAngle = cos(light.angle * 0.5);
+            float spotEffect = smoothstep(cosAngle, mix(cosAngle, 1.0, light.blendFactor), theta);
+            attenuation *= spotEffect;
         } else if(light.type == LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);

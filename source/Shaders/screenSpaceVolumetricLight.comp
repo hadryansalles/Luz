@@ -42,7 +42,7 @@ void main() {
 
         vec4 lightProjPos = sceneBlock.projView * vec4(light.position, 1);
         if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL) {
-            lightProjPos = sceneBlock.projView * vec4(-light.direction * 10000.0, 1);
+            lightProjPos = sceneBlock.projView * vec4(light.direction * 10000.0, 1);
         }
 
         vec2 lightUV = (lightProjPos.xy / lightProjPos.w) * 0.5 + vec2(0.5);

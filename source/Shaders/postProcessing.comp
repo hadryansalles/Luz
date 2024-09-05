@@ -10,20 +10,56 @@ layout(push_constant) uniform _constants {
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
+vec3 DepthToWorld(vec2 screenPos, float depth) {
+    vec4 clipSpacePos = vec4(screenPos * 2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePos = scene2.inverseProj * clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    vec4 worldSpacePos = scene2.inverseView * viewSpacePos;
+    return worldSpacePos.xyz;
+}
 
 void main() {
-    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    ivec2 imageSize = textureSize(textures[ctx.lightRID], 0).xy;
-    if (pixelPos.x >= imageSize.x || pixelPos.y >= imageSize.y) {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(images[ctx.lightRID]);
+    if (any(greaterThanEqual(pixelPos, imageSize))) {
         return;
     }
 
-    vec4 history = imageLoad(images[ctx.historyRID], pixelPos);
-    vec4 light = imageLoad(images[ctx.lightRID], pixelPos);
+    vec2 texCoord = (vec2(pixelPos) + 0.5) / vec2(imageSize);
+    float depth = texture(textures[ctx.depthRID], texCoord).r;
 
-    float alpha = 1.0;
-    light = alpha * light + (1.0 - alpha) * history;
+    vec3 worldPos = DepthToWorld(texCoord, depth);
 
-    imageStore(images[ctx.lightRID], pixelPos, light);
-    imageStore(images[ctx.historyRID], pixelPos, light);
+    vec4 previousNDC = scene2.prevProjView * vec4(worldPos, 1.0);
+    vec4 currentNDC = scene2.projView * vec4(worldPos, 1.0);
+    
+    previousNDC.xyz /= previousNDC.w;
+    currentNDC.xyz /= currentNDC.w;
+    
+    vec2 motionVector = (currentNDC.xy - previousNDC.xy) * 0.5;
+
+    vec4 currentColor = imageLoad(images[ctx.lightRID], pixelPos);
+    vec2 historyTexCoord = texCoord - motionVector;
+    vec4 historyColor = texture(textures[ctx.historyRID], historyTexCoord);
+
+    vec3 neighborhoodMin = currentColor.rgb;
+    vec3 neighborhoodMax = currentColor.rgb;
+
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(x, y) / vec2(imageSize);
+            vec3 neighborColor = texture(textures[ctx.lightRID], texCoord + offset).rgb;
+            neighborhoodMin = min(neighborhoodMin, neighborColor);
+            neighborhoodMax = max(neighborhoodMax, neighborColor);
+        }
+    }
+    historyColor.rgb = clamp(historyColor.rgb, neighborhoodMin, neighborhoodMax);
+
+    float motionLength = length(motionVector);
+    float blendFactor = clamp(motionLength * 100.0, 0.05, 0.95);
+
+    vec4 result = mix(historyColor, currentColor, blendFactor);
+
+    // TAA enabled
+    imageStore(images[ctx.lightRID], pixelPos, result);
 }

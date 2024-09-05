@@ -126,8 +126,8 @@ void LightNode::Serialize(Serializer& s) {
     s("color", color);
     s("intensity", intensity);
     s("lightType", lightType);
-    s("innerAngle", innerAngle);
-    s("outerAngle", outerAngle);
+    s("angle", angle);  // Changed from innerAngle
+    s("blendFactor", blendFactor);  // Changed from outerAngle
     s("radius", radius);
     s("shadowMapRange", shadowMapRange);
     s("shadowMapFar", shadowMapFar);

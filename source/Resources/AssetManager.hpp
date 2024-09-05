@@ -202,8 +202,8 @@ struct LightNode : Node {
     float intensity = 10.0f;
     LightType lightType = LightType::Point;
     float radius = 2.0f;
-    float innerAngle = 60.f;
-    float outerAngle = 50.f;
+    float angle = 45.0f;  // Single angle for spot light
+    float blendFactor = 0.5f;  // Blend factor, 0 for sharp, 1 for smooth
 
     float shadowMapRange = 3.0f;
     float shadowMapFar = 2000.0f;

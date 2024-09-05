@@ -44,7 +44,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        assetManager.LoadProject("assets/default.luz", "assets/default.Luzbin");
+        assetManager.LoadProject("assets/default.luz", "assets/default.luzbin");
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -73,7 +73,6 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
             Window::Update();
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);
@@ -203,13 +202,15 @@ private:
         DeferredShading::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);
 
-        auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
-        DeferredShading::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
-        DeferredShading::ShadowMapVolumetricLightPass(gpuScene, frameCount);
-        vkw::CmdEndTimeStamp(volumetricTS);
+        // auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
+        // DeferredShading::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
+        // DeferredShading::ShadowMapVolumetricLightPass(gpuScene, frameCount);
+        // vkw::CmdEndTimeStamp(volumetricTS);
 
-        auto postProcessingTS = vkw::CmdBeginTimeStamp("PostProcessingPass");
-        DeferredShading::PostProcessingPass(gpuScene);
+        auto postProcessingTS = vkw::CmdBeginTimeStamp("PostProcessingPasses");
+        // todo: separate light and albedo in light buffer, and make a compose pass to multiply light by albedo
+        DeferredShading::AtrousPass(gpuScene, 2);
+        DeferredShading::TAAPass(gpuScene);
         vkw::CmdEndTimeStamp(postProcessingTS);
 
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
@@ -232,6 +233,8 @@ private:
 
         vkw::CmdEndPresent();
         vkw::CmdEndTimeStamp(totalTS);
+
+        DeferredShading::SwapBuffers();
     }
 
     void DrawFrame() {

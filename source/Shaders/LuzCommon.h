@@ -31,10 +31,10 @@ struct LightBlock {
     float intensity;
 
     vec3 position;
-    float innerAngle;
+    float angle;  // Changed from innerAngle
 
     vec3 direction;
-    float outerAngle;
+    float blendFactor;  // Changed from outerAngle
 
     int type;
     int numShadowSamples;
@@ -92,6 +92,7 @@ struct SceneBlock {
     mat4 proj;
     mat4 view;
     mat4 projView;
+    mat4 prevProjView;
     mat4 inverseProj;
     mat4 inverseView;
 
@@ -160,7 +161,12 @@ struct FontRenderingConstants {
 
 struct PostProcessingConstants {
     int lightRID;
+    int lightDestRID;
+    int normalRID;
     int historyRID;
+    int depthRID;
+    int sceneBufferIndex;
+    int filterSize;
 };
 
 #if !defined(LUZ_ENGINE)

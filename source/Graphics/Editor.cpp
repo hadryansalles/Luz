@@ -35,6 +35,7 @@ struct EditorImpl {
     void OnTransform(const Ref<CameraNode>& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
     void Select(Ref<Node>& node);
     int FindSelected(Ref<Node>& node);
+    void DrawSelectedLightDebug(const Ref<LightNode>& light);
 };
 
 Editor::Editor() {
@@ -388,8 +389,8 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         ImGui::EndCombo();
     }
     if (node->lightType == LightNode::LightType::Spot) {
-        ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
-        ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);
+        ImGui::DragFloat("Angle", &node->angle, 0.05f, 0.0f, 180.0f);
+        ImGui::DragFloat("Blend Factor", &node->blendFactor, 0.01f, 0.0f, 1.0f);
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
@@ -416,6 +417,9 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density);
         ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples);
     }
+
+    // Draw the debug visualization for the selected light
+    DrawSelectedLightDebug(node);
 }
 
 void EditorImpl::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
@@ -575,4 +579,36 @@ void Editor::ProfilerPopup() {
         ImGui::SetWindowPos({ maxPos.x - panelSize.x, 0});
     }
     ImGui::End();
+}
+
+void EditorImpl::DrawSelectedLightDebug(const Ref<LightNode>& light) {
+    return;
+    if (!light) return;
+
+    std::string debugName = "selected_light_" + std::to_string(light->uuid);
+
+    if (light->lightType == LightNode::LightType::Point) {
+        DebugDraw::Sphere(debugName, light->GetWorldPosition(), light->radius, 16);
+    } else if (light->lightType == LightNode::LightType::Spot) {
+        glm::vec3 tipPosition = light->GetWorldPosition();
+        glm::vec3 basePosition = tipPosition + light->GetWorldFront() * light->radius;
+        float baseRadius = light->radius * tan(glm::radians(light->angle) * 0.5f);
+        DebugDraw::Cone(debugName, basePosition, tipPosition, baseRadius, 16);
+    } else if (light->lightType == LightNode::LightType::Directional) {
+        glm::vec3 position = light->GetWorldPosition();
+        DebugDraw::Sphere(debugName + "_sphere", position, light->radius, 16);
+        glm::vec3 endPoint = position + light->GetWorldFront() * light->radius;
+        DebugDraw::Line(debugName + "_line", position, endPoint);
+    }
+
+    DebugDraw::Config(debugName, {
+        .color = glm::vec4(light->color, 1.0f),
+        .thickness = 2.0f,
+        .depthAware = true,
+        .isPoint = false,
+        .update = true,
+        .hide = false,
+        .drawTitle = false,
+        .persist = false  // Set to false so it only renders for one frame
+    });
 }

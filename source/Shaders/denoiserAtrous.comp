@@ -1,0 +1,98 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    PostProcessingConstants ctx;
+};
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+const float kernel[3] = float[](1.0, 2.0, 1.0);
+
+float luminance(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+float RadiusWeight(float radius, float size) {
+    return (size - radius) / size;
+}
+
+float NormalWeight(vec3 normal, vec3 nNormal, float depth) {
+    return 1.0 - clamp(exp(-max(dot(normal, nNormal), 0) * 50.0 - 1.0e-7 * depth), 0, 1);
+}
+
+float PlaneWeight(vec3 planePos, vec3 planeNormal, vec3 point, float depth) {
+    return 1.0 - clamp(abs(dot(point - planePos, planeNormal)) * 1000.0 / depth, 0.0, 1.0);
+}
+
+float LuminanceWeight(float centerLum, float sampleLum) {
+    return exp(0.01 * -abs(centerLum - sampleLum) / max(centerLum, 0.001));
+}
+
+vec3 DepthToWorld(vec2 texCoord, float depth) {
+    vec4 clipSpacePos = vec4(texCoord * 2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePos = scene2.inverseProj * clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    vec4 worldSpacePos = scene2.inverseView * viewSpacePos;
+    return worldSpacePos.xyz;
+}
+
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(images[ctx.lightRID]);
+    if (any(greaterThanEqual(pixelPos, imageSize))) {
+        return;
+    }
+
+    vec2 texCoord = (vec2(pixelPos) + 0.5) / vec2(imageSize);
+    vec3 centerColor = imageLoad(images[ctx.lightRID], pixelPos).rgb;
+    vec3 centerNormal = normalize(texelFetch(textures[ctx.normalRID], pixelPos, 0).xyz);
+    float centerDepth = texelFetch(textures[ctx.depthRID], pixelPos, 0).r;
+    float centerLum = luminance(centerColor);
+
+    vec3 centerWorldPos = DepthToWorld(texCoord, centerDepth);
+
+    vec3 sum = centerColor;
+    float totalWeight = 1.0;
+
+    int stepWidth = ctx.filterSize;
+
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            if (x == 0 && y == 0) continue;
+
+            ivec2 offset = ivec2(x, y) * stepWidth * 2;
+            ivec2 samplePos = pixelPos + offset;
+            
+            if (any(lessThan(samplePos, ivec2(0))) || any(greaterThanEqual(samplePos, imageSize))) {
+                continue;
+            }
+
+            vec2 sampleTexCoord = (vec2(samplePos) + 0.5) / vec2(imageSize);
+            vec3 sampleColor = imageLoad(images[ctx.lightRID], samplePos).rgb;
+            vec3 sampleNormal = normalize(texelFetch(textures[ctx.normalRID], samplePos, 0).xyz);
+            float sampleDepth = texelFetch(textures[ctx.depthRID], samplePos, 0).r;
+            float sampleLum = luminance(sampleColor);
+
+            vec3 sampleWorldPos = DepthToWorld(sampleTexCoord, sampleDepth);
+
+            float radiusWeight = RadiusWeight(length(vec2(x, y)), 2.0);
+            float normalWeight = NormalWeight(centerNormal, sampleNormal, centerDepth);
+            float planeWeight = PlaneWeight(centerWorldPos, centerNormal, sampleWorldPos, length(centerWorldPos - scene2.camPos));
+            float lumWeight = LuminanceWeight(centerLum, sampleLum);
+
+            float weight = radiusWeight * normalWeight * planeWeight * lumWeight;
+            weight *= kernel[abs(x)] * kernel[abs(y)];
+
+            sum += sampleColor * weight;
+            totalWeight += weight;
+        }
+    }
+
+    vec3 result = sum / totalWeight;
+    
+    imageStore(images[ctx.lightDestRID], pixelPos, vec4(result, 1.0));
+}

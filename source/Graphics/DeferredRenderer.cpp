@@ -22,14 +22,16 @@ struct Context {
     vkw::Pipeline lineRenderingPipeline;
     vkw::Pipeline fontRenderingPipeline;
     vkw::Pipeline postProcessingPipeline;
+    vkw::Pipeline atrousDenoisePipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
     vkw::Image material;
     vkw::Image emission;
     vkw::Image depth;
-    vkw::Image light;
-    vkw::Image history;
+    vkw::Image lightA;
+    vkw::Image lightB;
+    vkw::Image lightHistory;
     vkw::Image compose;
     vkw::Image debug;
 };
@@ -60,7 +62,7 @@ void CreateShaders() {
         },
         .name = "Light Pipeline",
         .vertexAttributes = {},
-        .colorFormats = {ctx.light.format},
+        .colorFormats = {ctx.lightA.format},
         .useDepth = false,
     });
     ctx.opaquePipeline = vkw::CreatePipeline({
@@ -144,6 +146,13 @@ void CreateShaders() {
         },
         .name = "PostProcessing Pipeline",
     });
+    ctx.atrousDenoisePipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "denoiserAtrous.comp"},
+        },
+        .name = "Atrous Denoise Pipeline",
+    });
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
@@ -182,19 +191,26 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Emission Attachment"
     });
-    ctx.light = vkw::CreateImage({
+    ctx.lightA = vkw::CreateImage({
         .width = width,
         .height = height,
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-        .name = "Light Attachment"
+        .name = "Light Attachment A"
     });
-    ctx.history = vkw::CreateImage({
+    ctx.lightB = vkw::CreateImage({
         .width = width,
         .height = height,
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-        .name = "History Attachment"
+        .name = "Light Attachment B"
+    });
+    ctx.lightHistory = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Light History Attachment"
     });
     ctx.depth = vkw::CreateImage({
         .width = width,
@@ -257,33 +273,33 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
 }
 
 void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame) {
-    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.ssvlPipeline);
     VolumetricLightConstants constants;
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.modelBufferIndex = gpuScene.GetModelsBuffer();
     constants.depthRID = ctx.depth.RID();
-    constants.lightRID = ctx.light.RID();
-    constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.lightRID = ctx.lightA.RID();
+    constants.imageSize = {ctx.lightA.width, ctx.lightA.height};
     constants.frame = frame;
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
 void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame) {
-    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.shadowMapVolumetricLightPipeline);
     VolumetricLightConstants constants;
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.modelBufferIndex = gpuScene.GetModelsBuffer();
     constants.depthRID = ctx.depth.RID();
-    constants.lightRID = ctx.light.RID();
-    constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.lightRID = ctx.lightA.RID();
+    constants.imageSize = {ctx.lightA.width, ctx.lightA.height};
     constants.frame = frame;
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
 void LightPass(LightConstants constants) {
@@ -292,7 +308,7 @@ void LightPass(LightConstants constants) {
         vkw::CmdBarrier(attach, vkw::Layout::ShaderRead);
     }
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ColorAttachment);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ColorAttachment);
 
     constants.albedoRID = ctx.albedo.RID();
     constants.normalRID = ctx.normal.RID();
@@ -300,18 +316,18 @@ void LightPass(LightConstants constants) {
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
 
-    vkw::CmdBeginRendering({ ctx.light }, {});
+    vkw::CmdBeginRendering({ ctx.lightA }, {});
     vkw::CmdBindPipeline(ctx.lightPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDrawPassThrough();
     vkw::CmdEndRendering();
 
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
 void ComposePass(bool separatePass, Output output) {
     ComposeConstant constants;
-    constants.lightRID = ctx.light.RID();
+    constants.lightRID = ctx.lightA.RID();
     constants.albedoRID = ctx.albedo.RID();
     constants.normalRID = ctx.normal.RID();
     constants.materialRID = ctx.material.RID();
@@ -343,11 +359,11 @@ void LineRenderingPass(GPUScene& gpuScene) {
     vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
 
     LineRenderingConstants constants;
-    constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.imageSize = {ctx.lightA.width, ctx.lightA.height};
     constants.linesRID = 0;
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.depthRID = ctx.depth.RID();
-    constants.outputRID = ctx.light.RID();
+    constants.outputRID = ctx.lightA.RID();
     constants.lineCount = 0;
 
     int offset = 0;
@@ -386,16 +402,39 @@ void LineRenderingPass(GPUScene& gpuScene) {
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
-void PostProcessingPass(GPUScene& gpuScene) {
-    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
-    vkw::CmdBarrier(ctx.history, vkw::Layout::General);
+void TAAPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.lightHistory, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.postProcessingPipeline);
     PostProcessingConstants constants;
-    constants.historyRID = ctx.history.RID();
-    constants.lightRID = ctx.light.RID();
+    constants.historyRID = ctx.lightHistory.RID();
+    constants.lightRID = ctx.lightA.RID();
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.depthRID = ctx.depth.RID();
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
-    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+}
+
+void AtrousPass(GPUScene& gpuScene, int iterationCount) {
+    for (int i = 0; i < iterationCount * 2; ++i) {
+        vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
+        vkw::CmdBindPipeline(ctx.atrousDenoisePipeline);
+
+        PostProcessingConstants constants;
+        constants.lightRID = ctx.lightA.RID();
+        constants.lightDestRID = ctx.lightB.RID();
+        constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+        constants.normalRID = ctx.normal.RID();
+        constants.depthRID = ctx.depth.RID();
+        constants.filterSize = 1 << i;
+
+        vkw::CmdPushConstants(&constants, sizeof(constants));
+        vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+
+        vkw::CmdBarrier(ctx.lightB, vkw::Layout::ShaderRead);
+        std::swap(ctx.lightA, ctx.lightB);
+    }
 }
 
 vkw::Image& GetComposedImage() {
@@ -407,6 +446,10 @@ void ViewportOnImGui() {
 
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+}
+
+void SwapBuffers() {
+    std::swap(ctx.lightA, ctx.lightHistory);
 }
 
 }

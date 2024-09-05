@@ -220,19 +220,19 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.camPos = camera->eye;
     s.proj = camera->GetProj();
     s.view = camera->GetView();
+    s.prevProjView = s.projView;
     s.projView = camera->GetProj() * camera->GetView();
     s.inverseProj = glm::inverse(camera->GetProj());
     s.inverseView = glm::inverse(camera->GetView());
-
 
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
         LightBlock& block = s.lights[s.numLights++];
         block.color = light->color;
         block.intensity = light->intensity;
         block.position = light->GetWorldPosition();
-        block.innerAngle = glm::radians(light->innerAngle);
+        block.angle = glm::radians(light->angle);
         block.direction = light->GetWorldTransform() * glm::vec4(0, -1, 0, 0);
-        block.outerAngle = glm::radians(light->outerAngle);
+        block.blendFactor = glm::clamp(light->blendFactor, 0.0f, 1.0f);
         block.type = light->lightType;
         block.numShadowSamples = scene->shadowType == ShadowType::ShadowRayTraced ? scene->lightSamples : 0;
         block.radius = light->radius;
@@ -348,10 +348,12 @@ void GPUScene::UpdateResourcesGPU() {
 }
 
 void GPUScene::UpdateLineResources() {
-    auto points = DebugDraw::GetPoints();
-    if (points.size() > 0) {
-        vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3)*points.size());
+    LUZ_PROFILE_FUNC();
+    auto lines = DebugDraw::Get();
+    if (lines.size() > 0) {
+        vkw::CmdCopy(impl->linesBuffer, lines.data(), sizeof(glm::vec3)*lines.size());
     }
+    DebugDraw::ClearNonPersistent();
 }
 
 ShadowMapData& GPUScene::GetShadowMap(UUID uuid) {

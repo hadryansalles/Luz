@@ -1814,7 +1814,7 @@ void Context::CreateDevice() {
 
     // create bindless resources
     {
-        const u32 MAX_STORAGE = 8192;
+        const u32 MAX_STORAGE = 2*8192;
         const u32 MAX_SAMPLEDIMAGES = 8192;
         const u32 MAX_ACCELERATIONSTRUCTURE = 64;
         const u32 MAX_STORAGE_IMAGES = 8192;
