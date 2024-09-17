@@ -13,4 +13,5 @@ assets/*
 !assets/roboto.ttf
 !assets/fontawesome.otf
 !assets/default.luz
+!assets/font_bitmap.png
 *.ngfx-proj

@@ -104,3 +104,13 @@ std::vector<u8> DecodeBase64(std::string const& input) {
 
     return ret;
 }
+
+u32 HashUUID(const std::vector<UUID>& invec) {
+    std::vector<UUID> vec = invec;
+    std::sort(vec.begin(), vec.end());
+    std::size_t seed = vec.size();
+    for(auto& i : vec) {
+        seed ^= i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+}

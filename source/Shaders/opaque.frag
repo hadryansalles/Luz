@@ -2,8 +2,6 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
-layout(early_fragment_tests) in;
-
 layout(push_constant) uniform ConstantsBlock {
     int sceneBufferIndex;
     int modelBufferIndex;
@@ -24,19 +22,18 @@ layout(location = 3) out vec4 outEmission;
 
 void main() {
     vec4 albedo = model.color;
-    if (model.colorMap >= 0) {
-        albedo *= texture(textures[model.colorMap], fragTexCoord);
-    }
-    if(albedo.a < 0.5) {
-        discard;
-    }
-
     vec3 normalSample = vec3(1, 1, 1);
     float occlusion = 1;
     float roughness = model.roughness;
     float metallic = model.metallic;
     vec4 emission = vec4(model.emission, 1.0);
 
+    if (model.colorMap >= 0) {
+        albedo *= texture(textures[model.colorMap], fragTexCoord);
+    }
+    if (albedo.a < 0.5) {
+        discard;
+    }
     if (model.metallicRoughnessMap >= 0) {
         vec4 metallicRoughness = texture(textures[model.metallicRoughnessMap], fragTexCoord);
         roughness *= metallicRoughness.g;

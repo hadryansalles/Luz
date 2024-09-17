@@ -4,6 +4,7 @@
 
 layout(push_constant) uniform PresentConstants {
     int sceneBufferIndex;
+    int modelBufferIndex;
     int frame;
     int albedoRID;
     int normalRID;
@@ -81,10 +82,9 @@ vec3 HemisphereSample(vec2 rng) {
 }
 
 vec4 BlueNoiseSample(int i) {
-    // vec2 blueNoiseSize = textureSize(BLUE_NOISE_TEXTURE, 0);
-    // ivec2 fragUV = ivec2(mod(gl_FragCoord.xy + GOLDEN_RATIO*blueNoiseSize*(frame%64 + i*vec2(5, 7)), blueNoiseSize));
-    // return texelFetch(BLUE_NOISE_TEXTURE, fragUV, 0);
-    return vec4(1, 0, 0, 0);
+    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
+    ivec2 fragUV = ivec2(mod(gl_FragCoord.xy, blueNoiseSize));
+    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + frame%128));
 }
 
 vec3 aces(vec3 x) {
@@ -104,10 +104,12 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     vec3 lightBitangent = normalize(cross(lightTangent, L));
     float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
-        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
-        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
-        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
+        vec2 blueNoise = BlueNoiseSample(i).rg;
+        // vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
+        // vec2 rng = (0) * blueNoise + (1 - 0)*whiteNoise;
         // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + numSamples*i));
+        vec2 rng = blueNoise;
         vec2 diskSample = DiskSample(rng, radius);
         // vec2 diskSample = BlueNoiseInDisk[(i+frame)%64];
         // Ray Query for shadow
@@ -139,12 +141,7 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     float tMin = scene.aoMin;
     float tMax = scene.aoMax;
     for(int i = 0; i < scene.aoNumSamples; i++) {
-        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * scene.aoNumSamples + i)));
-        vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame + i)));
-        vec2 blueNoise = BlueNoiseSample(scene.aoNumSamples + i).rg;
-        // vec2 blueNoise = texture(BLUE_NOISE_TEXTURE, fragCoord).xy;
-        vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
-        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + scene.aoNumSamples*i));
+        vec2 rng = BlueNoiseSample(i).rg;
         vec3 randomVec = HemisphereSample(rng);
         vec3 direction = tangent*randomVec.x + bitangent*randomVec.y + normal*randomVec.z;
         // Ray Query for shadow
@@ -160,8 +157,42 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     return ao/scene.aoNumSamples;
 }
 
+float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
+    float shadowBias = max(length(fragPos - scene.camPos) * 0.01, 0.05);
+    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
+    float dist = length(light.position - fragPos.xyz);
+    if (scene.shadowType == SHADOW_TYPE_RAYTRACING) {
+        if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+            return TraceShadowRay(shadowOrigin, light.direction*dot(light.direction, L)*dist, light.numShadowSamples, light.radius);
+        } else {
+            return TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
+        }
+    } else if (scene.shadowType == SHADOW_TYPE_MAP && light.shadowMap != -1) {
+        if (light.type == LIGHT_TYPE_POINT) {
+            vec3 lightToFrag = fragPos - light.position;
+            float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+            if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
+                return 1.0f;
+            } else {
+                return 0.0f;
+            }
+        } else {
+            vec4 fragInLight = (light.viewProj[0] * vec4(shadowOrigin, 1));
+            float shadowDepth = texture(textures[light.shadowMap], (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+            if (fragInLight.z >= shadowDepth) {
+                return 1.0f;
+            } else {
+                return 0.0f;
+            }
+        }
+        return 0.0f;
+    } else {
+        return 1.0f;
+    }
+}
+
 void main() {
-    vec4 albedo = texture(textures[albedoRID], fragTexCoord);
+    vec4 albedo = pow(texture(textures[albedoRID], fragTexCoord), vec4(2.2));
     vec3 N = texture(textures[normalRID], fragTexCoord).xyz;
     vec4 material = texture(textures[materialRID], fragTexCoord);
     vec4 emission = texture(textures[emissionRID], fragTexCoord);
@@ -170,7 +201,7 @@ void main() {
         outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
         return;
     }
-    // float depth = 1.0;
+
     float occlusion = material.b;
     float roughness = material.r;
     float metallic = material.g;
@@ -179,29 +210,25 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.rgb, metallic);
     vec3 Lo = vec3(0.0);
-    float shadowBias = 0.1;
-    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
+
     for(int i = 0; i < scene.numLights; i++) {
         LightBlock light = scene.lights[i];
         vec3 L_ = light.position - fragPos.xyz;
         vec3 L = normalize(L_);
         float attenuation = 1;
-        float shadowFactor = 0.0;
         if(light.type == LIGHT_TYPE_DIRECTIONAL) {
             L = normalize(-light.direction);
-            shadowFactor = TraceShadowRay(shadowOrigin, L*10000, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_SPOT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
             float theta = dot(L, normalize(-light.direction));
             float epsilon = light.innerAngle - light.outerAngle;
             attenuation *= clamp((theta - light.outerAngle)/epsilon, 0.0, 1.0);
-            shadowFactor = TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         } else if(light.type == LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist*dist);
-            shadowFactor = TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         }
+        float shadowFactor = EvaluateShadow(light, L, N, fragPos);
         vec3 radiance = light.color * light.intensity * attenuation * (1.0 - shadowFactor);
 
         vec3 H = normalize(V + L);
@@ -221,17 +248,21 @@ void main() {
         Lo += (kD * albedo.rgb / PI + spec)*radiance*NdotL;
     }
 
+    float shadowBias = length(fragPos - scene.camPos) * 0.01;
+    vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
     float rayTracedAo = TraceAORays(shadowOrigin, N);
-    // float rayTracedAo = 1;
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
-    vec3 color = ambient + Lo;
-    color = color / (color + vec3(1.0));
-    vec3 totalRadiance = color + emission.rgb;
+    vec3 color = ambient + Lo + emission.rgb;
+
+    // color = color / (color + vec3(1.0));
+    // color = pow(color, vec3(1.0/2.2));
+    outColor = vec4(color, 1.0);
+
+    // vec3 totalRadiance = color + emission.rgb;
 
     // exposure tone mapping
-    vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
-    mapped = aces(mapped);
+    // vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
+    // mapped = aces(mapped);
     
     // gamma correction 
-    outColor = vec4(pow(mapped, vec3(1.0 / 1.0)), 1);
 }

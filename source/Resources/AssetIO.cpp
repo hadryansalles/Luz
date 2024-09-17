@@ -1,7 +1,7 @@
-#include "Luzpch.hpp"
-
+#include "Util.hpp"
 #include "AssetIO.hpp"
 #include "AssetManager.hpp"
+#include "Log.hpp"
 
 #define TINYGLTF_IMPLEMENTATION
 #include <tiny_gltf.h>
@@ -48,6 +48,21 @@ std::string ReadFile(const std::filesystem::path& path) {
     return buffer.str();
 }
 
+std::vector<u8> ReadFileBytes(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    std::vector<u8> bytes((std::istreambuf_iterator<char>(input)), (std::istreambuf_iterator<char>()));
+    input.close();
+    return bytes;
+}
+
+void WriteFileBytes(const std::filesystem::path& path, const std::vector<u8>& content) {
+    std::ofstream file(path, std::ofstream::binary);
+    if (file.is_open()) {
+        file.write((char*)content.data(), content.size());
+        file.close();
+    }
+}
+
 void WriteFile(const std::filesystem::path& path, const std::string& content) {
     std::ofstream file(path, std::ofstream::out);
     if (file.is_open()) {
@@ -67,10 +82,20 @@ UUID Import(const std::filesystem::path& path, AssetManager& assets) {
     return 0;
 }
 
+void ReadTexture(const std::filesystem::path& path, std::vector<u8>& data, i32& w, i32& h) {
+    i32 channels = 4;
+    u8* indata = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+    data.resize(w * h * 4);
+    memcpy(data.data(), indata, data.size());
+    stbi_image_free(indata);
+}
+
 void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     u8* indata = stbi_load(path.string().c_str(), &t->width, &t->height, &t->channels, 4);
-    t->data.resize(t->width * t->height * t->channels);
+    t->data.resize(t->width * t->height * 4);
     memcpy(t->data.data(), indata, t->data.size());
+    t->channels = 4;
+    stbi_image_free(indata);
 }
 
 UUID ImportTexture(const std::filesystem::path& path, AssetManager& assets) {
@@ -383,24 +408,27 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string err;
+    std::string warn;
     std::string filename = path.stem().string();
     std::string parentPath = path.parent_path().string() + "/";
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str(),parentPath.c_str(), true)) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str(), parentPath.c_str(), true)) {
         LOG_ERROR("{}", err);
+        LOG_WARN("{}", warn);
         LOG_ERROR("Failed to load obj file {}", path.string().c_str());
     }
 
-    if (err != "") {
-        LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), err);
+    if (warn != "") {
+        LOG_WARN("Warning during load obj file {}: {}", path.string().c_str(), warn);
     }
 
     // convert obj material to my material
     auto avg = [](const tinyobj::real_t value[3]) {return (value[0] + value[1] + value[2]) / 3.0f; };
     std::vector<Ref<MaterialAsset>> materialAssets;
+    std::unordered_map<std::string, Ref<TextureAsset>> textureAssets;
     for (size_t i = 0; i < materials.size(); i++) {
         Ref<MaterialAsset> asset = manager.CreateAsset<MaterialAsset>(filename + ":" + materials[i].name);
-        materialAssets.push_back(asset);
+        //asset->color = glm::vec4(1, 0, 0, 1);
         asset->color = glm::vec4(glm::make_vec3(materials[i].diffuse), 1);
         asset->emission = glm::make_vec3(materials[i].emission);
         asset->metallic = materials[i].metallic;
@@ -410,17 +438,37 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
             asset->roughness = materials[i].roughness;
         }
         if (materials[i].diffuse_texname != "") {
-            asset->colorMap = manager.CreateAsset<TextureAsset>(materials[i].diffuse_texname);
-            ImportTexture(parentPath + materials[i].diffuse_texname, asset->colorMap);
+            if (textureAssets.find(materials[i].diffuse_texname) == textureAssets.end()) {
+                asset->colorMap = manager.CreateAsset<TextureAsset>(materials[i].diffuse_texname);
+                ImportTexture(parentPath + materials[i].diffuse_texname, asset->colorMap);
+                textureAssets[materials[i].diffuse_texname] = asset->colorMap;
+            } else {
+                asset->colorMap = textureAssets[materials[i].diffuse_texname];
+            }
         }
+        if (materials[i].normal_texname != "") {
+            if (textureAssets.find(materials[i].normal_texname) == textureAssets.end()) {
+                asset->normalMap = manager.CreateAsset<TextureAsset>(materials[i].normal_texname);
+                ImportTexture(parentPath + materials[i].normal_texname, asset->normalMap);
+                textureAssets[materials[i].normal_texname] = asset->normalMap;
+            } else {
+                asset->normalMap = textureAssets[materials[i].normal_texname];
+            }
+        }
+        materialAssets.push_back(asset);
     }
 
     Ref<SceneAsset> scene = manager.CreateAsset<SceneAsset>(filename);
+    Ref<Node> parentNode = manager.CreateObject<Node>(filename);
+    scene->Add(parentNode);
     for (size_t i = 0; i < shapes.size(); i++) {
+        if (shapes[i].mesh.indices.size() == 0) {
+            continue;
+        }
         std::unordered_map<MeshAsset::MeshVertex, uint32_t> uniqueVertices{};
         int splittedShapeIndex = 0;
         size_t j = 0;
-        size_t lastMaterialId = shapes[i].mesh.material_ids[0];
+        size_t lastMaterialId = shapes[i].mesh.material_ids.size() > 0 ? shapes[i].mesh.material_ids[0] : -1;
         Ref<MeshAsset> asset = manager.CreateAsset<MeshAsset>(filename + ":" + shapes[i].name);
         for (const auto& index : shapes[i].mesh.indices) {
             MeshAsset::MeshVertex vertex{};
@@ -462,7 +510,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                 if (faceId >= shapes[i].mesh.material_ids.size() || shapes[i].mesh.material_ids[faceId] != lastMaterialId) {
                     asset->name += "_" + std::to_string(splittedShapeIndex);
                     Ref<MeshNode> model = manager.CreateObject<MeshNode>(asset->name);
-                    scene->nodes.push_back(model);
+                    Node::SetParent(model, parentNode);
                     model->mesh = asset;
                     if (lastMaterialId != -1) {
                         model->material = materialAssets[lastMaterialId];
@@ -475,6 +523,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
             }
         }
     }
+    Log::Info("Objects: %d", parentNode->children.size());
     return scene->uuid;
 }
 

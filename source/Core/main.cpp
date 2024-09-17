@@ -1,13 +1,14 @@
 #include "Luzpch.hpp"
 
 #include "Window.hpp"
-#include "Camera.hpp"
+#include "CameraController.hpp"
 #include "FileManager.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
 #include "AssetManager.hpp"
 #include "GPUScene.hpp"
 #include "Editor.h"
+#include "DebugDraw.h"
 
 #include <stb_image.h>
 
@@ -33,27 +34,19 @@ private:
     AssetManager assetManager;
     GPUScene gpuScene;
     Ref<SceneAsset> scene;
+    Ref<CameraNode> camera;
     Editor editor;
-    Camera mainCamera;
+    CameraController cameraController;
     bool viewportHovered = false;
     bool fullscreen = false;
     DeferredShading::Output outputMode = DeferredShading::Output::Light;
 
-    void WaitToInit(float seconds) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        auto t1 = std::chrono::high_resolution_clock::now();
-        while (std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() < seconds * 1000.0f) {
-            LUZ_PROFILE_FRAME();
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            t1 = std::chrono::high_resolution_clock::now();
-        }
-    }
-
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        assetManager.LoadProject("assets/default.luz");
+        assetManager.LoadProject("assets/default.luz", "assets/default.Luzbin");
         scene = assetManager.GetInitialScene();
+        camera = assetManager.GetMainCamera(scene);
     }
 
     void Create() {
@@ -63,11 +56,13 @@ private:
         DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
         DeferredShading::CreateShaders();
         gpuScene.Create();
-        mainCamera.SetExtent(viewportSize.x, viewportSize.y);
+        DebugDraw::Create();
+        camera->extent = { viewportSize.x, viewportSize.y };
     }
 
     void Finish() {
         LUZ_PROFILE_FUNC();
+        DebugDraw::Destroy();
         gpuScene.Destroy();
         DeferredShading::Destroy();
         vkw::Destroy();
@@ -78,6 +73,7 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
             Window::Update();
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);
@@ -87,11 +83,11 @@ private:
             }
             gpuScene.AddAssets(assetManager);
             // todo: focus camera on selected object
-            mainCamera.Update(nullptr, viewportHovered);
+            cameraController.Update(scene, camera, viewportHovered);
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
-                assetManager.SaveProject("assets/default.luz");
+                assetManager.SaveProject("assets/default.luz", "assets/default.luzbin");
             }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
@@ -113,7 +109,7 @@ private:
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
-        glm::vec4 cameraSpace = mainCamera.GetProj() * mainCamera.GetView() * glm::vec4(position, 1.0f);
+        glm::vec4 cameraSpace = camera->GetProj() * camera->GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         glm::ivec2 ext = viewportSize;
         screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
@@ -146,8 +142,9 @@ private:
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
-            editor.ScenePanel(scene, mainCamera);
-            editor.InspectorPanel(assetManager, mainCamera);
+            editor.ScenePanel(scene);
+            editor.InspectorPanel(assetManager, camera, gpuScene);
+            editor.DebugDrawPanel();
         } else {
             newViewportSize = { Window::GetWidth(), Window::GetHeight() };
             viewportHovered = true;
@@ -158,10 +155,15 @@ private:
     }
 
     void RenderFrame() {
-        gpuScene.UpdateResources(scene, mainCamera);
+        gpuScene.UpdateResources(scene, camera);
+        DebugDraw::Update();
+
         LUZ_PROFILE_FUNC();
+
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+
         gpuScene.UpdateResourcesGPU();
+        gpuScene.UpdateLineResources();
 
         vkw::CmdBarrier();
 
@@ -170,7 +172,6 @@ private:
         DeferredShading::OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-
 
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredShading::BeginOpaquePass();
@@ -190,12 +191,30 @@ private:
         DeferredShading::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
 
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredShading::ShadowMapPass(light, scene, gpuScene);
+        }
+
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
         DeferredShading::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
+        lightPassConstants.modelBufferIndex = constants.modelBufferIndex;
         lightPassConstants.frameID = frameCount;
         DeferredShading::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);
+
+        auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
+        DeferredShading::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
+        DeferredShading::ShadowMapVolumetricLightPass(gpuScene, frameCount);
+        vkw::CmdEndTimeStamp(volumetricTS);
+
+        auto postProcessingTS = vkw::CmdBeginTimeStamp("PostProcessingPass");
+        DeferredShading::PostProcessingPass(gpuScene);
+        vkw::CmdEndTimeStamp(postProcessingTS);
+
+        auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
+        DeferredShading::LineRenderingPass(gpuScene);
+        vkw::CmdEndTimeStamp(lineTS);
 
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {
@@ -213,17 +232,15 @@ private:
 
         vkw::CmdEndPresent();
         vkw::CmdEndTimeStamp(totalTS);
-
     }
 
     void DrawFrame() {
         LUZ_PROFILE_FUNC();
         DrawEditor();
-        vkw::AcquireImage();
+        RenderFrame();
         if (vkw::GetSwapChainDirty()) {
             return;
         }
-        RenderFrame();
         vkw::SubmitAndPresent();
         frameCount = (frameCount + 1) % (1 << 15);
     }
@@ -247,9 +264,7 @@ private:
             vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         }
         DeferredShading::CreateImages(viewportSize.x, viewportSize.y);
-        // glm was designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-        // the easiest way to fix this is fliping the scaling factor of the y axis
-        mainCamera.SetExtent(viewportSize.x, viewportSize.y);
+        camera->extent = {viewportSize.x, viewportSize.y};
     }
 
     void FinishImgui() {

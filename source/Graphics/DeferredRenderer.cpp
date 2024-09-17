@@ -1,7 +1,11 @@
 #include "Luzpch.hpp"
 
+#include "GPUScene.hpp"
+#include "AssetManager.hpp"
 #include "DeferredRenderer.hpp"
 #include "VulkanWrapper.h"
+#include "LuzCommon.h"
+#include "DebugDraw.h"
 
 #include "FileManager.hpp"
 #include <imgui/ImGuizmo.h>
@@ -12,6 +16,12 @@ struct Context {
     vkw::Pipeline opaquePipeline;
     vkw::Pipeline lightPipeline;
     vkw::Pipeline composePipeline;
+    vkw::Pipeline shadowMapPipeline;
+    vkw::Pipeline ssvlPipeline;
+    vkw::Pipeline shadowMapVolumetricLightPipeline;
+    vkw::Pipeline lineRenderingPipeline;
+    vkw::Pipeline fontRenderingPipeline;
+    vkw::Pipeline postProcessingPipeline;
 
     vkw::Image albedo;
     vkw::Image normal;
@@ -19,7 +29,9 @@ struct Context {
     vkw::Image emission;
     vkw::Image depth;
     vkw::Image light;
+    vkw::Image history;
     vkw::Image compose;
+    vkw::Image debug;
 };
 
 struct ComposeConstant {
@@ -27,9 +39,11 @@ struct ComposeConstant {
     int lightRID;
     int albedoRID;
     int normalRID;
+
     int materialRID;
     int emissionRID;
     int depthRID;
+    int debugRID;
 };
 
 Context ctx;
@@ -61,6 +75,20 @@ void CreateShaders() {
         .useDepth = true,
         .depthFormat = {ctx.depth.format}
     });
+    ctx.shadowMapPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "shadowMap.vert"},
+            {.stage = vkw::ShaderStage::Geometry, .path = "shadowMap.geom"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "shadowMap.frag"},
+        },
+        .name = "ShadowMap Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
+        .colorFormats = { },
+        .useDepth = true,
+        .depthFormat = { vkw::Format::D32_sfloat },
+        .cullFront = true,
+    });
     ctx.composePipeline = vkw::CreatePipeline({
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
@@ -72,6 +100,50 @@ void CreateShaders() {
         .colorFormats = {vkw::Format::BGRA8_unorm},
         .useDepth = false,
     });
+    ctx.ssvlPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "screenSpaceVolumetricLight.comp"},
+        },
+        .name = "VolumetricLight Pipeline",
+    });
+    ctx.shadowMapVolumetricLightPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "shadowMapVolumetricLight.comp"},
+        },
+        .name = "ShadowMapVolumetricLight Pipeline",
+    });
+    ctx.lineRenderingPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "debug.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "debug.frag"},
+        },
+        .name = "LineRendering Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.debug.format},
+        .useDepth = false,
+        .lineTopology = true,
+    });
+    ctx.fontRenderingPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "font.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "font.frag"},
+        },
+        .name = "FontRendering Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.debug.format},
+        .useDepth = false,
+    });
+    ctx.postProcessingPipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "postProcessing.comp"},
+        },
+        .name = "PostProcessing Pipeline",
+    });
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
@@ -81,6 +153,13 @@ void CreateImages(uint32_t width, uint32_t height) {
         .format = vkw::Format::RGBA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Albedo Attachment"
+    });
+    ctx.debug = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .name = "Debug Attachment"
     });
     ctx.normal = vkw::CreateImage({
         .width = width,
@@ -106,9 +185,16 @@ void CreateImages(uint32_t width, uint32_t height) {
     ctx.light = vkw::CreateImage({
         .width = width,
         .height = height,
-        .format = vkw::Format::RGBA8_unorm,
-        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
         .name = "Light Attachment"
+    });
+    ctx.history = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "History Attachment"
     });
     ctx.depth = vkw::CreateImage({
         .width = width,
@@ -144,6 +230,62 @@ void EndPass() {
     vkw::CmdEndRendering();
 }
 
+void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
+    ShadowMapData& shadowMap = gpuScene.GetShadowMap(light->uuid);
+    vkw::Image& img = shadowMap.img;
+    vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
+
+    ShadowMapConstants constants;
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.lightIndex = shadowMap.lightIndex;
+
+    uint32_t layers = light->lightType == LightNode::LightType::Point ? 6u : 1u;
+
+    vkw::CmdBeginRendering({}, {img}, layers);
+    vkw::CmdBindPipeline(ctx.shadowMapPipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    auto& allModels = gpuScene.GetMeshModels();
+    for (GPUModel& model : allModels) {
+        constants.modelID = model.modelRID;
+        vkw::CmdPushConstants(&constants, sizeof(constants));
+        vkw::CmdDrawMesh(model.mesh.vertexBuffer, model.mesh.indexBuffer, model.mesh.indexCount);
+    }
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(img, vkw::Layout::DepthRead);
+    shadowMap.readable = true;
+}
+
+void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.ssvlPipeline);
+    VolumetricLightConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.lightRID = ctx.light.RID();
+    constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.frame = frame;
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+}
+
+void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.shadowMapVolumetricLightPipeline);
+    VolumetricLightConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.lightRID = ctx.light.RID();
+    constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.frame = frame;
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
+}
+
 void LightPass(LightConstants constants) {
     std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
     for (auto& attach : attachs) {
@@ -176,6 +318,7 @@ void ComposePass(bool separatePass, Output output) {
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
     constants.imageType = uint32_t(output);
+    constants.debugRID = ctx.debug.RID();
 
     if (separatePass) {
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ColorAttachment);
@@ -188,6 +331,71 @@ void ComposePass(bool separatePass, Output output) {
         vkw::CmdEndRendering();
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
     }
+}
+
+void LineRenderingPass(GPUScene& gpuScene) {
+    auto strips = DebugDraw::Get();
+    if (strips.size() == 0) {
+        return;
+    }
+    vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ ctx.debug });
+    vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
+
+    LineRenderingConstants constants;
+    constants.imageSize = {ctx.light.width, ctx.light.height};
+    constants.linesRID = 0;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.outputRID = ctx.light.RID();
+    constants.lineCount = 0;
+
+    int offset = 0;
+    for (const auto& s : strips) {
+        if (!s.config.hide) {
+            constants.color = s.config.color;
+            constants.depthAware = s.config.depthAware;
+            vkw::CmdPushConstants(&constants, sizeof(constants));
+            vkw::CmdDrawLineStrip(gpuScene.GetLinesBuffer(), offset, s.points.size(), s.config.thickness);
+        }
+        offset += s.points.size();
+    }
+
+    FontRenderingConstants fontCtx;
+    fontCtx.depthRID = ctx.depth.RID();
+    fontCtx.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    vkw::CmdBindPipeline(ctx.fontRenderingPipeline);
+    for (const auto& s : strips) {
+        if (!s.config.hide && s.config.drawTitle && s.points.size() > 0) {
+            fontCtx.color = s.config.color;
+            fontCtx.depthAware = s.config.depthAware;
+            fontCtx.fontRID = gpuScene.GetFontBitmap();
+            fontCtx.fontSize = 0.5f;
+            fontCtx.charSize = 64;
+            fontCtx.pos = s.points[0];
+            for (int i = 0; i < s.name.size(); i++) {
+                fontCtx.charCode = (uint8_t)s.name.c_str()[i];
+                fontCtx.charIndex = i;
+                vkw::CmdPushConstants(&fontCtx, sizeof(fontCtx));
+                vkw::CmdDrawPassThrough();
+            }
+        }
+    }
+
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
+}
+
+void PostProcessingPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.light, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.history, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.postProcessingPipeline);
+    PostProcessingConstants constants;
+    constants.historyRID = ctx.history.RID();
+    constants.lightRID = ctx.light.RID();
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.light.width / 32 + 1, ctx.light.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.light, vkw::Layout::ShaderRead);
 }
 
 vkw::Image& GetComposedImage() {

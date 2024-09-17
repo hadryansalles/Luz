@@ -20,6 +20,7 @@ enum class ObjectType {
     Node,
     MeshNode,
     LightNode,
+    CameraNode,
     Count,
 };
 
@@ -32,8 +33,18 @@ inline std::string ObjectTypeName[] = {
     "Node",
     "MeshNode",
     "LightNode",
+    "CameraNode",
     "Count",
 };
+
+enum ShadowType {
+    ShadowDisabled = 0,
+    ShadowRayTraced = 1,
+    ShadowMap = 2,
+    ShadowTypeCount = 3,
+};
+
+inline std::string ShadowTypeNames[] = { "Disabled", "RayTraced", "Map" };
 
 struct Object {
     std::string name = "Unintialized";
@@ -88,8 +99,8 @@ struct MeshAsset : Asset {
 struct MaterialAsset : Asset {
     glm::vec4 color = glm::vec4(1.0f);
     glm::vec3 emission = glm::vec3(0.0f);
-    f32 metallic = 1;
-    f32 roughness = 1;
+    f32 metallic = 0;
+    f32 roughness = 0.5;
     Ref<TextureAsset> aoMap;
     Ref<TextureAsset> colorMap;
     Ref<TextureAsset> normalMap;
@@ -158,6 +169,7 @@ struct Node : Object {
     glm::mat4 GetWorldTransform();
     glm::vec3 GetWorldPosition();
     glm::mat4 GetParentTransform();
+    glm::vec3 GetWorldFront();
     static glm::mat4 ComposeTransform(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scl, glm::mat4 parent = glm::mat4(1));
 };
 
@@ -173,34 +185,103 @@ struct LightNode : Node {
     enum LightType {
         Point = 0,
         Spot = 1,
-        Directional = 2
+        Directional = 2,
+        LightTypeCount = 3,
     };
     inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
+
+    enum VolumetricType {
+        Disabled = 0,
+        ScreenSpace = 1,
+        ShadowMap = 2,
+        VolumetricLightCount = 3,
+    };
+    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "ShadowMap"};
+
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
     LightType lightType = LightType::Point;
-    bool shadows = true;
     float radius = 2.0f;
-    float innerAngle = 2.0;
-    float outerAngle = 2.0;
+    float innerAngle = 60.f;
+    float outerAngle = 50.f;
+
+    float shadowMapRange = 3.0f;
+    float shadowMapFar = 2000.0f;
+
+    struct VolumetricScreenSpaceParams {
+        float absorption = 0.5;
+        int samples = 128;
+    } volumetricScreenSpaceParams;
+
+    struct VolumetricShadowMapParams {
+        float weight = 0.0001;
+        float absorption = 1.0;
+        float density = 1.094;
+        int samples = 128;
+    } volumetricShadowMapParams;
+
+    VolumetricType volumetricType = VolumetricType::ScreenSpace;
 
     LightNode();
     virtual void Serialize(Serializer& s);
 };
 
 struct CameraNode : Node {
+    enum CameraMode {
+        Orbit,
+        Fly
+    };
+    inline static const char* modeNames[] = { "Orbit", "Fly" };
 
+    enum class CameraType {
+        Perspective,
+        Orthographic
+    };
+    inline static const char* typeNames[] = { "Perspective", "Orthographic" };
+
+    CameraType cameraType = CameraType::Perspective;
+    CameraMode mode = CameraMode::Orbit;
+
+    glm::vec3 eye = glm::vec3(0);
+    glm::vec3 center = glm::vec3(0);
+    glm::vec3 rotation = glm::vec3(0);
+
+    float zoom = 10.0f;
+
+    float farDistance = 1000.0f;
+    float nearDistance = 0.01f;
+    float horizontalFov = 60.0f;
+
+    float orthoFarDistance = 10.0f;
+    float orthoNearDistance = -100.0f;
+
+    glm::vec2 extent = glm::vec2(1.0f);
+
+    CameraNode();
+    virtual void Serialize(Serializer& s);
+
+    glm::mat4 GetView();
+    glm::mat4 GetProj();
+    glm::mat4 GetProj(float zNear, float zFar);
 };
 
 struct SceneAsset : Asset {
     std::vector<Ref<Node>> nodes;
     glm::vec3 ambientLightColor = glm::vec3(1);
     float ambientLight = 0.01f;
-    int aoSamples = 32;
-    int lightSamples = 16;
+    int aoSamples = 4;
+    int lightSamples = 2;
     float aoMin = 0.0001f;
     float aoMax = 1.0000f;
     float exposure = 2.0f;
+    ShadowType shadowType = ShadowType::ShadowRayTraced;
+    uint32_t shadowResolution = 1024;
+
+    float camSpeed = 0.01;
+    float zoomSpeed = 0.1;
+    float rotationSpeed = 0.3;
+    bool autoOrbit = false;
+    Ref<CameraNode> mainCamera;
 
     template<typename T>
     Ref<T> Add() {
@@ -214,6 +295,17 @@ struct SceneAsset : Asset {
     }
 
     void DeleteRecursive(const Ref<Node>& node);
+
+    template<typename T>
+    Ref<T> Get(UUID id) {
+        // todo: search recursively
+        for (auto& node : nodes) {
+            if (node->uuid == id) {
+                return std::dynamic_pointer_cast<T>(node);
+            }
+        }
+        return {};
+    }
 
     template<typename T>
     void GetAll(ObjectType type, std::vector<Ref<T>>& all) {
@@ -249,10 +341,13 @@ struct SceneAsset : Asset {
 };
 
 struct AssetManager {
+    AssetManager();
+    ~AssetManager();
     std::vector<Ref<Node>> AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
-    void LoadProject(const std::filesystem::path& path);
-    void SaveProject(const std::filesystem::path& path);
+    void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    void SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
     Ref<SceneAsset> GetInitialScene();
+    Ref<CameraNode> GetMainCamera(Ref<SceneAsset>& scene);
     void OnImgui();
 
     template<typename T>
@@ -318,6 +413,7 @@ struct AssetManager {
             case ObjectType::Node: return CreateObject<Node>(name, uuid);
             case ObjectType::MeshNode: return CreateObject<MeshNode>(name, uuid);
             case ObjectType::LightNode: return CreateObject<LightNode>(name, uuid);
+            case ObjectType::CameraNode: return CreateObject<CameraNode>(name, uuid);
             default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
@@ -348,11 +444,13 @@ struct AssetManager {
             case ObjectType::Node: return CloneObject<Node>(rhs);
             case ObjectType::MeshNode: return CloneObject<MeshNode>(rhs);
             case ObjectType::LightNode: return CloneObject<LightNode>(rhs);
+            case ObjectType::CameraNode: return CloneObject<CameraNode>(rhs);
             default: DEBUG_ASSERT(false, "Invalid object type {}.", type) return nullptr;
         }
     }
 
 private:
+    struct AssetManagerImpl* impl;
     std::unordered_map<UUID, Ref<Asset>> assets;
     static UUID NewUUID();
     UUID initialScene = 0;

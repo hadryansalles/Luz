@@ -1,0 +1,70 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    VolumetricLightConstants ctx;
+};
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+// todo: put in some header
+vec3 DepthToWorld(vec2 screenPos, float depth) {
+    vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePos = sceneBlock.inverseProj*clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    vec4 worldSpacePos = sceneBlock.inverseView*viewSpacePos;
+    return worldSpacePos.xyz;
+}
+
+// todo: put in some header
+vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
+    vec2 blueNoiseSize = textureSize(textures[scene2.blueNoiseTexture], 0);
+    ivec2 fragUV = ivec2(mod(pixelPos, blueNoiseSize));
+    return fract(texelFetch(textures[scene2.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
+}
+
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
+        return;
+    }
+    vec2 pixelUV = pixelPos / vec2(ctx.imageSize);
+    float pixelDepth = texture(textures[ctx.depthRID], pixelUV).r;
+    vec3 radiance = vec3(0);
+    for (int i = 0; i < sceneBlock.numLights; i++) {
+        LightBlock light = sceneBlock.lights[i];
+        if (light.volumetricType != VOLUMETRIC_TYPE_SCREEN_SPACE) {
+            continue;
+        }
+
+        vec4 lightProjPos = sceneBlock.projView * vec4(light.position, 1);
+        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL) {
+            lightProjPos = sceneBlock.projView * vec4(-light.direction * 10000.0, 1);
+        }
+
+        vec2 lightUV = (lightProjPos.xy / lightProjPos.w) * 0.5 + vec2(0.5);
+
+        int samples = light.volumetricSamples;
+        float absorption = light.volumetricAbsorption / 1000.0;
+        vec2 deltaUV = (pixelUV - lightUV) * (1.0 / float(samples));
+        vec2 sampleUV = pixelUV + (BlueNoiseSample(pixelPos, 0).r * 2.0 - 1.0) * 0.003;
+        for (int i = 0; i < samples; i++) {
+            sampleUV -= deltaUV + (BlueNoiseSample(pixelPos, i + 1).r * 2.0 - 1.0) * 0.003;
+            bool inside = sampleUV.x >= 0 && sampleUV.x <= 1 && sampleUV.y >= 0 && sampleUV.y <= 1;
+            if (inside && texture(textures[ctx.depthRID], sampleUV).r == 1.0) {
+                vec3 sampleRadiance = light.color * light.intensity * absorption;
+                if (light.type == LUZ_LIGHT_TYPE_POINT) {
+                    vec3 sampleWorldPos = DepthToWorld(sampleUV, texture(textures[ctx.depthRID], sampleUV).r);
+                    sampleRadiance *= 5.0 / length(sampleWorldPos - light.position);
+                }
+                radiance += sampleRadiance;
+            }
+        }
+    }
+    vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
+    rgba += vec4(radiance, 0);
+    imageStore(images[ctx.lightRID], pixelPos, rgba);
+}

@@ -31,16 +31,33 @@ inline void from_json(const Json& j, glm::vec3& v) {
     }
 }
 
+struct BinaryStorage {
+    std::vector<u8> data;
+
+    uint32_t Push(void* ptr, uint32_t size) {
+        uint32_t offset = data.size();
+        data.resize(data.size() + size);
+        memcpy(data.data() + offset, ptr, size);
+        return offset;
+    }
+
+    void* Get(uint32_t offset) {
+        return data.data() + offset;
+    }
+};
+
 struct Serializer {
     Json& j;
+    BinaryStorage& storage;
     AssetManager& manager;
     int dir = 0;
     std::filesystem::path filename;
     inline static constexpr int LOAD = 0;
     inline static constexpr int SAVE = 1;
 
-    Serializer(Json& j, int dir, AssetManager& manager)
+    Serializer(Json& j, BinaryStorage& storage, int dir, AssetManager& manager)
         : j(j)
+        , storage(storage)
         , manager(manager)
         , dir(dir)
     {}
@@ -53,10 +70,10 @@ struct Serializer {
             std::string name = j["name"];
             UUID uuid = j["uuid"];
             object = std::dynamic_pointer_cast<T>(manager.CreateObject(type, name, uuid));
-            Serializer s(j, dir, manager);
+            Serializer s(j, storage, dir, manager);
             object->Serialize(s);
         } else {
-            Serializer s(j, dir, manager);
+            Serializer s(j, storage, dir, manager);
             j["type"] = object->type;
             j["name"] = object->name;
             j["uuid"] = object->uuid;
@@ -76,11 +93,18 @@ struct Serializer {
     template<typename T>
     void Vector(const std::string& field, std::vector<T>& v) {
         if (dir == SAVE) {
-            j[field] = EncodeBase64((u8*)v.data(), v.size() * sizeof(T));
+            uint32_t size = v.size() * sizeof(T);
+            uint32_t offset = storage.Push(v.data(), size);
+            j[field] = Json::object();
+            j[field]["offset"] = offset;
+            j[field]["size"] = size;
+            //j[field] = EncodeBase64((u8*)v.data(), v.size() * sizeof(T));
         } else if (j.contains(field)) {
-            std::vector<u8> data = DecodeBase64(j[field]);
-            v.resize(data.size()/sizeof(T));
-            memcpy(v.data(), data.data(), data.size());
+            //std::vector<u8> data = DecodeBase64(j[field]);
+            uint32_t size = j[field]["size"];
+            uint32_t offset = j[field]["offset"];
+            v.resize(size / sizeof(T));
+            memcpy(v.data(), storage.Get(offset), size);
         }
     }
 
@@ -89,7 +113,7 @@ struct Serializer {
          if (dir == SAVE) {
              Json childrenArray = Json::array();
              for (auto& x : v) {
-                 Serializer childSerializer(childrenArray.emplace_back(), dir, manager);
+                 Serializer childSerializer(childrenArray.emplace_back(), storage, dir, manager);
                  childSerializer.Serialize(x);
              }
              j[field] = childrenArray;
@@ -99,7 +123,7 @@ struct Serializer {
                  ObjectType type = j["type"];
                  std::string name = j["name"];
                  UUID uuid = j["uuid"];
-                 Serializer childSerializer(value, dir, manager);
+                 Serializer childSerializer(value, storage, dir, manager);
                  auto& child = v.emplace_back();
                  childSerializer.Serialize(child);
              }
@@ -116,6 +140,19 @@ struct Serializer {
             }
         } else if (j.contains(field) && j[field] != 0) {
             object = manager.Get<T>(j[field]);
+        }
+    }
+
+    template <typename T>
+    void Node(const std::string& field, Ref<T>& node, SceneAsset* scene) {
+        if (dir == SAVE) {
+            if (node) {
+                j[field] = node->uuid;
+            } else {
+                j[field] = 0;
+            }
+        } else if (j.contains(field) && j[field] != 0) {
+            node = scene->Get<T>(j[field]);
         }
     }
 };

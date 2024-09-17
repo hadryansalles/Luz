@@ -1,10 +1,11 @@
 #include "Editor.h"
 #include "Luzpch.hpp"
 
+#include "GPUScene.hpp"
 #include "AssetManager.hpp"
-#include "Camera.hpp"
 #include "VulkanWrapper.h"
 #include "Window.hpp"
+#include "DebugDraw.h"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
@@ -29,9 +30,9 @@ struct EditorImpl {
     std::string assetNameFilter = "";
     void OnNode(Ref<Node> node);
     void InspectMeshNode(AssetManager& manager, Ref<MeshNode> node);
-    void InspectLightNode(AssetManager& manager, Ref<LightNode> node);
+    void InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene);
     void InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material);
-    void OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
+    void OnTransform(const Ref<CameraNode>& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
     void Select(Ref<Node>& node);
     int FindSelected(Ref<Node>& node);
 };
@@ -149,7 +150,6 @@ void Editor::BeginFrame() {
     vkw::BeginImGui();
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-    //ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 }
 
 ImDrawData* Editor::EndFrame() {
@@ -183,7 +183,7 @@ void EditorImpl::OnNode(Ref<Node> node) {
     ImGui::PopID();
 }
 
-void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent) {
+void EditorImpl::OnTransform(const Ref<CameraNode>& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent) {
     // todo: use parent transform to allow World option
     bool open = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
     if (!open) {
@@ -235,10 +235,11 @@ void EditorImpl::OnTransform(Camera& camera, glm::vec3& position, glm::vec3& rot
         currentGizmoMode = ImGuizmo::LOCAL;
     }
     glm::mat4 modelMat = Node::ComposeTransform(position, rotation, scale, parent);
-    glm::mat4 guizmoProj(camera.GetProj());
+    glm::mat4 guizmoProj(camera->GetProj());
     guizmoProj[1][1] *= -1;
     ImGuiIO& io = ImGui::GetIO();
-    ImGuizmo::Manipulate(glm::value_ptr(camera.GetView()), glm::value_ptr(guizmoProj), currentGizmoOperation, currentGizmoMode, glm::value_ptr(modelMat));
+    glm::mat4 camView = camera->GetView();
+    ImGuizmo::Manipulate(glm::value_ptr(camView), glm::value_ptr(guizmoProj), currentGizmoOperation, currentGizmoMode, glm::value_ptr(modelMat));
     modelMat = glm::inverse(parent) * modelMat;
     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(modelMat), glm::value_ptr(position), glm::value_ptr(rotation), glm::value_ptr(scale));
     ImGui::Separator();
@@ -273,7 +274,7 @@ void Editor::DemoPanel() {
     ImGui::ShowDemoWindow();
 }
 
-void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
+void Editor::ScenePanel(Ref<SceneAsset>& scene) {
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -326,13 +327,23 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene, Camera& camera) {
             ImGui::DragFloat("Max##AO", &scene->aoMax, 0.1f, 0.000f, 1000.0f);
             ImGui::SeparatorText("Lights");
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
+            ImGui::SeparatorText("Shadows");
+            if (ImGui::BeginCombo("Type###Shadow", ShadowTypeNames[(int)scene->shadowType].c_str())) {
+                for (int i = 0; i < ShadowType::ShadowTypeCount; i++) {
+                    bool selected = scene->shadowType == i;
+                    if (ImGui::Selectable(ShadowTypeNames[i].c_str(), &selected)) {
+                        scene->shadowType = (ShadowType)i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
-        camera.OnImgui();
+        // todo: scene camera prameters, speed, etc
     }
     ImGui::End();
 }
 
-void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
+void Editor::InspectorPanel(AssetManager& assetManager, const Ref<CameraNode>& camera, GPUScene& gpuScene) {
     bool open = ImGui::Begin("Inspector");
     if (open && impl->selectedNodes.size() > 0) {
         // todo: handle multi selection
@@ -349,18 +360,64 @@ void Editor::InspectorPanel(AssetManager& assetManager, Camera& camera) {
                 impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
                 break;
             case ObjectType::LightNode:
-                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected));
+                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected), gpuScene);
                 break;
         }
     }
     ImGui::End();
 }
 
-void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node) {
+void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene) {
     ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
-    ImGui::DragFloat("Intensity", &node->intensity, 0.01, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::BeginCombo("Type", LightNode::typeNames[node->lightType])) {
+        for (int i = 0; i < LightNode::LightType::LightTypeCount; i++) {
+            bool selected = node->lightType == i;
+            if (ImGui::Selectable(LightNode::typeNames[i], &selected)) {
+                node->lightType = (LightNode::LightType)i;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    if (node->lightType == LightNode::LightType::Spot) {
+        ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
+        ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);
+    }
+    ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
-    ImGui::Checkbox("Shadow", &node->shadows);
+    if (ImGui::CollapsingHeader("Shadow Map")) {
+        ImGui::DragFloat("Range##Shadow", &node->shadowMapRange, 0.01f);
+        ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
+        if (gpuScene.GetShadowMap(node->uuid).readable) {
+            auto& img = gpuScene.GetShadowMap(node->uuid).img;
+            if (node->lightType == LightNode::LightType::Point) {
+                for (int i = 0; i < 6; i++) {
+                    ImGui::Image(img.ImGuiRID(i), ImVec2(400, 400*img.height/img.width));
+                }
+            } else {
+                ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
+            }
+        }
+    }
+    if (ImGui::CollapsingHeader("Volumetric Light")) {
+        if (ImGui::BeginCombo("Volumetric", LightNode::volumetricTypeNames[node->volumetricType])) {
+            for (int i = 0; i < LightNode::VolumetricType::VolumetricLightCount; i++) {
+                bool selected = node->volumetricType == i;
+                if (ImGui::Selectable(LightNode::volumetricTypeNames[i], &selected)) {
+                    node->volumetricType = (LightNode::VolumetricType)i;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (node->volumetricType == LightNode::VolumetricType::ScreenSpace) {
+            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricScreenSpaceParams.absorption, 0.01f, 0.0f, 1.0f);
+            ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples, 1, 0, 256);
+        } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
+            ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight);
+            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption);
+            ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density);
+            ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples);
+        }
+    }
 }
 
 void EditorImpl::InspectMeshNode(AssetManager& manager, Ref<MeshNode> node) {
@@ -463,6 +520,27 @@ bool Editor::ViewportPanel(vkw::Image& image, glm::ivec2& newViewportSize) {
 }
 
 void Editor::ProfilerPanel() {
+}
+
+void Editor::DebugDrawPanel() {
+    if (!ImGui::Begin("Debug Draw")) {
+        ImGui::End();
+        return;
+    }
+    auto data = DebugDraw::Get();
+    for (auto& line : data) {
+        if (ImGui::CollapsingHeader(line.name.c_str())) {
+            bool changed = ImGui::Checkbox("Hide", &line.config.hide);
+            changed |= ImGui::Checkbox("Update", &line.config.update);
+            changed |= ImGui::Checkbox("Depth", &line.config.depthAware);
+            changed |= ImGui::DragFloat("Thickness", &line.config.thickness, 0.01, 0, 10);
+            changed |= ImGui::ColorPicker4("Color", glm::value_ptr(line.config.color));
+            if (changed) {
+                DebugDraw::Config(line.name, line.config, false);
+            }
+        }
+    }
+    ImGui::End();
 }
 
 void Editor::ProfilerPopup() {
