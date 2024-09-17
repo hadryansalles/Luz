@@ -10,20 +10,18 @@ layout(push_constant) uniform _constants {
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
-
 void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    ivec2 imageSize = textureSize(textures[ctx.lightRID], 0).xy;
+    ivec2 imageSize = textureSize(textures[ctx.lightInputRID], 0).xy;
     if (pixelPos.x >= imageSize.x || pixelPos.y >= imageSize.y) {
         return;
     }
 
-    vec4 history = imageLoad(images[ctx.historyRID], pixelPos);
-    vec4 light = imageLoad(images[ctx.lightRID], pixelPos);
+    vec4 history = imageLoad(images[ctx.lightHistoryRID], pixelPos);
+    vec4 light = imageLoad(images[ctx.lightInputRID], pixelPos);
 
     float alpha = 1.0;
     light = alpha * light + (1.0 - alpha) * history;
 
-    imageStore(images[ctx.lightRID], pixelPos, light);
-    imageStore(images[ctx.historyRID], pixelPos, light);
+    imageStore(images[ctx.lightOutputRID], pixelPos, light);
 }

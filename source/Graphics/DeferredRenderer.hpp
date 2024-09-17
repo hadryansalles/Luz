@@ -12,7 +12,7 @@ struct LightNode;
 struct SceneAsset;
 struct GPUScene;
 
-namespace DeferredShading {
+namespace DeferredRenderer {
 
 struct OpaqueConstants {
     int sceneBufferIndex;
@@ -55,6 +55,8 @@ void LineRenderingPass(GPUScene& gpuScene);
 void BeginOpaquePass();
 void EndPass();
 void PostProcessingPass(GPUScene& gpuScene);
+void TAAPass(GPUScene& gpuScene);
+void SwapLightHistory();
 
 vkw::Image& GetComposedImage();
 

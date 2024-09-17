@@ -163,8 +163,13 @@ struct FontRenderingConstants {
 };
 
 struct PostProcessingConstants {
-    int lightRID;
-    int historyRID;
+    int lightInputRID;
+    int lightOutputRID;
+    int lightHistoryRID;
+    int depthRID;
+
+    int sceneBufferIndex;
+    int pad[3];
 };
 
 #if !defined(LUZ_ENGINE)

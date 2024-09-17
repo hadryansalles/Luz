@@ -20,3 +20,17 @@ std::vector<char> FileManager::ReadRawBytes(const std::string& filename) {
 
     return buffer;
 }
+
+int FileManager::GetFileVersion(const std::string& filename) {
+    std::filesystem::path filePath(filename);
+    if (!std::filesystem::exists(filePath)) {
+        LOG_ERROR("File does not exist: '{}'", filename);
+        return -1;
+    }
+
+    auto lastWriteTime = std::filesystem::last_write_time(filePath);
+    auto duration = lastWriteTime.time_since_epoch();
+    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+
+    return static_cast<int>(seconds);
+}

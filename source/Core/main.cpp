@@ -39,7 +39,7 @@ private:
     CameraController cameraController;
     bool viewportHovered = false;
     bool fullscreen = false;
-    DeferredShading::Output outputMode = DeferredShading::Output::Light;
+    DeferredRenderer::Output outputMode = DeferredRenderer::Output::Light;
 
     void Setup() {
         LUZ_PROFILE_FUNC();
@@ -53,8 +53,8 @@ private:
         LUZ_PROFILE_FUNC();
         Window::Create();
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
-        DeferredShading::CreateImages(Window::GetWidth(), Window::GetHeight());
-        DeferredShading::CreateShaders();
+        DeferredRenderer::CreateImages(Window::GetWidth(), Window::GetHeight());
+        DeferredRenderer::CreateShaders();
         gpuScene.Create();
         DebugDraw::Create();
         camera->extent = { viewportSize.x, viewportSize.y };
@@ -64,7 +64,7 @@ private:
         LUZ_PROFILE_FUNC();
         DebugDraw::Destroy();
         gpuScene.Destroy();
-        DeferredShading::Destroy();
+        DeferredRenderer::Destroy();
         vkw::Destroy();
         Window::Destroy();
         FinishImgui();
@@ -90,7 +90,7 @@ private:
             }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
-                DeferredShading::CreateShaders();
+                DeferredRenderer::CreateShaders();
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
             }
@@ -131,13 +131,13 @@ private:
             }
         }
         if (ImGui::IsKeyPressed(ImGuiKey_F7)) {
-            outputMode = DeferredShading::Output((outputMode + 1) % DeferredShading::Output::Count);
+            outputMode = DeferredRenderer::Output((outputMode + 1) % DeferredRenderer::Output::Count);
         }
 
         editor.BeginFrame();
 
         if (!fullscreen) {
-            viewportHovered = editor.ViewportPanel(DeferredShading::GetComposedImage(), newViewportSize);
+            viewportHovered = editor.ViewportPanel(DeferredRenderer::GetComposedImage(), newViewportSize);
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
@@ -168,12 +168,12 @@ private:
 
         auto totalTS = vkw::CmdBeginTimeStamp("Total");
 
-        DeferredShading::OpaqueConstants constants;
+        DeferredRenderer::OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
-        DeferredShading::BeginOpaquePass();
+        DeferredRenderer::BeginOpaquePass();
 
         {
             LUZ_PROFILE_NAMED("RenderModels");
@@ -187,40 +187,40 @@ private:
 
         // todo: light gizmos
 
-        DeferredShading::EndPass();
+        DeferredRenderer::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
 
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
-            DeferredShading::ShadowMapPass(light, scene, gpuScene);
+            DeferredRenderer::ShadowMapPass(light, scene, gpuScene);
         }
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
-        DeferredShading::LightConstants lightPassConstants;
+        DeferredRenderer::LightConstants lightPassConstants;
         lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
         lightPassConstants.modelBufferIndex = constants.modelBufferIndex;
         lightPassConstants.frameID = frameCount;
-        DeferredShading::LightPass(lightPassConstants);
+        DeferredRenderer::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);
 
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
-        DeferredShading::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
-        DeferredShading::ShadowMapVolumetricLightPass(gpuScene, frameCount);
+        DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
+        DeferredRenderer::ShadowMapVolumetricLightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(volumetricTS);
 
-        auto postProcessingTS = vkw::CmdBeginTimeStamp("PostProcessingPass");
-        DeferredShading::PostProcessingPass(gpuScene);
-        vkw::CmdEndTimeStamp(postProcessingTS);
+        auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
+        DeferredRenderer::TAAPass(gpuScene);
+        vkw::CmdEndTimeStamp(taaTS);
 
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
-        DeferredShading::LineRenderingPass(gpuScene);
+        DeferredRenderer::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);
 
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {
             vkw::CmdBeginPresent();
-            DeferredShading::ComposePass(false, outputMode);
+            DeferredRenderer::ComposePass(false, outputMode);
         }  else {
-            DeferredShading::ComposePass(true, outputMode);
+            DeferredRenderer::ComposePass(true, outputMode);
             vkw::CmdBeginPresent();
         }
         vkw::CmdEndTimeStamp(composeTS);
@@ -231,6 +231,8 @@ private:
 
         vkw::CmdEndPresent();
         vkw::CmdEndTimeStamp(totalTS);
+
+        DeferredRenderer::SwapLightHistory();
     }
 
     void DrawFrame() {
@@ -262,7 +264,7 @@ private:
             Window::UpdateFramebufferSize();
             vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         }
-        DeferredShading::CreateImages(viewportSize.x, viewportSize.y);
+        DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
         camera->extent = {viewportSize.x, viewportSize.y};
     }
 
