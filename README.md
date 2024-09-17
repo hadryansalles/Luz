@@ -13,16 +13,20 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 <a name="features"/>
 
 ## Features
+- Complete Vulkan Wrapper (including BLAS and TLAS creation)
+- Shadow Maps (Point/Directional)
+- Scene Serialization (JSON)
 - Deferred Rendering
 - Real-time ray traced shadows and ambient occlusion
 - PBR Shading with metallic, roughness, normal, ambient occlusion and emission
 - Vulkan bindless resources
-- Scene hierarchy
 - Asynchronous glTF and OBJ model loading
 - Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
 - Widgets for adjusting Vulkan settings at runtime
 
 ## Gallery
+- Screen Space Volumetric Light
+![ssvl](https://github.com/user-attachments/assets/fcbd3fd5-881f-4640-a887-565d7190da23)
 
 - Deferred Rendering (Light, Albedo, Normal, Material, Emissive and Depth)
 ![deferred](https://user-images.githubusercontent.com/37905502/154867586-7dfa15d1-faf7-4eab-8337-c578831c9044.gif)
