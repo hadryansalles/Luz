@@ -187,7 +187,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             .mesh = impl->meshes[node->mesh->uuid],
             .modelRID = uint32_t(impl->modelsBlock.size()),
             .node = node,
-        });
+            });
         ModelBlock& block = impl->modelsBlock.emplace_back();
         Ref<MaterialAsset> material = node->material;
         block = impl->defaultModelBlock;
@@ -212,6 +212,13 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         block.vertexBuffer = impl->meshes[node->mesh->uuid].vertexBuffer.RID();
         block.indexBuffer = impl->meshes[node->mesh->uuid].indexBuffer.RID();
         block.modelMat = node->GetWorldTransform();
+
+        auto pos = node->GetWorldPosition();
+        auto size = node->scale;
+#if LUZ_DEBUG
+        DebugDraw::Config("model" + std::to_string(node->uuid), { .color = {0.3f, 0.8f, 0.2f, 1.0f}, .update = true});
+        DebugDraw::Box("model" + std::to_string(node->uuid),  pos - size * 0.5f, pos + size * 0.5f);
+#endif
     }
 
     SceneBlock& s = impl->sceneBlock;
@@ -240,10 +247,10 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         block.shadowMap = -1;
         block.volumetricType = light->volumetricType;
         if (light->volumetricType == LightNode::VolumetricType::ScreenSpace) {
-            block.volumetricWeight = light->volumetricScreenSpaceParams.weight;
             block.volumetricSamples = light->volumetricScreenSpaceParams.samples;
             block.volumetricAbsorption = light->volumetricScreenSpaceParams.absorption;
-        } else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
+        }
+        else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
             block.volumetricWeight = light->volumetricShadowMapParams.weight;
             block.volumetricSamples = light->volumetricShadowMapParams.samples;
             block.volumetricDensity = light->volumetricShadowMapParams.density;
@@ -261,7 +268,12 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.viewProj[3] = proj * glm::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
             block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
             block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
-        } else {
+#if LUZ_DEBUG
+            DebugDraw::Config("light" + std::to_string(light->uuid), {.update = true});
+            DebugDraw::Box("light" + std::to_string(light->uuid), pos - glm::vec3(light->radius), pos + glm::vec3(light->radius));
+#endif
+        }
+        else {
             std::vector<glm::vec4> frustumCorners;
             auto camProjView = glm::inverse(camera->GetProj(camera->nearDistance, camera->farDistance / light->shadowMapRange) * s.view);
             frustumCorners.reserve(8);
@@ -297,9 +309,9 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             glm::mat4 proj = glm::ortho(frustumMin.x, frustumMax.x, frustumMin.y, frustumMax.y, frustumMax.z, frustumMin.z);
             block.viewProj[0] = proj * view;
         }
-        
+
         auto it = impl->shadowMaps.find(light->uuid);
-        if (it == impl->shadowMaps.end() || (isPoint && it->second.img.layers != 6) ) {
+        if (it == impl->shadowMaps.end() || (isPoint && it->second.img.layers != 6)) {
             // todo: add shadow map settings to scene and recreate if changed
             impl->shadowMaps[light->uuid].img = vkw::CreateImage({
                 .width = scene->shadowResolution,
@@ -308,7 +320,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
                 .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
                 .name = "ShadowMap" + std::to_string(light->uuid),
                 .layers = light->lightType == LightNode::LightType::Point ? 6u : 1u,
-            });
+                });
         }
 
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
@@ -325,6 +337,27 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.whiteTexture = -1;
     s.blackTexture = -1;
     s.shadowType = scene->shadowType;
+
+
+    glm::vec3 starting = { 3, 0.4, 0 };
+    glm::vec3 offset = { 2, 0, 0 };
+
+#if LUZ_DEBUG
+    DebugDraw::Config("debug_box", {.color = {1.0f, 0.0f, 0.0f, 1.0f}, .update = true});
+    DebugDraw::Box("debug_box", starting, starting + glm::vec3(1.0f));
+
+    DebugDraw::Config("debug_rect", {.color = {0.0f, 1.0f, 0.0f, 1.0f}, .update = true});
+    DebugDraw::Rect("debug_rect", starting + offset + glm::vec3(0.0f, 0.0f, 0.5f), starting + offset + glm::vec3(0, 1, 0) + glm::vec3(0.0f, 0.0f, 0.5f), starting + offset + glm::vec3(1, 1, 0) + glm::vec3(0.0f, 0.0f, 0.5f), starting + offset + glm::vec3(1, 0, 0) + glm::vec3(0.0f, 0.0f, 0.5f));
+
+    DebugDraw::Config("debug_sphere", {.color = {0.0f, 0.0f, 1.0f, 1.0f}, .update = true});
+    DebugDraw::Sphere("debug_sphere", starting + offset * 2.0f + glm::vec3(0.5f), 0.5f);
+
+    DebugDraw::Config("debug_cylinder", {.color = {1.0f, 1.0f, 0.0f, 1.0f}, .update = true});
+    DebugDraw::Cylinder("debug_cylinder", starting + offset * 3.0f + glm::vec3(0.5f, 0.5f, 0.5f), 1.0f, 0.5f);
+
+    DebugDraw::Config("debug_cone", {.color = {1.0f, 0.0f, 1.0f, 1.0f}, .update = true});
+    DebugDraw::Cone("debug_cone", starting + offset * 4.0f + glm::vec3(0.5f, 0.0f, 0.5f), starting + offset * 4.0f + glm::vec3(0.5f, 1.0f, 0.5f), 0.5f);
+#endif
 }
 
 void GPUScene::UpdateResourcesGPU() {

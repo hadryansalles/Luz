@@ -378,43 +378,45 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         }
         ImGui::EndCombo();
     }
-    if (ImGui::BeginCombo("Volumetric", LightNode::volumetricTypeNames[node->volumetricType])) {
-        for (int i = 0; i < LightNode::VolumetricType::VolumetricLightCount; i++) {
-            bool selected = node->volumetricType == i;
-            if (ImGui::Selectable(LightNode::volumetricTypeNames[i], &selected)) {
-                node->volumetricType = (LightNode::VolumetricType)i;
-            }
-        }
-        ImGui::EndCombo();
-    }
     if (node->lightType == LightNode::LightType::Spot) {
         ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
         ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
-    ImGui::DragFloat("Range##Shadow", &node->shadowMapRange, 0.01f);
-    ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
-    if (gpuScene.GetShadowMap(node->uuid).readable) {
-        auto& img = gpuScene.GetShadowMap(node->uuid).img;
-        if (node->lightType == LightNode::LightType::Point) {
-            for (int i = 0; i < 6; i++) {
-                ImGui::Image(img.ImGuiRID(i), ImVec2(400, 400*img.height/img.width));
+    if (ImGui::CollapsingHeader("Shadow Map")) {
+        ImGui::DragFloat("Range##Shadow", &node->shadowMapRange, 0.01f);
+        ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
+        if (gpuScene.GetShadowMap(node->uuid).readable) {
+            auto& img = gpuScene.GetShadowMap(node->uuid).img;
+            if (node->lightType == LightNode::LightType::Point) {
+                for (int i = 0; i < 6; i++) {
+                    ImGui::Image(img.ImGuiRID(i), ImVec2(400, 400*img.height/img.width));
+                }
+            } else {
+                ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
             }
-        } else {
-            ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
         }
     }
-    // todo: fix maximuns and minimuns
-    if (node->volumetricType == LightNode::VolumetricType::ScreenSpace) {
-        ImGui::DragFloat("Weight##Volumetric", &node->volumetricScreenSpaceParams.weight);
-        ImGui::DragFloat("Absorption##Volumetric", &node->volumetricScreenSpaceParams.absorption);
-        ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples);
-    } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
-        ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight);
-        ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption);
-        ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density);
-        ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples);
+    if (ImGui::CollapsingHeader("Volumetric Light")) {
+        if (ImGui::BeginCombo("Volumetric", LightNode::volumetricTypeNames[node->volumetricType])) {
+            for (int i = 0; i < LightNode::VolumetricType::VolumetricLightCount; i++) {
+                bool selected = node->volumetricType == i;
+                if (ImGui::Selectable(LightNode::volumetricTypeNames[i], &selected)) {
+                    node->volumetricType = (LightNode::VolumetricType)i;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (node->volumetricType == LightNode::VolumetricType::ScreenSpace) {
+            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricScreenSpaceParams.absorption, 0.01f, 0.0f, 1.0f);
+            ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples, 1, 0, 256);
+        } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
+            ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight);
+            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption);
+            ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density);
+            ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples);
+        }
     }
 }
 
@@ -531,7 +533,7 @@ void Editor::DebugDrawPanel() {
             bool changed = ImGui::Checkbox("Hide", &line.config.hide);
             changed |= ImGui::Checkbox("Update", &line.config.update);
             changed |= ImGui::Checkbox("Depth", &line.config.depthAware);
-            changed |= ImGui::DragFloat("Thickness", &line.config.thickness);
+            changed |= ImGui::DragFloat("Thickness", &line.config.thickness, 0.01, 0, 10);
             changed |= ImGui::ColorPicker4("Color", glm::value_ptr(line.config.color));
             if (changed) {
                 DebugDraw::Config(line.name, line.config, false);

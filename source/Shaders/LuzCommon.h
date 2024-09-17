@@ -7,6 +7,10 @@ using vec4 = glm::vec4;
 using mat4 = glm::mat4;
 #endif
 
+#define LUZ_PI 3.14159265359
+#define PI 3.14159265359
+#define GOLDEN_RATIO 2.118033988749895
+
 #define LUZ_BINDING_TEXTURE 0
 #define LUZ_BINDING_BUFFER 1
 #define LUZ_BINDING_TLAS 2
@@ -14,7 +18,7 @@ using mat4 = glm::mat4;
 
 #define LUZ_MAX_LIGHTS 64
 #define LUZ_MAX_MODELS 8192
-#define LUZ_MAX_LINES 1024
+#define LUZ_MAX_LINES 2048
 
 #define LUZ_LIGHT_TYPE_POINT 0
 #define LUZ_LIGHT_TYPE_SPOT 1
@@ -174,9 +178,6 @@ struct PostProcessingConstants {
 #define LIGHT_TYPE_POINT 0
 #define LIGHT_TYPE_DIRECTIONAL 2
 #define LIGHT_TYPE_SPOT 1
-
-#define PI 3.14159265359
-#define GOLDEN_RATIO 2.118033988749895
 
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler2D textures[];
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform samplerCube cubeTextures[];

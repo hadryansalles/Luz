@@ -29,15 +29,6 @@ endif()
 # project config
 project(Luz)
 
-# define LUZ_DEBUG if is debug build
-if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
-    add_compile_definitions(LUZ_DEBUG)
-endif()
-# define LUZ_RELEASE if is release build
-if(${CMAKE_BUILD_TYPE} MATCHES "Release")
-    add_compile_definitions(LUZ_RELEASE)
-endif()
-
 # config relative lib folder
 set(LIBS_DIR ${CMAKE_SOURCE_DIR}/lib/${CMAKE_CFG_INTDIR})
 
@@ -50,6 +41,13 @@ source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCE} ${GLSL_SOURCE})
 include_directories(${HEADERS})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 target_precompile_headers(${PROJECT_NAME} PRIVATE "source/Core/Luzpch.hpp")
+
+# Define LUZ_DEBUG for Debug builds and LUZ_RELEASE for Release builds
+target_compile_definitions(${PROJECT_NAME} 
+    PRIVATE 
+    $<$<CONFIG:Debug>:LUZ_DEBUG>
+    $<$<CONFIG:Release>:LUZ_RELEASE>
+)
 
 # glfw
 add_subdirectory("deps/glfw")

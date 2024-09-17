@@ -133,7 +133,6 @@ void LightNode::Serialize(Serializer& s) {
     s("shadowMapFar", shadowMapFar);
     s("volumetricType", volumetricType);
 
-    s("volumetricScreenWeight", volumetricScreenSpaceParams.weight);
     s("volumetricScreenAbsorption", volumetricScreenSpaceParams.absorption);
     s("volumetricScreenSamples", volumetricScreenSpaceParams.samples);
 

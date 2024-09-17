@@ -47,18 +47,21 @@ void main() {
 
         vec2 lightUV = (lightProjPos.xy / lightProjPos.w) * 0.5 + vec2(0.5);
 
-        float weight = light.volumetricWeight/10000.0;
         int samples = light.volumetricSamples;
-        float decay = light.volumetricAbsorption/10.0;
+        float absorption = light.volumetricAbsorption / 1000.0;
         vec2 deltaUV = (pixelUV - lightUV) * (1.0 / float(samples));
         vec2 sampleUV = pixelUV + (BlueNoiseSample(pixelPos, 0).r * 2.0 - 1.0) * 0.003;
         for (int i = 0; i < samples; i++) {
             sampleUV -= deltaUV + (BlueNoiseSample(pixelPos, i + 1).r * 2.0 - 1.0) * 0.003;
             bool inside = sampleUV.x >= 0 && sampleUV.x <= 1 && sampleUV.y >= 0 && sampleUV.y <= 1;
             if (inside && texture(textures[ctx.depthRID], sampleUV).r == 1.0) {
-                radiance += light.color * light.intensity * weight * decay;
+                vec3 sampleRadiance = light.color * light.intensity * absorption;
+                if (light.type == LUZ_LIGHT_TYPE_POINT) {
+                    vec3 sampleWorldPos = DepthToWorld(sampleUV, texture(textures[ctx.depthRID], sampleUV).r);
+                    sampleRadiance *= 5.0 / length(sampleWorldPos - light.position);
+                }
+                radiance += sampleRadiance;
             }
-            decay *= 1.0;
         }
     }
     vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
