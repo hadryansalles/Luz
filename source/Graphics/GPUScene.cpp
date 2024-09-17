@@ -215,10 +215,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
 
         auto pos = node->GetWorldPosition();
         auto size = node->scale;
-#if LUZ_DEBUG
-        DebugDraw::Config("model" + std::to_string(node->uuid), { .color = {0.3f, 0.8f, 0.2f, 1.0f}, .update = true});
-        DebugDraw::Box("model" + std::to_string(node->uuid),  pos - size * 0.5f, pos + size * 0.5f);
-#endif
     }
 
     SceneBlock& s = impl->sceneBlock;
@@ -230,7 +226,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.projView = camera->GetProj() * camera->GetView();
     s.inverseProj = glm::inverse(camera->GetProj());
     s.inverseView = glm::inverse(camera->GetView());
-
 
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
         LightBlock& block = s.lights[s.numLights++];
@@ -268,10 +263,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.viewProj[3] = proj * glm::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
             block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
             block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
-#if LUZ_DEBUG
-            DebugDraw::Config("light" + std::to_string(light->uuid), {.update = true});
-            DebugDraw::Box("light" + std::to_string(light->uuid), pos - glm::vec3(light->radius), pos + glm::vec3(light->radius));
-#endif
         }
         else {
             std::vector<glm::vec4> frustumCorners;
@@ -341,23 +332,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
 
     glm::vec3 starting = { 3, 0.4, 0 };
     glm::vec3 offset = { 2, 0, 0 };
-
-#if LUZ_DEBUG
-    DebugDraw::Config("debug_box", {.color = {1.0f, 0.0f, 0.0f, 1.0f}, .update = true});
-    DebugDraw::Box("debug_box", starting, starting + glm::vec3(1.0f));
-
-    DebugDraw::Config("debug_rect", {.color = {0.0f, 1.0f, 0.0f, 1.0f}, .update = true});
-    DebugDraw::Rect("debug_rect", starting + offset + glm::vec3(0.0f, 0.0f, 0.5f), starting + offset + glm::vec3(0, 1, 0) + glm::vec3(0.0f, 0.0f, 0.5f), starting + offset + glm::vec3(1, 1, 0) + glm::vec3(0.0f, 0.0f, 0.5f), starting + offset + glm::vec3(1, 0, 0) + glm::vec3(0.0f, 0.0f, 0.5f));
-
-    DebugDraw::Config("debug_sphere", {.color = {0.0f, 0.0f, 1.0f, 1.0f}, .update = true});
-    DebugDraw::Sphere("debug_sphere", starting + offset * 2.0f + glm::vec3(0.5f), 0.5f);
-
-    DebugDraw::Config("debug_cylinder", {.color = {1.0f, 1.0f, 0.0f, 1.0f}, .update = true});
-    DebugDraw::Cylinder("debug_cylinder", starting + offset * 3.0f + glm::vec3(0.5f, 0.5f, 0.5f), 1.0f, 0.5f);
-
-    DebugDraw::Config("debug_cone", {.color = {1.0f, 0.0f, 1.0f, 1.0f}, .update = true});
-    DebugDraw::Cone("debug_cone", starting + offset * 4.0f + glm::vec3(0.5f, 0.0f, 0.5f), starting + offset * 4.0f + glm::vec3(0.5f, 1.0f, 0.5f), 0.5f);
-#endif
 }
 
 void GPUScene::UpdateResourcesGPU() {

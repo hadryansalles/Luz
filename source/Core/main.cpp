@@ -44,7 +44,7 @@ private:
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        assetManager.LoadProject("assets/default.luz", "assets/default.Luzbin");
+        assetManager.LoadProject("assets/default.luz", "assets/default.luzbin");
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
