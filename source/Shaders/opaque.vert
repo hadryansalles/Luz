@@ -2,13 +2,11 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
-layout(push_constant) uniform ConstantsBlock {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-};
-
 #include "LuzCommon.h"
+
+layout(push_constant) uniform Constants {
+    OpaqueConstants ctx;
+};
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;

@@ -4,7 +4,7 @@
 
 #include "LuzCommon.h"
 
-layout(push_constant) uniform _constants {
+layout(push_constant) uniform Constants {
     PostProcessingConstants ctx;
 };
 

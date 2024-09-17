@@ -9,6 +9,7 @@
 #include "GPUScene.hpp"
 #include "Editor.h"
 #include "DebugDraw.h"
+#include "LuzCommon.h"
 
 #include <stb_image.h>
 
@@ -40,6 +41,8 @@ private:
     bool viewportHovered = false;
     bool fullscreen = false;
     DeferredRenderer::Output outputMode = DeferredRenderer::Output::Light;
+
+    std::chrono::high_resolution_clock::time_point lastFrameTime = {};
 
     void Setup() {
         LUZ_PROFILE_FUNC();
@@ -73,6 +76,7 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
+            WaitForVsync();
             Window::Update();
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);
@@ -105,6 +109,17 @@ private:
         dirty |= Window::GetFramebufferResized();
         dirty |= Window::IsDirty();
         return dirty;
+    }
+
+    void WaitForVsync() {
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFrameTime).count();
+        
+        if (elapsedTime < 16) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(16 - elapsedTime));
+        }
+
+        lastFrameTime = std::chrono::high_resolution_clock::now();
     }
 
     ImVec2 ToScreenSpace(glm::vec3 position) {
@@ -168,7 +183,7 @@ private:
 
         auto totalTS = vkw::CmdBeginTimeStamp("Total");
 
-        DeferredRenderer::OpaqueConstants constants;
+        OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
 

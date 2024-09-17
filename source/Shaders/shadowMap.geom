@@ -5,10 +5,7 @@
 #include "LuzCommon.h"
 
 layout(push_constant) uniform Constants {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-    int lightIndex;
+    ShadowMapConstants ctx;
 };
 
 layout (triangles) in;
@@ -17,7 +14,7 @@ layout (triangle_strip, max_vertices=18) out;
 layout(location = 0) out vec4 fragPos;
 
 void main() {
-    LightBlock light = scene.lights[lightIndex];
+    LightBlock light = scene.lights[ctx.lightIndex];
     if (light.type == LIGHT_TYPE_POINT) {
         for(int face = 0; face < 6; face++) {
             gl_Layer = face;

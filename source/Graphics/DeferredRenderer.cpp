@@ -37,31 +37,21 @@ struct Context {
     vkw::Image debug;
 };
 
-struct ComposeConstant {
-    int imageType;
-    int lightRID;
-    int albedoRID;
-    int normalRID;
-
-    int materialRID;
-    int emissionRID;
-    int depthRID;
-    int debugRID;
-};
-
 Context ctx;
 
 void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
-    bool updated = true;
+    bool should_update = false;
     for (auto& stage : desc.stages) {
         auto path = "source/Shaders/" + stage.path.string();
         auto it = ctx.shaderVersions.find(path);
         auto version = FileManager::GetFileVersion(path);
         if (it == ctx.shaderVersions.end() || version > it->second) {
-            pipeline = vkw::CreatePipeline(desc);
             ctx.shaderVersions[path] = version;
-            return;
+            should_update = true;
         }
+    }
+    if (should_update) {
+        pipeline = vkw::CreatePipeline(desc);
     }
 }
 
@@ -334,7 +324,7 @@ void LightPass(LightConstants constants) {
 }
 
 void ComposePass(bool separatePass, Output output) {
-    ComposeConstant constants;
+    ComposeConstants constants;
     constants.lightRID = ctx.lightA.RID();
     constants.albedoRID = ctx.albedo.RID();
     constants.normalRID = ctx.normal.RID();

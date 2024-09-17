@@ -27,6 +27,6 @@ void main() {
     fragUV = fragPos.xy;
     fragPos *= ctx.fontSize * 0.1;
     fragPos += vec3(ctx.charSize * 0.0004, 0, 0) * ctx.charIndex;
-    vec4 fragAnchor = scene2.view * vec4(ctx.pos, 1.0);
-    gl_Position = scene2.proj * (fragAnchor + vec4(fragPos, 1.0));
+    vec4 fragAnchor = scene.view * vec4(ctx.pos, 1.0);
+    gl_Position = scene.proj * (fragAnchor + vec4(fragPos, 1.0));
 }

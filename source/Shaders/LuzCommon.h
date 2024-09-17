@@ -115,6 +115,12 @@ struct SceneBlock {
     int shadowType;
 };
 
+struct OpaqueConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int modelID;
+};
+
 struct ShadowMapConstants {
     int sceneBufferIndex;
     int modelBufferIndex;
@@ -160,6 +166,29 @@ struct FontRenderingConstants {
     int depthAware;
     int depthRID;
     int fontRID;
+};
+
+struct LightConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int frame;
+    int albedoRID;
+    int normalRID;
+    int materialRID;
+    int emissionRID;
+    int depthRID;
+};
+
+struct ComposeConstants {
+    int imageType;
+    int lightRID;
+    int albedoRID;
+    int normalRID;
+
+    int materialRID;
+    int emissionRID;
+    int depthRID;
+    int debugRID;
 };
 
 struct PostProcessingConstants {
@@ -210,12 +239,10 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer IndexBuffer {
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
 
+#define scene sceneBuffers[ctx.sceneBufferIndex].block
 #define tlas tlasBuffer[scene.tlasRid]
-#define scene sceneBuffers[sceneBufferIndex].block
-#define scene2 sceneBuffers[ctx.sceneBufferIndex].block
-#define model modelsBuffers[modelBufferIndex].models[modelID]
+#define model modelsBuffers[ctx.modelBufferIndex].models[ctx.modelID]
 #define vertexBuffer vertexBuffers[model.vertexBuffer]
-#define sceneBlock sceneBuffers[ctx.sceneBufferIndex].block
 #define lineBlocks lineBuffers[ctx.linesRID].data
 
 #endif

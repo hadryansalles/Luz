@@ -14,12 +14,6 @@ struct GPUScene;
 
 namespace DeferredRenderer {
 
-struct OpaqueConstants {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-};
-
 struct LightConstants {
     int sceneBufferIndex;
     int modelBufferIndex;

@@ -8,22 +8,15 @@ layout(push_constant) uniform _constants {
     VolumetricLightConstants ctx;
 };
 
+#include "utils.glsl"
+
 layout (local_size_x = 32, local_size_y = 32) in;
 
 // todo: put in some header
-vec3 DepthToWorld(vec2 screenPos, float depth) {
-    vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
-    vec4 viewSpacePos = sceneBlock.inverseProj*clipSpacePos;
-    viewSpacePos /= viewSpacePos.w;
-    vec4 worldSpacePos = sceneBlock.inverseView*viewSpacePos;
-    return worldSpacePos.xyz;
-}
-
-// todo: put in some header
 vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
-    vec2 blueNoiseSize = textureSize(textures[scene2.blueNoiseTexture], 0);
+    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
     ivec2 fragUV = ivec2(mod(pixelPos, blueNoiseSize));
-    return fract(texelFetch(textures[scene2.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
+    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
 }
 
 void main() {
@@ -34,15 +27,15 @@ void main() {
     vec2 pixelUV = pixelPos / vec2(ctx.imageSize);
     float pixelDepth = texture(textures[ctx.depthRID], pixelUV).r;
     vec3 radiance = vec3(0);
-    for (int i = 0; i < sceneBlock.numLights; i++) {
-        LightBlock light = sceneBlock.lights[i];
+    for (int i = 0; i < scene.numLights; i++) {
+        LightBlock light = scene.lights[i];
         if (light.volumetricType != VOLUMETRIC_TYPE_SCREEN_SPACE) {
             continue;
         }
 
-        vec4 lightProjPos = sceneBlock.projView * vec4(light.position, 1);
+        vec4 lightProjPos = scene.projView * vec4(light.position, 1);
         if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL) {
-            lightProjPos = sceneBlock.projView * vec4(-light.direction * 10000.0, 1);
+            lightProjPos = scene.projView * vec4(-light.direction * 10000.0, 1);
         }
 
         vec2 lightUV = (lightProjPos.xy / lightProjPos.w) * 0.5 + vec2(0.5);
