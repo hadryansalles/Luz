@@ -20,7 +20,7 @@ layout(location = 3) out mat3 fragTBN;
 
 void main() {
     vec4 fragPos = model.modelMat * vec4(inPosition, 1.0);
-    gl_Position = scene.projView * fragPos;
+    gl_Position = scene.viewProj * fragPos;
     fragTexCoord = inTexCoord;
     mat4 transposeInverseModel = transpose(inverse(model.modelMat));
     fragTangent = normalize(vec3(transposeInverseModel*vec4(inTangent.xyz, 0.0)));

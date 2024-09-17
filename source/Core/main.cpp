@@ -223,7 +223,9 @@ private:
         vkw::CmdEndTimeStamp(volumetricTS);
 
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
-        DeferredRenderer::TAAPass(gpuScene);
+        if (scene->useTaa) {
+            DeferredRenderer::TAAPass(gpuScene);
+        }
         vkw::CmdEndTimeStamp(taaTS);
 
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");

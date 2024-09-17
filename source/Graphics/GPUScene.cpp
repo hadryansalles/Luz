@@ -223,7 +223,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.camPos = camera->eye;
     s.proj = camera->GetProj();
     s.view = camera->GetView();
-    s.projView = camera->GetProj() * camera->GetView();
+    s.prevViewProj = s.viewProj;
+    s.viewProj = camera->GetProj() * camera->GetView();
     s.inverseProj = glm::inverse(camera->GetProj());
     s.inverseView = glm::inverse(camera->GetView());
 

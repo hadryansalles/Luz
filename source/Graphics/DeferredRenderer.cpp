@@ -413,6 +413,7 @@ void TAAPass(GPUScene& gpuScene) {
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+    std::swap(ctx.lightA, ctx.lightB);
 }
 
 void SwapLightHistory() {

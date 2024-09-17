@@ -11,5 +11,5 @@ layout(push_constant) uniform _constants {
 layout(location = 0) in vec3 inPosition;
 
 void main() {
-    gl_Position = scene.projView * vec4(inPosition, 1.0);
+    gl_Position = scene.viewProj * vec4(inPosition, 1.0);
 }

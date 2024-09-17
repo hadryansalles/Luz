@@ -95,7 +95,8 @@ struct SceneBlock {
 
     mat4 proj;
     mat4 view;
-    mat4 projView;
+    mat4 viewProj;
+    mat4 prevViewProj;
     mat4 inverseProj;
     mat4 inverseView;
 

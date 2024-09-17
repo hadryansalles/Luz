@@ -8,20 +8,100 @@ layout(push_constant) uniform Constants {
     PostProcessingConstants ctx;
 };
 
+#include "utils.glsl"
+
 layout (local_size_x = 32, local_size_y = 32) in;
 
 void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     ivec2 imageSize = textureSize(textures[ctx.lightInputRID], 0).xy;
-    if (pixelPos.x >= imageSize.x || pixelPos.y >= imageSize.y) {
+
+    if (any(greaterThanEqual(pixelPos, imageSize))) {
         return;
     }
 
-    vec4 history = imageLoad(images[ctx.lightHistoryRID], pixelPos);
-    vec4 light = imageLoad(images[ctx.lightInputRID], pixelPos);
+    vec2 texCoord = vec2(pixelPos) / vec2(imageSize);
+    float depth = texture(textures[ctx.depthRID], texCoord).r;
+    vec3 worldPos = DepthToWorld(texCoord, depth);
 
-    float alpha = 1.0;
-    light = alpha * light + (1.0 - alpha) * history;
+    vec4 prevNDC = scene.prevViewProj * vec4(worldPos, 1.0);
+    vec4 currentNDC = scene.viewProj * vec4(worldPos, 1.0);
+    prevNDC /= prevNDC.w;
+    currentNDC /= currentNDC.w;
+    vec2 velocity = (currentNDC.xy - prevNDC.xy);
 
-    imageStore(images[ctx.lightOutputRID], pixelPos, light);
+    vec3 sourceSampleTotal = vec3(0.0);
+    float sourceSampleWeight = 0.0;
+    vec3 neighborhoodMin = vec3(10000);
+    vec3 neighborhoodMax = vec3(-10000);
+    vec3 m1 = vec3(0.0);
+    vec3 m2 = vec3(0.0);
+    float closestDepth = 10000000;
+    ivec2 closestDepthPos = ivec2(0);
+
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            ivec2 samplePos = pixelPos + ivec2(x, y);
+            samplePos = clamp(samplePos, ivec2(0), imageSize - ivec2(1));
+
+            vec3 neighbor = imageLoad(images[ctx.lightInputRID], samplePos).rgb;
+            float subSampleDistance = length(vec2(x, y));
+            float subSampleWeight = MitchellFilter(subSampleDistance);
+
+            sourceSampleTotal += neighbor * subSampleWeight;
+            sourceSampleWeight += subSampleWeight;
+
+            neighborhoodMin = min(neighborhoodMin, neighbor);
+            neighborhoodMax = max(neighborhoodMax, neighbor);
+
+            m1 += neighbor;
+            m2 += neighbor * neighbor;
+
+            float currentDepth = imageLoad(images[ctx.depthRID], samplePos).r;
+            if (currentDepth < closestDepth) {
+                closestDepth = currentDepth;
+                closestDepthPos = samplePos;
+            }
+        }
+    }
+    
+    vec2 historyTexCoord = texCoord - velocity;
+    vec3 sourceSample = sourceSampleTotal / sourceSampleWeight;
+
+    if (any(lessThan(historyTexCoord, vec2(0.0))) || any(greaterThan(historyTexCoord, vec2(1.0)))) {
+        imageStore(images[ctx.lightOutputRID], pixelPos, vec4(sourceSample, 1.0));
+        return;
+    }
+
+    vec3 historySample = SampleTextureCatmullRom(textures[ctx.lightHistoryRID], historyTexCoord).rgb;
+
+    float oneDividedBySampleCount = 1.0 / 9.0;
+    float gamma = 1.0;
+    vec3 mu = m1 * oneDividedBySampleCount;
+    vec3 sigma = sqrt(abs((m2 * oneDividedBySampleCount) - (mu * mu)));
+    vec3 minc = mu - gamma * sigma;
+    vec3 maxc = mu + gamma * sigma;
+
+    historySample = clip_aabb(minc, maxc, clamp(historySample, neighborhoodMin, neighborhoodMax));
+
+    float sourceWeight = 0.1;  // Increased from 0.05 to reduce ghosting
+    float velocityWeight = length(velocity) * 5.0;  // Add velocity-based weight
+    sourceWeight = clamp(sourceWeight + velocityWeight, 0.1, 0.5);  // Adjust weight based on velocity
+    float historyWeight = 1.0 - sourceWeight;
+
+    // Calculate luminance difference between source and history
+    float luminanceSource = Luminance(sourceSample);
+    float luminanceHistory = Luminance(historySample);
+    float luminanceDiff = abs(luminanceSource - luminanceHistory);
+
+    // Adjust weights based on luminance difference
+    float luminanceThreshold = 0.1;
+    if (luminanceDiff > luminanceThreshold) {
+        sourceWeight = mix(sourceWeight, 1.0, smoothstep(luminanceThreshold, 2.0 * luminanceThreshold, luminanceDiff));
+        historyWeight = 1.0 - sourceWeight;
+    }
+
+    vec3 result = (sourceSample * sourceWeight + historySample * historyWeight) / max(sourceWeight + historyWeight, 0.00001);
+
+    imageStore(images[ctx.lightOutputRID], pixelPos, vec4(result, 1.0));
 }
