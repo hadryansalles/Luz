@@ -12,7 +12,57 @@ layout(push_constant) uniform Constants {
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
-void main() {
+void taa_mine() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(images[ctx.lightInputRID]);
+    if (any(greaterThanEqual(pixelPos, imageSize))) {
+        return;
+    }
+
+    vec2 texCoord = (vec2(pixelPos) + 0.5) / vec2(imageSize);
+    float depth = texture(textures[ctx.depthRID], texCoord).r;
+
+    vec3 worldPos = DepthToWorld(texCoord, depth);
+
+    vec4 previousNDC = scene.prevViewProj * vec4(worldPos, 1.0);
+    vec4 currentNDC = scene.viewProj * vec4(worldPos, 1.0);
+
+    previousNDC.xyz /= previousNDC.w;
+    currentNDC.xyz /= currentNDC.w;
+
+    vec2 motionVector = (currentNDC.xy - previousNDC.xy) * 0.5;
+
+    vec4 currentColor = imageLoad(images[ctx.lightInputRID], pixelPos);
+    vec2 historyTexCoord = texCoord - motionVector;
+    vec4 historyColor = texture(textures[ctx.lightHistoryRID], historyTexCoord);
+
+    if (any(lessThan(historyTexCoord, vec2(0.0))) || any(greaterThanEqual(historyTexCoord, vec2(1.0)))) {
+        imageStore(images[ctx.lightOutputRID], pixelPos, currentColor);
+        return;
+    }
+
+    vec3 neighborhoodMin = currentColor.rgb;
+    vec3 neighborhoodMax = currentColor.rgb;
+
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(x, y) / vec2(imageSize);
+            vec3 neighborColor = texture(textures[ctx.lightInputRID], texCoord + offset).rgb;
+            neighborhoodMin = min(neighborhoodMin, neighborColor);
+            neighborhoodMax = max(neighborhoodMax, neighborColor);
+        }
+    }
+    historyColor.rgb = clamp(historyColor.rgb, neighborhoodMin, neighborhoodMax);
+
+    float motionLength = length(motionVector);
+    float blendFactor = clamp(motionLength * 20.0, 0.05, 0.95);
+
+    vec4 result = mix(historyColor, currentColor, blendFactor);
+
+    imageStore(images[ctx.lightOutputRID], pixelPos, result);
+}
+
+void taa_tarif() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     ivec2 imageSize = textureSize(textures[ctx.lightInputRID], 0).xy;
 
@@ -84,17 +134,15 @@ void main() {
 
     historySample = clip_aabb(minc, maxc, clamp(historySample, neighborhoodMin, neighborhoodMax));
 
-    float sourceWeight = 0.1;  // Increased from 0.05 to reduce ghosting
-    float velocityWeight = length(velocity) * 5.0;  // Add velocity-based weight
-    sourceWeight = clamp(sourceWeight + velocityWeight, 0.1, 0.5);  // Adjust weight based on velocity
+    float sourceWeight = 0.1;
+    float velocityWeight = length(velocity) * 100.0;
+    sourceWeight = clamp(sourceWeight + velocityWeight, 0.1, 0.5);
     float historyWeight = 1.0 - sourceWeight;
 
-    // Calculate luminance difference between source and history
     float luminanceSource = Luminance(sourceSample);
     float luminanceHistory = Luminance(historySample);
     float luminanceDiff = abs(luminanceSource - luminanceHistory);
 
-    // Adjust weights based on luminance difference
     float luminanceThreshold = 0.1;
     if (luminanceDiff > luminanceThreshold) {
         sourceWeight = mix(sourceWeight, 1.0, smoothstep(luminanceThreshold, 2.0 * luminanceThreshold, luminanceDiff));
@@ -104,4 +152,8 @@ void main() {
     vec3 result = (sourceSample * sourceWeight + historySample * historyWeight) / max(sourceWeight + historyWeight, 0.00001);
 
     imageStore(images[ctx.lightOutputRID], pixelPos, vec4(result, 1.0));
+}
+
+void main() {
+    taa_mine();
 }

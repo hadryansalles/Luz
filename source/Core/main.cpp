@@ -40,9 +40,11 @@ private:
     CameraController cameraController;
     bool viewportHovered = false;
     bool fullscreen = false;
+    bool batterySaver = LUZ_BATTERY_SAVER;
     DeferredRenderer::Output outputMode = DeferredRenderer::Output::Light;
 
     std::chrono::high_resolution_clock::time_point lastFrameTime = {};
+    std::chrono::high_resolution_clock::time_point lastCameraTime = {};
 
     void Setup() {
         LUZ_PROFILE_FUNC();
@@ -76,8 +78,7 @@ private:
     void MainLoop() {
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
-            WaitForVsync();
-            Window::Update();
+            LUZ_PROFILE_NAMED("MainLoop");
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);
                 if (newNodes.size()) {
@@ -86,7 +87,12 @@ private:
             }
             gpuScene.AddAssets(assetManager);
             // todo: focus camera on selected object
-            cameraController.Update(scene, camera, viewportHovered);
+            {
+                auto currentTime = std::chrono::high_resolution_clock::now();
+                auto deltaTime = std::chrono::duration_cast<std::chrono::nanoseconds>(currentTime - lastCameraTime).count() / 1000000.0;
+                cameraController.Update(scene, camera, viewportHovered, deltaTime);
+                lastCameraTime = currentTime;
+            }
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
@@ -98,6 +104,8 @@ private:
             } else if (DirtyFrameResources()) {
                 RecreateFrameResources();
             }
+            BatterySaver();
+            Window::Update();
         }
         vkw::WaitIdle();
     }
@@ -111,13 +119,17 @@ private:
         return dirty;
     }
 
-    void WaitForVsync() {
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFrameTime).count();
-        
-        if (elapsedTime < 16) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(16 - elapsedTime));
+    void BatterySaver() {
+        LUZ_PROFILE_NAMED("BatterySaver");
+        if (!batterySaver) {
+            return;
         }
+        float targetFrameTime = 33.333f;
+        float elapsedTime = 0.0f;
+        do {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - lastFrameTime).count() / 1000.0f;
+        } while (elapsedTime < targetFrameTime);
 
         lastFrameTime = std::chrono::high_resolution_clock::now();
     }
@@ -218,8 +230,10 @@ private:
         vkw::CmdEndTimeStamp(lightTS);
 
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
-        DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
-        DeferredRenderer::ShadowMapVolumetricLightPass(gpuScene, frameCount);
+        if (gpuScene.AnyVolumetricLight()) {
+            DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
+            DeferredRenderer::ShadowMapVolumetricLightPass(gpuScene, frameCount);
+        }
         vkw::CmdEndTimeStamp(volumetricTS);
 
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");

@@ -5,75 +5,89 @@
 
 #include "AssetManager.hpp"
 
-void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNode>& cam, bool viewportHovered) {
+void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNode>& cam, bool viewportHovered, float deltaTime) {
     if (!viewportHovered) {
        return;
     }
-    glm::vec2 drag(.0f);
-    glm::vec2 move(.0f);
+
     if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyDown(GLFW_KEY_1)) {
         cam->mode = CameraNode::CameraMode::Orbit;
+        moveSpeed = glm::vec3(.0f);
+        rotationSpeed = glm::vec3(.0f);
     }
     if (Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) && Window::IsKeyDown(GLFW_KEY_2)) {
         cam->mode = CameraNode::CameraMode::Fly;
+        moveSpeed = glm::vec3(.0f);
+        rotationSpeed = glm::vec3(.0f);
     }
+
+    glm::vec2 drag(.0f);
+    glm::vec2 move(.0f);
+    glm::vec3 fpsMove(.0f, .0f, .0f);
+
+    float dt = deltaTime;
+    float scroll = Window::GetDeltaScroll();
+    float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1 : 1;
+    float speedUp = 1.0f;
+
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_1) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {
         drag = -Window::GetDeltaMouse();
+        drag.x *= -1;
     }
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) {
         move = -Window::GetDeltaMouse();
     }
-    if (scene->autoOrbit) {
-        drag.x = 1*Window::GetDeltaTime();
+    if (Window::IsKeyDown(GLFW_KEY_CAPS_LOCK)) {
+        speedUp = 3.0f;
     }
-    float scroll = Window::GetDeltaScroll();
-    float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1 : 1;
+    if (Window::IsKeyDown(GLFW_KEY_W)) {
+        fpsMove.z -= 1;
+    }
+    if (Window::IsKeyDown(GLFW_KEY_S)) {
+        fpsMove.z += 1;
+    }
+    if (Window::IsKeyDown(GLFW_KEY_D)) {
+        fpsMove.x += 1;
+    }
+    if (Window::IsKeyDown(GLFW_KEY_A)) {
+        fpsMove.x -= 1;
+    }
+    if (scroll != 0) {
+        fpsMove.y += scroll;
+    }
+
+    if (scene->autoOrbit) {
+        drag.x = 1*deltaTime;
+    }
+
+    glm::mat4 view = cam->GetView();
+    glm::vec3 right = glm::vec3(view[0][0], view[1][0], view[2][0]);
+    glm::vec3 up = glm::vec3(view[0][1], view[1][1], view[2][1]);
+    glm::vec3 front = glm::vec3(view[0][2], view[1][2], view[2][2]);
+
+    float maxMoveSpeed = scene->camSpeed * slowDown * speedUp;
+    float maxRotationSpeed = scene->rotationSpeed;
+    float zoomSpeed = scene->zoomSpeed;
+
+    glm::vec3 targetMoveSpeed = glm::vec3(.0f);
+
+    glm::vec3 targetRotationSpeed = glm::vec3(drag.y, drag.x, 0) * maxRotationSpeed;
+    rotationSpeed = glm::mix(rotationSpeed, targetRotationSpeed, rotationSmooth);
+    glm::vec3 newRotation = cam->rotation + rotationSpeed;
+    newRotation.x = std::max(-89.9f, std::min(89.9f, newRotation.x));
+    cam->rotation = newRotation;
+
     switch (cam->mode) {
     case CameraNode::CameraMode::Orbit:
-        if (drag.x != 0 || drag.y != 0) {
-            cam->rotation.x = std::max(-89.9f, std::min(89.9f, cam->rotation.x + drag.y * scene->rotationSpeed * slowDown));
-            cam->rotation.y -=  drag.x * scene->rotationSpeed * slowDown; 
-        }
-        if (scroll != 0) {
-            cam->zoom *= std::pow(10, -scroll * scene->zoomSpeed * slowDown);
-        }
-        if (move.x != 0 || move.y != 0) {
-            glm::mat4 view = cam->GetView();
-            glm::vec3 right = glm::vec3(view[0][0], view[1][0], view[2][0]);
-            glm::vec3 up = glm::vec3(view[0][1], view[1][1], view[2][1]);
-            cam->center -= (right * move.x - up * move.y) * scene->camSpeed * slowDown;
-        }
+        targetMoveSpeed = maxMoveSpeed * glm::vec3(move.x, move.y, -scroll);
+        moveSpeed = glm::mix(moveSpeed, targetMoveSpeed, dt / accelerationTime);
+        cam->zoom *= std::pow(10, moveSpeed.z * zoomSpeed);
+        cam->center -= (right * moveSpeed.x - up * moveSpeed.y);
         break;
     case CameraNode::CameraMode::Fly:
-        glm::vec2 fpsMove(.0f, .0f);
-        if (Window::IsKeyDown(GLFW_KEY_W)) {
-            fpsMove.y += 1;
-        }
-        if (Window::IsKeyDown(GLFW_KEY_S)) {
-            fpsMove.y -= 1;
-        }
-        if (Window::IsKeyDown(GLFW_KEY_D)) {
-            fpsMove.x += 1;
-        }
-        if (Window::IsKeyDown(GLFW_KEY_A)) {
-            fpsMove.x -= 1;
-        }
-        if (fpsMove.x != 0 || fpsMove.y != 0) {
-            glm::mat4 view = cam->GetView();
-            fpsMove = glm::normalize(fpsMove);
-            glm::vec3 right = glm::vec3(view[0][0], view[1][0], view[2][0]);
-            glm::vec3 front = glm::vec3(view[0][2], view[1][2], view[2][2]);
-            cam->eye += (right * fpsMove.x - front * fpsMove.y) * 0.5f * scene->camSpeed * slowDown * Window::GetDeltaTime();
-        }
-        if (scroll != 0) {
-            glm::mat4 view = cam->GetView();
-            glm::vec3 up = glm::vec3(view[0][1], view[1][1], view[2][1]);
-            cam->eye += up * scroll * scene->camSpeed * 25.0f * slowDown;
-        }
-        if (drag.x != 0 || drag.y != 0) {
-            cam->rotation += glm::vec3(drag.y, -drag.x, 0) * scene->rotationSpeed * slowDown;
-            cam->rotation.x = std::max(-89.9f, std::min(89.9f, cam->rotation.x));
-        }
+        targetMoveSpeed = maxMoveSpeed * fpsMove;
+        moveSpeed = glm::mix(moveSpeed, targetMoveSpeed, dt / accelerationTime);
+        cam->eye += (right * moveSpeed.x + front * moveSpeed.z + up * moveSpeed.y) * dt;
         break;
     }
 }

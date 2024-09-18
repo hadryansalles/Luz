@@ -44,6 +44,8 @@ struct GPUScene {
     void AddAssets(const AssetManager& assets);
     void ClearAssets();
 
+    bool AnyVolumetricLight();
+
     void UpdateResources(const Ref<SceneAsset>& asset, const Ref<CameraNode>& camera);
     void UpdateResourcesGPU();
     void UpdateLineResources();

@@ -49,6 +49,13 @@ target_compile_definitions(${PROJECT_NAME}
     $<$<CONFIG:Release>:LUZ_RELEASE>
 )
 
+# prevent my laptop from overheating...
+if(DEFINED ENV{COMPUTERNAME} AND "$ENV{COMPUTERNAME}" STREQUAL "LOVELACE")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LUZ_BATTERY_SAVER=1)
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LUZ_BATTERY_SAVER=0)
+endif()
+
 # glfw
 add_subdirectory("deps/glfw")
 include_directories("deps/glfw/include")

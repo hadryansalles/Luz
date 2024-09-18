@@ -279,7 +279,7 @@ struct SceneAsset : Asset {
     bool useTaa = true;
 
     float camSpeed = 0.01;
-    float zoomSpeed = 0.1;
+    float zoomSpeed = 1.0;
     float rotationSpeed = 0.3;
     bool autoOrbit = false;
     Ref<CameraNode> mainCamera;

@@ -13,6 +13,7 @@ struct GPUSceneImpl {
 
     SceneBlock sceneBlock;
     std::vector<ModelBlock> modelsBlock;
+    bool anyVolumetricLight = false;
 
     ModelBlock defaultModelBlock = {
         .modelMat = glm::mat4(1),
@@ -245,12 +246,13 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         if (light->volumetricType == LightNode::VolumetricType::ScreenSpace) {
             block.volumetricSamples = light->volumetricScreenSpaceParams.samples;
             block.volumetricAbsorption = light->volumetricScreenSpaceParams.absorption;
-        }
-        else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
+            impl->anyVolumetricLight = true;
+        } else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
             block.volumetricWeight = light->volumetricShadowMapParams.weight;
             block.volumetricSamples = light->volumetricShadowMapParams.samples;
             block.volumetricDensity = light->volumetricShadowMapParams.density;
             block.volumetricAbsorption = light->volumetricShadowMapParams.absorption;
+            impl->anyVolumetricLight = true;
         }
 
         bool isPoint = false;
@@ -388,4 +390,8 @@ RID GPUScene::GetFontBitmap() {
 
 vkw::Buffer GPUScene::GetLinesBuffer() {
     return impl->linesBuffer;
+}
+
+bool GPUScene::AnyVolumetricLight() {
+    return impl->anyVolumetricLight;
 }
