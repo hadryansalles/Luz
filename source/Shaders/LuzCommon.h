@@ -100,6 +100,9 @@ struct SceneBlock {
     mat4 inverseProj;
     mat4 inverseView;
 
+    vec2 jitter;
+    vec2 prevJitter;
+
     vec3 camPos;
     int numLights;
 
@@ -114,6 +117,7 @@ struct SceneBlock {
     int tlasRid;
 
     int shadowType;
+    int pad[3];
 };
 
 struct OpaqueConstants {

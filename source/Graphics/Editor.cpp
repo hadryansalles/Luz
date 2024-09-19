@@ -316,6 +316,7 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::ColorEdit3("Color", glm::value_ptr(scene->ambientLightColor));
             ImGui::DragFloat("Intesity", &scene->ambientLight, 0.01f, 0.0f, 100.0f);
             ImGui::Checkbox("TAA", &scene->useTaa);
+            ImGui::Checkbox("Jitter", &scene->mainCamera->useJitter);
             ImGui::SeparatorText("Ambient Occlusion");
             bool aoEnable = scene->aoSamples >= 0;
             if (ImGui::Checkbox("Enable##AO", &aoEnable)) {

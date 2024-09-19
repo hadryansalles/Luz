@@ -222,11 +222,14 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.numLights = 0;
 
     s.camPos = camera->eye;
-    s.proj = camera->GetProj();
-    s.view = camera->GetView();
     s.prevViewProj = s.viewProj;
-    s.viewProj = camera->GetProj() * camera->GetView();
-    s.inverseProj = glm::inverse(camera->GetProj());
+    s.prevJitter = camera->GetJitter();
+    camera->NextJitter();
+    s.jitter = camera->GetJitter();
+    s.proj = camera->GetProjJittered();
+    s.view = camera->GetView();
+    s.viewProj = camera->GetProjJittered() * camera->GetView();
+    s.inverseProj = glm::inverse(camera->GetProjJittered());
     s.inverseView = glm::inverse(camera->GetView());
 
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {

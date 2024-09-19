@@ -401,8 +401,10 @@ void LineRenderingPass(GPUScene& gpuScene) {
 }
 
 void TAAPass(GPUScene& gpuScene) {
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
-    vkw::CmdBarrier(ctx.lightHistory, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::Read);
+    vkw::CmdBarrier(ctx.lightB, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.lightHistory, vkw::Layout::Read);
     vkw::CmdBindPipeline(ctx.postProcessingPipeline);
     PostProcessingConstants constants;
     constants.lightInputRID = ctx.lightA.RID();

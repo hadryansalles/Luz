@@ -839,8 +839,9 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
     sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
     DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
     DEBUG_TRACE("[ShaderCompiler] Output:");
-    if(system(compile_string)) {
-        LOG_ERROR("[ShaderCompiler] Error!");
+    while(system(compile_string)) {
+        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
+        std::cin.get();
     }
 
     // 'ate' specify to start reading at the end of the file

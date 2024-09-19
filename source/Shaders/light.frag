@@ -91,27 +91,17 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     vec3 lightBitangent = normalize(cross(lightTangent, L));
     float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
-        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
         vec2 blueNoise = BlueNoiseSample(i).rg;
-        // vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
-        // vec2 rng = (0) * blueNoise + (1 - 0)*whiteNoise;
-        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + numSamples*i));
         vec2 rng = blueNoise;
         vec2 diskSample = DiskSample(rng, radius);
-        // vec2 diskSample = BlueNoiseInDisk[(i+frame)%64];
-        // Ray Query for shadow
         float tMax = length(L);
         vec3 direction = normalize(L + diskSample.x * lightTangent + diskSample.y * lightBitangent);
-        // Initializes a ray query object but does not start traversal
         rayQueryEXT rayQuery;
         rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, O, 0.001, direction, tMax);
 
-        // Start traversal: return false if traversal is complete
         while(rayQueryProceedEXT(rayQuery)) {}
 
-        // Returns type of committed (true) intersection
         if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-            // Got an intersection == Shadow
             numShadows++;
         }
     }

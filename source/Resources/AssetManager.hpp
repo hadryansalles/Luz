@@ -246,6 +246,7 @@ struct CameraNode : Node {
     glm::vec3 center = glm::vec3(0);
     glm::vec3 rotation = glm::vec3(0);
 
+    bool useJitter = true;
     float zoom = 10.0f;
 
     float farDistance = 1000.0f;
@@ -262,7 +263,15 @@ struct CameraNode : Node {
 
     glm::mat4 GetView();
     glm::mat4 GetProj();
+    glm::mat4 GetProjJittered();
     glm::mat4 GetProj(float zNear, float zFar);
+
+    glm::vec2 GetJitter();
+    void NextJitter();
+
+private:
+    glm::vec2 jitter = glm::vec2(0);
+    uint32_t jitterIndex = 0;
 };
 
 struct SceneAsset : Asset {
