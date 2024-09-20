@@ -374,7 +374,7 @@ glm::vec2 CameraNode::GetJitter() {
 
 void CameraNode::NextJitter() {
     if (useJitter) {
-        jitterIndex = (jitterIndex + 1) % 1024;
+        jitterIndex = (jitterIndex + 1) % 16;
         jitter = glm::vec2(Halton(jitterIndex + 1, 2), Halton(jitterIndex + 1, 3));
         jitter = 2.0f * jitter - 1.0f;
         jitter /= extent;

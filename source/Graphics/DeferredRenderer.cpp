@@ -214,7 +214,7 @@ void CreateImages(uint32_t width, uint32_t height) {
         .width = width,
         .height = height,
         .format = vkw::Format::D32_sfloat,
-        .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
         .name = "Depth Attachment"
     });
     ctx.compose = vkw::CreateImage({
@@ -411,6 +411,7 @@ void TAAPass(GPUScene& gpuScene) {
     constants.lightOutputRID = ctx.lightB.RID();
     constants.lightHistoryRID = ctx.lightHistory.RID();
     constants.depthRID = ctx.depth.RID();
+    constants.size = {ctx.lightA.width, ctx.lightA.height};
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});

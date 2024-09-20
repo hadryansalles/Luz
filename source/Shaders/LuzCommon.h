@@ -202,8 +202,9 @@ struct PostProcessingConstants {
     int lightHistoryRID;
     int depthRID;
 
+    vec2 size;
     int sceneBufferIndex;
-    int pad[3];
+    int pad[1];
 };
 
 #if !defined(LUZ_ENGINE)
