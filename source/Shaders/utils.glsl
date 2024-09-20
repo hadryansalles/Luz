@@ -64,8 +64,28 @@ vec4 SampleTextureCatmullRom(sampler2D tex, vec2 uv) {
     return result;
 }
 
-vec3 clip_aabb(vec3 minc, vec3 maxc, vec3 value) {
-    return max(minc, min(maxc, value));
+vec3 clip_aabb(vec3 aabb_min, vec3 aabb_max, vec3 p, vec3 q) {
+    vec3 r = q - p;
+    vec3 rmax = aabb_max - p;
+    vec3 rmin = aabb_min - p;
+
+    const float eps = 1e-7;
+
+    if (r.x > rmax.x + eps)
+        r *= (rmax.x / r.x);
+    if (r.y > rmax.y + eps)
+        r *= (rmax.y / r.y);
+    if (r.z > rmax.z + eps)
+        r *= (rmax.z / r.z);
+
+    if (r.x < rmin.x - eps)
+        r *= (rmin.x / r.x);
+    if (r.y < rmin.y - eps)
+        r *= (rmin.y / r.y);
+    if (r.z < rmin.z - eps)
+        r *= (rmin.z / r.z);
+
+    return p + r;
 }
 
 float rcp(float value) {

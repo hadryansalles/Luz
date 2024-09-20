@@ -214,7 +214,7 @@ void CreateImages(uint32_t width, uint32_t height) {
         .width = width,
         .height = height,
         .format = vkw::Format::D32_sfloat,
-        .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
+        .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
         .name = "Depth Attachment"
     });
     ctx.compose = vkw::CreateImage({
@@ -401,7 +401,7 @@ void LineRenderingPass(GPUScene& gpuScene) {
 }
 
 void TAAPass(GPUScene& gpuScene) {
-    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
+    vkw::CmdBarrier(ctx.depth, vkw::Layout::General);
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::Read);
     vkw::CmdBarrier(ctx.lightB, vkw::Layout::General);
     vkw::CmdBarrier(ctx.lightHistory, vkw::Layout::Read);

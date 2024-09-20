@@ -12,16 +12,8 @@ layout(push_constant) uniform Constants {
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
-void taa_mine() {
-    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 imageSize = imageSize(images[ctx.lightInputRID]);
-    if (any(greaterThanEqual(pixelPos, imageSize))) {
-        return;
-    }
-
-    vec2 texCoord = (vec2(pixelPos) + 0.5) / vec2(imageSize);
-    float depth = texture(textures[ctx.depthRID], texCoord).r;
-
+vec2 get_motion_vector(float depth, ivec2 pos) {
+    vec2 texCoord = (vec2(pos) + 0.5) / vec2(imageSize(images[ctx.lightInputRID]));
     vec3 worldPos = DepthToWorld(texCoord, depth);
 
     vec4 previousNDC = scene.prevViewProj * vec4(worldPos, 1.0);
@@ -30,54 +22,14 @@ void taa_mine() {
     previousNDC.xyz /= previousNDC.w;
     currentNDC.xyz /= currentNDC.w;
 
-    vec2 motionVector = (currentNDC.xy - scene.jitter) - (previousNDC.xy - scene.prevJitter);
-    motionVector *= 0.5;
-
-    vec4 sourceSampleTotal = vec4(0);
-    float sourceSampleWeight = 0;
-
-    vec2 historyTexCoord = texCoord - motionVector;
-
-    vec4 neighborhoodMin = vec4(10000);
-    vec4 neighborhoodMax = vec4(-10000);
-
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
-            ivec2 samplePos = pixelPos + ivec2(x, y);
-            samplePos = clamp(samplePos, ivec2(0), imageSize - ivec2(1));
-            vec4 neighbor = max(vec4(0), imageLoad(images[ctx.lightInputRID], samplePos));
-
-            float subSampleDistance = length(vec2(x, y));
-            float subSampleWeight = MitchellFilter(subSampleDistance);
-
-            sourceSampleTotal += neighbor * subSampleWeight;
-            sourceSampleWeight += subSampleWeight;
-
-            neighborhoodMin = min(neighborhoodMin, neighbor);
-            neighborhoodMax = max(neighborhoodMax, neighbor);
-        }
-    }
-
-    // vec4 currentColor = sourceSampleTotal / sourceSampleWeight;
-    vec4 currentColor = imageLoad(images[ctx.lightInputRID], pixelPos);
-
-    vec4 historyColor = texture(textures[ctx.lightHistoryRID], historyTexCoord);
-    if (any(lessThan(historyTexCoord, vec2(0.0))) || any(greaterThanEqual(historyTexCoord, vec2(1.0)))) {
-        imageStore(images[ctx.lightOutputRID], pixelPos, currentColor);
-        return;
-    }
-
-    historyColor = clamp(historyColor, neighborhoodMin, neighborhoodMax);
-    float blendFactor = 0.05;
-    vec4 result = mix(historyColor, currentColor, blendFactor);
-    imageStore(images[ctx.lightOutputRID], pixelPos, result);
+    return ((currentNDC.xy - scene.jitter) - (previousNDC.xy - scene.prevJitter)) * vec2(0.5, 0.5);
 }
 
-void taa_tarif() {
+void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    ivec2 imageSize = textureSize(textures[ctx.lightInputRID], 0).xy;
+    ivec2 size = imageSize(images[ctx.lightInputRID]);
 
-    if (any(greaterThanEqual(pixelPos, imageSize))) {
+    if (any(greaterThanEqual(pixelPos, size))) {
         return;
     }
 
@@ -93,7 +45,7 @@ void taa_tarif() {
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             ivec2 samplePos = pixelPos + ivec2(x, y);
-            samplePos = clamp(samplePos, ivec2(0), imageSize - ivec2(1));
+            samplePos = clamp(samplePos, ivec2(0), size - ivec2(1));
             vec3 neighbor = max(vec3(0, 0, 0), imageLoad(images[ctx.lightInputRID], samplePos).rgb);
 
             float subSampleDistance = length(vec2(x, y));
@@ -108,58 +60,49 @@ void taa_tarif() {
             m1 += neighbor;
             m2 += neighbor * neighbor;
 
-            vec2 sampleUV = vec2(samplePos) / vec2(imageSize);
-            float currentDepth = texture(textures[ctx.depthRID], sampleUV).r;
+            float currentDepth = imageLoad(images[ctx.depthRID], samplePos).r;
             if (currentDepth < closestDepth) {
                 closestDepth = currentDepth;
                 closestDepthPos = samplePos;
             }
         }
     }
+
     vec3 sourceSample = sourceSampleTotal / sourceSampleWeight;
-
-    vec2 texCoord = vec2(closestDepthPos) / vec2(imageSize);
-    float depth = texture(textures[ctx.depthRID], texCoord).r;
-    vec3 worldPos = DepthToWorld(texCoord, depth);
-    vec4 prevNDC = scene.prevViewProj * vec4(worldPos, 1.0);
-    vec4 currentNDC = scene.viewProj * vec4(worldPos, 1.0);
-    prevNDC /= prevNDC.w;
-    currentNDC /= currentNDC.w;
-    vec2 motionVector = ((currentNDC.xy - scene.jitter) - (prevNDC.xy - scene.prevJitter)) * 0.5;
-
-    vec2 historyTexCoord = texCoord - motionVector;
+    vec2 motionVector = get_motion_vector(closestDepth, closestDepthPos);
+    vec2 historyTexCoord = (vec2(pixelPos) + 0.5) / vec2(size) - motionVector;
 
     if (clamp(historyTexCoord, vec2(0), vec2(1)) != historyTexCoord) {
         imageStore(images[ctx.lightOutputRID], pixelPos, vec4(sourceSample, 1.0));
         return;
     }
 
-    vec3 historySample = SampleTextureCatmullRom(textures[ctx.lightHistoryRID], historyTexCoord).rgb;
+    // vec3 historySample = SampleTextureCatmullRom(textures[ctx.lightHistoryRID], historyTexCoord).rgb;
+    vec3 historySample = texture(textures[ctx.lightHistoryRID], historyTexCoord).rgb;
 
-    float oneDividedBySampleCount = 1.0 / 9.0;
-    float gamma = 1.0;
-    vec3 mu = m1 * oneDividedBySampleCount;
-    vec3 sigma = sqrt(abs((m2 * oneDividedBySampleCount) - (mu * mu)));
-    vec3 minc = mu - gamma * sigma;
-    vec3 maxc = mu + gamma * sigma;
+    // float oneDividedBySampleCount = 1.0 / 9.0;
+    // float gamma = 1.0;
+    // vec3 mu = m1 * oneDividedBySampleCount;
+    // vec3 sigma = sqrt(abs((m2 * oneDividedBySampleCount) - (mu * mu)));
+    // vec3 minc = mu - gamma * sigma;
+    // vec3 maxc = mu + gamma * sigma;
 
-    historySample = clip_aabb(minc, maxc, clamp(historySample, neighborhoodMin, neighborhoodMax));
+    historySample = clip_aabb(neighborhoodMin, neighborhoodMax, sourceSample, historySample);
+    // historySample = clamp(historySample, neighborhoodMin, neighborhoodMax);
 
     float sourceWeight = 0.05;
-    float historyWeight = 1.0 - sourceWeight;
-    vec3 compressedSource = sourceSample * rcp(max(max(sourceSample.r, sourceSample.g), sourceSample.b) + 1.0);
-    vec3 compressedHistory = historySample * rcp(max(max(historySample.r, historySample.g), historySample.b) + 1.0);
-    float luminanceSource = Luminance(compressedSource);
-    float luminanceHistory = Luminance(compressedHistory);
+    // float historyWeight = 1.0 - sourceWeight;
+    // vec3 compressedSource = sourceSample * rcp(max(max(sourceSample.r, sourceSample.g), sourceSample.b) + 1.0);
+    // vec3 compressedHistory = historySample * rcp(max(max(historySample.r, historySample.g), historySample.b) + 1.0);
+    // float luminanceSource = Luminance(compressedSource);
+    // float luminanceHistory = Luminance(compressedHistory);
 
-    sourceWeight *= 1.0 / (1.0 + luminanceSource);
-    historyWeight *= 1.0 / (1.0 + luminanceHistory);
+    // sourceWeight *= 1.0 / (1.0 + luminanceSource);
+    // historyWeight *= 1.0 / (1.0 + luminanceHistory);
 
-    vec3 result = (sourceSample * sourceWeight + historySample * historyWeight) / max(sourceWeight + historyWeight, 0.00001);
+    // vec3 result = (sourceSample * sourceWeight + historySample * historyWeight) / max(sourceWeight + historyWeight, 0.00001);
+
+    vec3 result = sourceSample * sourceWeight + historySample * (1.0 - sourceWeight);
 
     imageStore(images[ctx.lightOutputRID], pixelPos, vec4(result, 1.0));
-}
-
-void main() {
-    taa_tarif();
 }
