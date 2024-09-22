@@ -285,13 +285,15 @@ struct SceneAsset : Asset {
     float exposure = 2.0f;
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
-    bool useTaa = true;
 
     float camSpeed = 0.01;
     float zoomSpeed = 1.0;
     float rotationSpeed = 0.3;
     bool autoOrbit = false;
     Ref<CameraNode> mainCamera;
+
+    bool taaEnabled = true;
+    bool taaReconstruct = true;
 
     template<typename T>
     Ref<T> Add() {

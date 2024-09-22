@@ -204,7 +204,7 @@ struct PostProcessingConstants {
 
     vec2 size;
     int sceneBufferIndex;
-    int pad[1];
+    int reconstruct;
 };
 
 #if !defined(LUZ_ENGINE)

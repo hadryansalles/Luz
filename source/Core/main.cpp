@@ -124,7 +124,7 @@ private:
         if (!batterySaver) {
             return;
         }
-        float targetFrameTime = 33.333f;
+        float targetFrameTime = 16.666f;
         float elapsedTime = 0.0f;
         do {
             auto currentTime = std::chrono::high_resolution_clock::now();
@@ -237,9 +237,7 @@ private:
         vkw::CmdEndTimeStamp(volumetricTS);
 
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
-        if (scene->useTaa) {
-            DeferredRenderer::TAAPass(gpuScene);
-        }
+        DeferredRenderer::TAAPass(gpuScene, scene);
         vkw::CmdEndTimeStamp(taaTS);
 
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");

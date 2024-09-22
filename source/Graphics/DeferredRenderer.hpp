@@ -49,7 +49,7 @@ void LineRenderingPass(GPUScene& gpuScene);
 void BeginOpaquePass();
 void EndPass();
 void PostProcessingPass(GPUScene& gpuScene);
-void TAAPass(GPUScene& gpuScene);
+void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
 void SwapLightHistory();
 
 vkw::Image& GetComposedImage();

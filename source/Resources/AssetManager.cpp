@@ -104,7 +104,8 @@ void SceneAsset::Serialize(Serializer& s) {
     s("aoMax", aoMax);
     s("exposure", exposure);
     s("shadowType", shadowType);
-    //s("shadowResolution", shadowResolution);
+    s("taaEnabled", taaEnabled);
+    s("taaReconstruct", taaReconstruct);
     s.Node("mainCamera", mainCamera, this);
 }
 

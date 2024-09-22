@@ -51,36 +51,38 @@ void get_neighbor_3x3(vec2 uv, out vec4 cmin, out vec4 cmax, out vec4 cavg, out 
     cmax = 0.5 * (cmax + cmax5);
     cavg = 0.5 * (cavg + cavg5);
 
-    sourceSample = vec4(0.0);
-    float weightSum = 0.0;
-    float weight = MitchellFilter(length(vec2(-1, -1)));
-    sourceSample += ctl * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(0, -1)));
-    sourceSample += ctc * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(1, -1)));
-    sourceSample += ctr * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(-1, 0)));
-    sourceSample += cml * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(0, 0)));
-    sourceSample += cmc * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(1, 0)));
-    sourceSample += cmr * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(-1, 1)));
-    sourceSample += cbl * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(0, 1)));
-    sourceSample += cbc * weight;
-    weightSum += weight;
-    weight = MitchellFilter(length(vec2(1, 1)));
-    sourceSample += cbr * weight;
-    weightSum += weight;
-    sourceSample /= weightSum;
+    if (ctx.reconstruct == 1) {
+        sourceSample = vec4(0.0);
+        float weightSum = 0.0;
+        float weight = MitchellFilter(length(vec2(-1, -1)));
+        sourceSample += ctl * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(0, -1)));
+        sourceSample += ctc * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(1, -1)));
+        sourceSample += ctr * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(-1, 0)));
+        sourceSample += cml * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(0, 0)));
+        sourceSample += cmc * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(1, 0)));
+        sourceSample += cmr * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(-1, 1)));
+        sourceSample += cbl * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(0, 1)));
+        sourceSample += cbc * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(1, 1)));
+        sourceSample += cbr * weight;
+        weightSum += weight;
+        sourceSample /= weightSum;
+    }
 }
 
 vec3 find_closest_3x3(vec2 uv) {
@@ -281,7 +283,7 @@ void main() {
     vec4 sourceSample, cmin, cmax, cavg;
     get_neighbor_3x3(sourceUv, cmin, cmax, cavg, sourceSample);
 
-    if (any(isnan(sourceSample))) {
+    if (ctx.reconstruct == 0 || any(isnan(sourceSample))) {
         sourceSample = texture(textures[ctx.lightInputRID], sourceUv);
     }
 

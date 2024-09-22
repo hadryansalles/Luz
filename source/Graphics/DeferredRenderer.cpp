@@ -400,23 +400,26 @@ void LineRenderingPass(GPUScene& gpuScene) {
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
-void TAAPass(GPUScene& gpuScene) {
-    vkw::CmdBarrier(ctx.depth, vkw::Layout::General);
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::Read);
-    vkw::CmdBarrier(ctx.lightB, vkw::Layout::General);
-    vkw::CmdBarrier(ctx.lightHistory, vkw::Layout::Read);
-    vkw::CmdBindPipeline(ctx.postProcessingPipeline);
-    PostProcessingConstants constants;
-    constants.lightInputRID = ctx.lightA.RID();
-    constants.lightOutputRID = ctx.lightB.RID();
-    constants.lightHistoryRID = ctx.lightHistory.RID();
-    constants.depthRID = ctx.depth.RID();
-    constants.size = {ctx.lightA.width, ctx.lightA.height};
-    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
-    std::swap(ctx.lightA, ctx.lightB);
+void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
+    if (scene->taaEnabled) {
+        vkw::CmdBarrier(ctx.depth, vkw::Layout::General);
+        vkw::CmdBarrier(ctx.lightA, vkw::Layout::Read);
+        vkw::CmdBarrier(ctx.lightB, vkw::Layout::General);
+        vkw::CmdBarrier(ctx.lightHistory, vkw::Layout::Read);
+        vkw::CmdBindPipeline(ctx.postProcessingPipeline);
+        PostProcessingConstants constants;
+        constants.lightInputRID = ctx.lightA.RID();
+        constants.lightOutputRID = ctx.lightB.RID();
+        constants.lightHistoryRID = ctx.lightHistory.RID();
+        constants.depthRID = ctx.depth.RID();
+        constants.size = {ctx.lightA.width, ctx.lightA.height};
+        constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+        constants.reconstruct = scene->taaReconstruct;
+        vkw::CmdPushConstants(&constants, sizeof(constants));
+        vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+        vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+        std::swap(ctx.lightA, ctx.lightB);
+    }
 }
 
 void SwapLightHistory() {
