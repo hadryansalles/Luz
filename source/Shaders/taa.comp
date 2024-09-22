@@ -26,7 +26,7 @@ vec2 get_motion_vector(vec2 uv) {
     return ((currentNDC.xy - scene.jitter) - (previousNDC.xy - scene.prevJitter)) * vec2(0.5);
 }
 
-void get_neighbor_3x3(vec2 uv, out vec4 cmin, out vec4 cmax, out vec4 cavg) {
+void get_neighbor_3x3(vec2 uv, out vec4 cmin, out vec4 cmax, out vec4 cavg, out vec4 sourceSample) {
     vec2 du = vec2(1.0 / ctx.size.x, 0.0);
     vec2 dv = vec2(0.0, 1.0 / ctx.size.y);
 
@@ -50,6 +50,37 @@ void get_neighbor_3x3(vec2 uv, out vec4 cmin, out vec4 cmax, out vec4 cavg) {
     cmin = 0.5 * (cmin + cmin5);
     cmax = 0.5 * (cmax + cmax5);
     cavg = 0.5 * (cavg + cavg5);
+
+    sourceSample = vec4(0.0);
+    float weightSum = 0.0;
+    float weight = MitchellFilter(length(vec2(-1, -1)));
+    sourceSample += ctl * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(0, -1)));
+    sourceSample += ctc * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(1, -1)));
+    sourceSample += ctr * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(-1, 0)));
+    sourceSample += cml * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(0, 0)));
+    sourceSample += cmc * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(1, 0)));
+    sourceSample += cmr * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(-1, 1)));
+    sourceSample += cbl * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(0, 1)));
+    sourceSample += cbc * weight;
+    weightSum += weight;
+    weight = MitchellFilter(length(vec2(1, 1)));
+    sourceSample += cbr * weight;
+    weightSum += weight;
+    sourceSample /= weightSum;
 }
 
 vec3 find_closest_3x3(vec2 uv) {
@@ -152,6 +183,89 @@ vec4 neighbor_clip(vec4 sourceSample, vec4 historySample, vec2 sourceUv, vec2 hi
     return clip_aabb(cmin, cmax, sourceSample, historySample);
 }
 
+vec4 get_reconstruction_3x3(ivec2 pos) {
+    vec4 sourceSample = vec4(0.0);
+    float weightSum = 0.0;
+    // Top row
+    {
+        ivec2 samplePos = clamp(pos + ivec2(-1, -1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(-1, -1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(0, -1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(0, -1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(1, -1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(1, -1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+
+    // Middle row
+    {
+        ivec2 samplePos = clamp(pos + ivec2(-1, 0), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(-1, 0));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(0, 0), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(0, 0));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(1, 0), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(1, 0));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+
+    // Bottom row
+    {
+        ivec2 samplePos = clamp(pos + ivec2(-1, 1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(-1, 1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(0, 1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(0, 1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(1, 1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(1, 1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    return sourceSample / weightSum;
+}
+
 void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
 
@@ -161,31 +275,32 @@ void main() {
 
     vec2 sourceUv = get_uv(pixelPos);
     vec2 historyUv = sourceUv - get_motion_vector(find_closest_3x3(sourceUv).xy);
-    vec2 jitterUv = (scene.jitter * 0.5) / ctx.size;
 
-    vec4 sourceSample = texture(textures[ctx.lightInputRID], sourceUv);
     vec4 historySample = texture(textures[ctx.lightHistoryRID], historyUv);
+
+    vec4 sourceSample, cmin, cmax, cavg;
+    get_neighbor_3x3(sourceUv, cmin, cmax, cavg, sourceSample);
+
+    if (any(isnan(sourceSample))) {
+        sourceSample = texture(textures[ctx.lightInputRID], sourceUv);
+    }
 
     if (any(greaterThan(historyUv, vec2(1.0))) || any(lessThan(historyUv, vec2(0.0)))) {
         imageStore(images[ctx.lightOutputRID], pixelPos, sourceSample);
         return;
     }
 
-    vec4 cmin, cmax, cavg;
-    get_neighbor_3x3(sourceUv, cmin, cmax, cavg);
     historySample = clip_aabb(cmin.rgb, cmax.rgb, clamp(cavg, cmin, cmax), historySample);
-    // historySample = neighbor_clip(sourceSample, historySample, sourceUv, historyUv);
 
     float sourceWeight = 0.05;
     float historyWeight = 1.0 - sourceWeight;
 
     anti_flicker(sourceSample, historySample, sourceWeight, historyWeight);
 
-    // sourceWeight = luminance_feedback(sourceSample, historySample);
-    // historyWeight = 1.0 - sourceWeight;
-
     vec4 result = (sourceSample * sourceWeight + historySample * historyWeight) / max(sourceWeight + historyWeight, 0.0000001);
-    // vec4 result = mix(historySample, sourceSample, sourceWeight);
+    if (any(isnan(result))) {
+        result = sourceSample;
+    }
 
     imageStore(images[ctx.lightOutputRID], pixelPos, result);
 }
