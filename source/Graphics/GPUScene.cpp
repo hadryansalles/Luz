@@ -14,6 +14,7 @@ struct GPUSceneImpl {
     SceneBlock sceneBlock;
     std::vector<ModelBlock> modelsBlock;
     bool anyVolumetricLight = false;
+    bool anyShadowMap = false;
 
     ModelBlock defaultModelBlock = {
         .modelMat = glm::mat4(1),
@@ -232,6 +233,9 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.inverseProj = glm::inverse(camera->GetProjJittered());
     s.inverseView = glm::inverse(camera->GetView());
 
+    impl->anyShadowMap = scene->shadowType == ShadowType::ShadowMap;
+    impl->anyVolumetricLight = false;
+
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
         LightBlock& block = s.lights[s.numLights++];
         block.color = light->color;
@@ -256,6 +260,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.volumetricDensity = light->volumetricShadowMapParams.density;
             block.volumetricAbsorption = light->volumetricShadowMapParams.absorption;
             impl->anyVolumetricLight = true;
+            impl->anyShadowMap = true;
         }
 
         bool isPoint = false;

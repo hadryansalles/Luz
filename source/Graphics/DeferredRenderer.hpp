@@ -44,13 +44,15 @@ void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame);
 void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame);
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
 void LightPass(LightConstants constants);
-void ComposePass(bool separatePass, Output output);
+void ComposePass(bool separatePass, Output output, Ref<SceneAsset>& scene);
 void LineRenderingPass(GPUScene& gpuScene);
 void BeginOpaquePass();
 void EndPass();
 void PostProcessingPass(GPUScene& gpuScene);
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
+void LuminanceHistogramPass();
 void SwapLightHistory();
+
 
 vkw::Image& GetComposedImage();
 

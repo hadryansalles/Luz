@@ -119,6 +119,7 @@ struct Context {
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
+        VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
     };
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -404,6 +405,18 @@ void Destroy() {
     _ctx.DestroySwapChain();
     _ctx.DestroyDevice();
     _ctx.DestroyInstance();
+}
+
+void* MapBuffer(Buffer& buffer) {
+    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+    void* data;
+    vmaMapMemory(_ctx.vmaAllocator, buffer.resource->allocation, &data);
+    return buffer.resource->allocation->GetMappedData();
+}
+
+void UnmapBuffer(Buffer& buffer) {
+    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+    vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
 }
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
@@ -1754,7 +1767,12 @@ void Context::CreateDevice() {
     sync2Features.synchronization2 = VK_TRUE;
     sync2Features.pNext = &dynamicRenderingFeatures;
 
-    features2.pNext = &sync2Features;
+    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+    atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+    atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+    atomicFeatures.pNext = &sync2Features;
+
+    features2.pNext = &atomicFeatures;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

@@ -174,6 +174,7 @@ void main() {
     vec4 material = texture(textures[ctx.materialRID], fragTexCoord);
     vec4 emission = texture(textures[ctx.emissionRID], fragTexCoord);
     float depth = texture(textures[ctx.depthRID], fragTexCoord).r;
+
     if (length(N) == 0.0f) {
         outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
         return;
@@ -230,16 +231,5 @@ void main() {
     float rayTracedAo = TraceAORays(shadowOrigin, N);
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
     vec3 color = ambient + Lo + emission.rgb;
-
-    // color = color / (color + vec3(1.0));
-    // color = pow(color, vec3(1.0/2.2));
     outColor = vec4(color, 1.0);
-
-    // vec3 totalRadiance = color + emission.rgb;
-
-    // exposure tone mapping
-    // vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
-    // mapped = aces(mapped);
-    
-    // gamma correction 
 }

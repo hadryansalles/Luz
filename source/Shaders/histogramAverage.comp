@@ -1,0 +1,44 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform Constants {
+    PostProcessingConstants ctx;
+};
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer _FloatBuffers {
+    float data[];
+} floatBuffers[];
+
+#include "utils.glsl"
+
+shared float HistogramShared[LUZ_HISTOGRAM_BINS];
+
+layout (local_size_x = LUZ_HISTOGRAM_THREADS, local_size_y = LUZ_HISTOGRAM_THREADS) in;
+void main() {
+    uint groupIndex = gl_LocalInvocationIndex;
+    float countForThisBin = floatBuffers[ctx.histogramRID].data[groupIndex * 4];
+    HistogramShared[groupIndex] = countForThisBin * float(groupIndex);
+
+    memoryBarrierShared();
+    barrier();
+
+    for (uint histogramSampleIndex = (LUZ_HISTOGRAM_BINS >> 1); histogramSampleIndex > 0; histogramSampleIndex >>= 1) {
+        if (groupIndex < histogramSampleIndex) {
+            HistogramShared[groupIndex] += HistogramShared[groupIndex + histogramSampleIndex];
+        }
+
+        memoryBarrierShared();
+        barrier();
+    }
+
+    if (groupIndex == 0) {
+        float weightedLogAverage = (HistogramShared[0] / max(float(ctx.size.x * ctx.size.y) - countForThisBin, 1.0)) - 1.0;
+        float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * ctx.histogramOneOverLog) + ctx.histogramMinLog);
+        float luminanceLastFrame = floatBuffers[ctx.histogramAverageRID].data[0];
+        float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1.0 - exp(-ctx.deltaTime * 1.1));
+        floatBuffers[ctx.histogramAverageRID].data[0] = HistogramShared[0];
+    }
+}

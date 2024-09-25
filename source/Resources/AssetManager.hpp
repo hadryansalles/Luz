@@ -209,14 +209,14 @@ struct LightNode : Node {
     float shadowMapFar = 2000.0f;
 
     struct VolumetricScreenSpaceParams {
-        float absorption = 0.5;
+        float absorption = 0.5f;
         int samples = 128;
     } volumetricScreenSpaceParams;
 
     struct VolumetricShadowMapParams {
-        float weight = 0.0001;
-        float absorption = 1.0;
-        float density = 1.094;
+        float weight = 0.0001f;
+        float absorption = 1.0f;
+        float density = 1.094f;
         int samples = 128;
     } volumetricShadowMapParams;
 
@@ -286,9 +286,9 @@ struct SceneAsset : Asset {
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
 
-    float camSpeed = 0.01;
-    float zoomSpeed = 1.0;
-    float rotationSpeed = 0.3;
+    float camSpeed = 0.01f;
+    float zoomSpeed = 1.0f;
+    float rotationSpeed = 0.3f;
     bool autoOrbit = false;
     Ref<CameraNode> mainCamera;
 

@@ -1,0 +1,53 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform Constants {
+    PostProcessingConstants ctx;
+};
+
+#include "utils.glsl"
+
+shared uint HistogramShared[LUZ_HISTOGRAM_BINS];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer _FloatBuffers {
+    float data[];
+} floatBuffers[];
+
+uint HDRToHistogramBin(vec3 hdrColor) {
+    float luminance = Luminance(hdrColor);
+
+    if(luminance < LUZ_EPS) {
+        return 0;
+    }
+    
+    float logLuminance = clamp((log2(luminance) - ctx.histogramMinLog) * ctx.histogramOneOverLog, 0.0, 1.0);
+    return uint(logLuminance * 254.0 + 1.0);
+}
+
+layout (local_size_x = LUZ_HISTOGRAM_THREADS, local_size_y = LUZ_HISTOGRAM_THREADS) in;
+void main() {
+    uint groupIndex = gl_LocalInvocationIndex;
+    uvec2 threadId = gl_GlobalInvocationID.xy;
+
+    floatBuffers[ctx.histogramRID].data[groupIndex * 4] = 0.0f;
+
+    HistogramShared[groupIndex] = 0;
+
+    memoryBarrierShared();
+    barrier();
+    
+    if(threadId.x < uint(ctx.size.x) && threadId.y < uint(ctx.size.y)) {
+        vec3 hdrColor = imageLoad(images[ctx.lightInputRID], ivec2(threadId.xy)).rgb;
+        uint binIndex = HDRToHistogramBin(hdrColor);
+        atomicAdd(HistogramShared[binIndex], 1);
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    atomicAdd(floatBuffers[ctx.histogramRID].data[groupIndex * 4], HistogramShared[groupIndex]);
+}

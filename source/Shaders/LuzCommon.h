@@ -10,6 +10,7 @@ using mat4 = glm::mat4;
 #define LUZ_PI 3.14159265359
 #define PI 3.14159265359
 #define GOLDEN_RATIO 2.118033988749895
+#define LUZ_EPS 0.000001f
 
 #define LUZ_BINDING_TEXTURE 0
 #define LUZ_BINDING_BUFFER 1
@@ -29,6 +30,9 @@ using mat4 = glm::mat4;
 
 #define VOLUMETRIC_TYPE_SCREEN_SPACE 1
 #define VOLUMETRIC_TYPE_SHADOW_MAP 2
+
+#define LUZ_HISTOGRAM_THREADS 16
+#define LUZ_HISTOGRAM_BINS 256
 
 struct LightBlock {
     vec3 color;
@@ -194,6 +198,9 @@ struct ComposeConstants {
     int emissionRID;
     int depthRID;
     int debugRID;
+
+    float exposure;
+    float pad[3];
 };
 
 struct PostProcessingConstants {
@@ -205,7 +212,14 @@ struct PostProcessingConstants {
     vec2 size;
     int sceneBufferIndex;
     int reconstruct;
+    float deltaTime;
+
+    int histogramRID;
+    int histogramAverageRID;
+    float histogramMinLog;
+    float histogramOneOverLog;
 };
+
 
 #if !defined(LUZ_ENGINE)
 

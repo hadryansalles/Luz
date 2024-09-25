@@ -27,12 +27,12 @@ void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNo
 
     float dt = deltaTime;
     float scroll = Window::GetDeltaScroll();
-    float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1 : 1;
+    float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1f : 1.0f;
     float speedUp = 1.0f;
 
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_1) || Window::IsKeyDown(GLFW_KEY_LEFT_ALT)) {
         drag = -Window::GetDeltaMouse();
-        drag.x *= -1;
+        drag.x *= -1.0f;
     }
     if (Window::IsMouseDown(GLFW_MOUSE_BUTTON_2) || Window::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) {
         move = -Window::GetDeltaMouse();
@@ -81,7 +81,7 @@ void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNo
     case CameraNode::CameraMode::Orbit:
         targetMoveSpeed = maxMoveSpeed * glm::vec3(move.x, move.y, -scroll);
         moveSpeed = glm::mix(moveSpeed, targetMoveSpeed, dt / accelerationTime);
-        cam->zoom *= std::pow(10, moveSpeed.z * zoomSpeed);
+        cam->zoom *= std::powf(10, moveSpeed.z * zoomSpeed);
         cam->center -= (right * moveSpeed.x - up * moveSpeed.y);
         break;
     case CameraNode::CameraMode::Fly:

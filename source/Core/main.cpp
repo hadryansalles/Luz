@@ -89,7 +89,7 @@ private:
             // todo: focus camera on selected object
             {
                 auto currentTime = std::chrono::high_resolution_clock::now();
-                auto deltaTime = std::chrono::duration_cast<std::chrono::nanoseconds>(currentTime - lastCameraTime).count() / 1000000.0;
+                float deltaTime = std::chrono::duration_cast<std::chrono::nanoseconds>(currentTime - lastCameraTime).count() / 1000000.0f;
                 cameraController.Update(scene, camera, viewportHovered, deltaTime);
                 lastCameraTime = currentTime;
             }
@@ -124,7 +124,7 @@ private:
         if (!batterySaver) {
             return;
         }
-        float targetFrameTime = 16.666f;
+        float targetFrameTime = 33.333f;
         float elapsedTime = 0.0f;
         do {
             auto currentTime = std::chrono::high_resolution_clock::now();
@@ -138,8 +138,8 @@ private:
         glm::vec4 cameraSpace = camera->GetProj() * camera->GetView() * glm::vec4(position, 1.0f);
         ImVec2 screenSpace = ImVec2(cameraSpace.x / cameraSpace.w, cameraSpace.y / cameraSpace.w);
         glm::ivec2 ext = viewportSize;
-        screenSpace.x = (screenSpace.x + 1.0) * ext.x/2.0;
-        screenSpace.y = (screenSpace.y + 1.0) * ext.y/2.0;
+        screenSpace.x = (screenSpace.x + 1.0f) * ext.x/2.0f;
+        screenSpace.y = (screenSpace.y + 1.0f) * ext.y/2.0f;
         return screenSpace;
     }
 
@@ -217,9 +217,11 @@ private:
         DeferredRenderer::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
 
+        auto shadowMapTS = vkw::CmdBeginTimeStamp("ShadowMaps");
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
             DeferredRenderer::ShadowMapPass(light, scene, gpuScene);
         }
+        vkw::CmdEndTimeStamp(shadowMapTS);
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
         DeferredRenderer::LightConstants lightPassConstants;
@@ -244,12 +246,16 @@ private:
         DeferredRenderer::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);
 
+        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
+        DeferredRenderer::LuminanceHistogramPass();
+        vkw::CmdEndTimeStamp(histogramTS);
+
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {
             vkw::CmdBeginPresent();
-            DeferredRenderer::ComposePass(false, outputMode);
+            DeferredRenderer::ComposePass(false, outputMode, scene);
         }  else {
-            DeferredRenderer::ComposePass(true, outputMode);
+            DeferredRenderer::ComposePass(true, outputMode, scene);
             vkw::CmdBeginPresent();
         }
         vkw::CmdEndTimeStamp(composeTS);
