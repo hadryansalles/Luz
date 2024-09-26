@@ -33,8 +33,6 @@ void main() {
     uint groupIndex = gl_LocalInvocationIndex;
     uvec2 threadId = gl_GlobalInvocationID.xy;
 
-    floatBuffers[ctx.histogramRID].data[groupIndex * 4] = 0.0f;
-
     HistogramShared[groupIndex] = 0;
 
     memoryBarrierShared();
@@ -49,5 +47,5 @@ void main() {
     memoryBarrierShared();
     barrier();
 
-    atomicAdd(floatBuffers[ctx.histogramRID].data[groupIndex * 4], HistogramShared[groupIndex]);
+    atomicAdd(floatBuffers[ctx.histogramRID].data[groupIndex], HistogramShared[groupIndex]);
 }

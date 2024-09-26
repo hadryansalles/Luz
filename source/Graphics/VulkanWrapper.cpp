@@ -89,6 +89,7 @@ struct Context {
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
     void CmdBarrier();
+    void CmdFillBuffer(Buffer& buffer, uint32_t value);
     void EndCommandBuffer(VkSubmitInfo submitInfo);
 
     void LoadShaders(Pipeline& pipeline);
@@ -1156,6 +1157,10 @@ void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
     _ctx.CmdBarrier(img, layout);
+}
+
+void CmdFillBuffer(Buffer& buffer, uint32_t value) {
+    _ctx.CmdFillBuffer(buffer, value);
 }
 
 void CmdBarrier() {
@@ -2380,6 +2385,11 @@ void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset
     region.imageOffset = { 0, 0, 0 };
     region.imageExtent = { dst.width, dst.height, 1 };
     vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
+}
+
+void Context::CmdFillBuffer(Buffer& buffer, uint32_t value) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    vkCmdFillBuffer(cmd.buffer, buffer.resource->buffer, 0, buffer.size, value);
 }
 
 void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {

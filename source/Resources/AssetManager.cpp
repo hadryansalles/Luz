@@ -102,10 +102,14 @@ void SceneAsset::Serialize(Serializer& s) {
     s("aoSamples", aoSamples);
     s("aoMin", aoMin);
     s("aoMax", aoMax);
-    s("exposure", exposure);
     s("shadowType", shadowType);
+    s("shadowResolution", shadowResolution);
     s("taaEnabled", taaEnabled);
     s("taaReconstruct", taaReconstruct);
+    s("exposureAdaptive", exposureAdaptive);
+    s("exposureReaction", exposureReaction);
+    s("exposureMin", exposureMin);
+    s("exposureMax", exposureMax);
     s.Node("mainCamera", mainCamera, this);
 }
 
@@ -317,6 +321,7 @@ void CameraNode::Serialize(Serializer& s) {
     s("center", center);
     s("rotation", rotation);
     s("zoom", zoom);
+    s("jitter", useJitter);
     s("farDistance", farDistance);
     s("nearDistance", nearDistance);
     s("horizontalFov", horizontalFov);

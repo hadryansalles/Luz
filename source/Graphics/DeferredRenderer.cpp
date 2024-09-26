@@ -243,8 +243,8 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
-    ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
-    ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
+    ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Luminance Histogram");
+    ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc | vkw::BufferUsage::TransferDst, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
 
 void Destroy() {
@@ -444,29 +444,34 @@ void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     }
 }
 
-void LuminanceHistogramPass() {
-    vkw::CmdBindPipeline(ctx.luminanceHistogramPipeline);
-    PostProcessingConstants constants;
-    constants.lightInputRID = ctx.lightA.RID();
-    constants.size = {ctx.lightA.width, ctx.lightA.height};
-    constants.histogramRID = ctx.luminanceHistogram.RID();
-    constants.histogramAverageRID = ctx.luminanceAverage.RID();
-    constants.deltaTime = 1.0f / 60.0f;
-    constants.histogramMinLog = -10.0f;
-    constants.histogramOneOverLog = 1.0f / 12.0f;
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.lightA.width / LUZ_HISTOGRAM_THREADS + 1, ctx.lightA.height / LUZ_HISTOGRAM_THREADS + 1, 1});
-    vkw::CmdBarrier();
-    vkw::CmdBindPipeline(ctx.luminanceHistogramAveragePipeline);
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({1, 1, 1});
-    vkw::CmdBarrier();
+void LuminanceHistogramPass(Ref<SceneAsset>& scene) {
+    if (scene->exposureAdaptive) {
+        uint32_t exposure = *(uint32_t*)&scene->exposure;
+        vkw::CmdFillBuffer(ctx.luminanceHistogram, exposure);
+        vkw::CmdBindPipeline(ctx.luminanceHistogramPipeline);
+        PostProcessingConstants constants;
+        constants.lightInputRID = ctx.lightA.RID();
+        constants.size = {ctx.lightA.width, ctx.lightA.height};
+        constants.histogramRID = ctx.luminanceHistogram.RID();
+        constants.histogramAverageRID = ctx.luminanceAverage.RID();
+        constants.deltaTime = 1.0f / 33.0f;
+        constants.histogramMinLog = scene->exposureMin;
+        constants.histogramOneOverLog = scene->exposureMax - scene->exposureMin;
+        vkw::CmdPushConstants(&constants, sizeof(constants));
+        vkw::CmdDispatch({ctx.lightA.width / LUZ_HISTOGRAM_THREADS + 1, ctx.lightA.height / LUZ_HISTOGRAM_THREADS + 1, 1});
+        vkw::CmdBarrier();
+        vkw::CmdBindPipeline(ctx.luminanceHistogramAveragePipeline);
+        vkw::CmdPushConstants(&constants, sizeof(constants));
+        vkw::CmdDispatch({1, 1, 1});
+        vkw::CmdBarrier();
 
-    float* average = (float*)vkw::MapBuffer(ctx.luminanceAverage);
-    if (*average > LUZ_EPS) {
-        Log::Info("Luminance Average: %f", *average);
+        float* average = (float*)vkw::MapBuffer(ctx.luminanceAverage);
+        if (*average > LUZ_EPS) {
+            Log::Info("Luminance Average: %f", *average);
+            scene->exposure = *average;
+        }
+        vkw::UnmapBuffer(ctx.luminanceAverage);
     }
-    vkw::UnmapBuffer(ctx.luminanceAverage);
 }
 
 void SwapLightHistory() {

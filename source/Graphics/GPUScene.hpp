@@ -35,7 +35,7 @@ struct GPUModel {
 struct GPUScene {
     GPUScene();
     ~GPUScene();
-    
+
     void Create();
     void Destroy();
 

@@ -218,6 +218,8 @@ struct PostProcessingConstants {
     int histogramAverageRID;
     float histogramMinLog;
     float histogramOneOverLog;
+    
+    float histogramReaction;
 };
 
 

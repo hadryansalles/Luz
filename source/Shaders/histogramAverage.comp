@@ -1,6 +1,8 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float : enable
+#extension GL_EXT_shader_atomic_float2 : enable
 
 #include "LuzCommon.h"
 
@@ -19,7 +21,9 @@ shared float HistogramShared[LUZ_HISTOGRAM_BINS];
 layout (local_size_x = LUZ_HISTOGRAM_THREADS, local_size_y = LUZ_HISTOGRAM_THREADS) in;
 void main() {
     uint groupIndex = gl_LocalInvocationIndex;
-    float countForThisBin = floatBuffers[ctx.histogramRID].data[groupIndex * 4];
+    uint globalIndex = gl_GlobalInvocationID.x;
+
+    float countForThisBin = floatBuffers[ctx.histogramRID].data[groupIndex];
     HistogramShared[groupIndex] = countForThisBin * float(groupIndex);
 
     memoryBarrierShared();
@@ -35,10 +39,19 @@ void main() {
     }
 
     if (groupIndex == 0) {
-        float weightedLogAverage = (HistogramShared[0] / max(float(ctx.size.x * ctx.size.y) - countForThisBin, 1.0)) - 1.0;
+        float weightedLogAverage = (HistogramShared[0].x / max(float(ctx.size.x * ctx.size.y) - countForThisBin, 1.0)) - 1.0;
         float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * ctx.histogramOneOverLog) + ctx.histogramMinLog);
         float luminanceLastFrame = floatBuffers[ctx.histogramAverageRID].data[0];
-        float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1.0 - exp(-ctx.deltaTime * 1.1));
-        floatBuffers[ctx.histogramAverageRID].data[0] = HistogramShared[0];
+        float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1.0 - exp(-ctx.deltaTime * ctx.histogramReaction));
+        floatBuffers[ctx.histogramAverageRID].data[0] = weightedAverageLuminance;
     }
+
+    // if (groupIndex == 0) {
+    //     float weightedLogAverage = (HistogramShared[0] / max(float(ctx.size.x * ctx.size.y) - countForThisBin, 1.0)) - 1.0;
+    //     float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * ctx.histogramOneOverLog) + ctx.histogramMinLog);
+    //     float luminanceLastFrame = floatBuffers[ctx.histogramAverageRID].data[0];
+    //     float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1.0 - exp(-ctx.deltaTime * 1.1));
+    //     // floatBuffers[ctx.histogramAverageRID].data[0] = HistogramShared[0];
+    //     floatBuffers[ctx.histogramAverageRID].data[0] = countForThisBin;
+    // }
 }

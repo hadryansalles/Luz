@@ -83,8 +83,8 @@ void main() {
     vec4 value = texture(textures[imageRID], fragCoord);
     vec4 debugColor = texture(textures[ctx.debugRID], fragCoord);
     if (imageType == 0) {
-        // vec3 color = ExposureToneMapping(value.rgb, ctx.exposure);
-        vec3 color = TonemapACES(value.rgb);
+        vec3 color = TonemapExposure(value.rgb, ctx.exposure);
+        // vec3 color = TonemapACES(value.rgb);
         color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
         value = vec4(color, 1.0);
     } else if(imageType == 2) {

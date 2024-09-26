@@ -23,7 +23,7 @@ struct Editor {
 
     void InspectorPanel(AssetManager& assetManager, const Ref<struct CameraNode>& camera, GPUScene& gpuScene);
     void DemoPanel();
-    void ScenePanel(Ref<SceneAsset>& scene);
+    void ScenePanel(Ref<SceneAsset>& scene, GPUScene& gpuScene);
     void AssetsPanel(AssetManager& assetManager);
     void ProfilerPanel();
     void ProfilerPopup();

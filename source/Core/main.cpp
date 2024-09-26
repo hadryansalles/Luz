@@ -168,7 +168,7 @@ private:
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
-            editor.ScenePanel(scene);
+            editor.ScenePanel(scene, gpuScene);
             editor.InspectorPanel(assetManager, camera, gpuScene);
             editor.DebugDrawPanel();
         } else {
@@ -231,6 +231,10 @@ private:
         DeferredRenderer::LightPass(lightPassConstants);
         vkw::CmdEndTimeStamp(lightTS);
 
+        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
+        DeferredRenderer::LuminanceHistogramPass(scene);
+        vkw::CmdEndTimeStamp(histogramTS);
+
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
         if (gpuScene.AnyVolumetricLight()) {
             DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
@@ -245,10 +249,6 @@ private:
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
         DeferredRenderer::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);
-
-        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
-        DeferredRenderer::LuminanceHistogramPass();
-        vkw::CmdEndTimeStamp(histogramTS);
 
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {

@@ -50,7 +50,7 @@ void BeginOpaquePass();
 void EndPass();
 void PostProcessingPass(GPUScene& gpuScene);
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
-void LuminanceHistogramPass();
+void LuminanceHistogramPass(Ref<SceneAsset>& scene);
 void SwapLightHistory();
 
 

@@ -282,7 +282,6 @@ struct SceneAsset : Asset {
     int lightSamples = 2;
     float aoMin = 0.0001f;
     float aoMax = 1.0000f;
-    float exposure = 2.0f;
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
 
@@ -294,6 +293,12 @@ struct SceneAsset : Asset {
 
     bool taaEnabled = true;
     bool taaReconstruct = true;
+
+    bool exposureAdaptive = true;
+    float exposure = 2.0f;
+    float exposureReaction = 1.1f;
+    float exposureMin = -2.0f;
+    float exposureMax = 10.0f;
 
     template<typename T>
     Ref<T> Add() {

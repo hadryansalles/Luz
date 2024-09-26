@@ -274,7 +274,7 @@ void Editor::DemoPanel() {
     ImGui::ShowDemoWindow();
 }
 
-void Editor::ScenePanel(Ref<SceneAsset>& scene) {
+void Editor::ScenePanel(Ref<SceneAsset>& scene, GPUScene& gpuScene) {
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -311,7 +311,12 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             }
         }
         if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Exposure", &scene->exposure, 0.01, 0, 10);
+            ImGui::SeparatorText("Exposure");
+            ImGui::DragFloat("Exposure##Exposure", &scene->exposure, 0.01, 0, 10);
+            ImGui::Checkbox("Adaptive##Exposure", &scene->exposureAdaptive);
+            ImGui::DragFloat("Reaction##Exposure", &scene->exposureReaction, 0.001, 0, 10);
+            ImGui::DragFloat("Min##Exposure", &scene->exposureMin, 0.01, -10, scene->exposureMax);
+            ImGui::DragFloat("Max##Exposure", &scene->exposureMax, 0.01, scene->exposureMin, 10);
 
             ImGui::SeparatorText("Ambient Light");
             ImGui::ColorEdit3("Color", glm::value_ptr(scene->ambientLightColor));
