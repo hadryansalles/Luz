@@ -104,7 +104,8 @@ void SceneAsset::Serialize(Serializer& s) {
     s("aoMax", aoMax);
     s("exposure", exposure);
     s("shadowType", shadowType);
-    //s("shadowResolution", shadowResolution);
+    s("taaEnabled", taaEnabled);
+    s("taaReconstruct", taaReconstruct);
     s.Node("mainCamera", mainCamera, this);
 }
 
@@ -346,6 +347,10 @@ glm::mat4 CameraNode::GetView() {
     }
 }
 
+glm::mat4 CameraNode::GetProjJittered() {
+    return glm::translate(glm::vec3(jitter.x, jitter.y, 0)) * GetProj();
+}
+
 glm::mat4 CameraNode::GetProj() {
     return GetProj(nearDistance, farDistance);
 }
@@ -362,4 +367,19 @@ glm::mat4 CameraNode::GetProj(float zNear, float zFar) {
     // the easiest way to fix this is fliping the scaling factor of the y axis
     proj[1][1] *= -1;
     return proj;
+}
+
+glm::vec2 CameraNode::GetJitter() {
+    return jitter;
+}
+
+void CameraNode::NextJitter() {
+    if (useJitter) {
+        jitterIndex = (jitterIndex + 1) % 16;
+        jitter = glm::vec2(Halton(jitterIndex + 1, 2), Halton(jitterIndex + 1, 3));
+        jitter = 2.0f * jitter - 1.0f;
+        jitter /= extent;
+    } else {
+        jitter = glm::vec2(0, 0);
+    }
 }

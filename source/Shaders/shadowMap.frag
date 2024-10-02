@@ -5,16 +5,13 @@
 #include "LuzCommon.h"
 
 layout(push_constant) uniform Constants {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-    int lightIndex;
+    ShadowMapConstants ctx;
 };
 
 layout(location = 0) in vec4 fragPos;
 
 void main() {
-    LightBlock light = scene.lights[lightIndex];
+    LightBlock light = scene.lights[ctx.lightIndex];
     if (light.type == LIGHT_TYPE_POINT) {
         gl_FragDepth = length(light.position - fragPos.xyz) / light.zFar;
     } else {

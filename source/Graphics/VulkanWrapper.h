@@ -219,6 +219,9 @@ Pipeline CreatePipeline(const PipelineDesc& desc);
 TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
 BLAS CreateBLAS(const BLASDesc& desc);
 
+void* MapBuffer(Buffer& buffer);
+void UnmapBuffer(Buffer& buffer);
+
 void SubmitAndPresent();
 bool GetSwapChainDirty();
 

@@ -312,9 +312,11 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
         }
         if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Exposure", &scene->exposure, 0.01, 0, 10);
+
             ImGui::SeparatorText("Ambient Light");
             ImGui::ColorEdit3("Color", glm::value_ptr(scene->ambientLightColor));
             ImGui::DragFloat("Intesity", &scene->ambientLight, 0.01f, 0.0f, 100.0f);
+
             ImGui::SeparatorText("Ambient Occlusion");
             bool aoEnable = scene->aoSamples >= 0;
             if (ImGui::Checkbox("Enable##AO", &aoEnable)) {
@@ -325,8 +327,10 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             }
             ImGui::DragFloat("Min##AO", &scene->aoMin, 0.01f, 0.000f, 10.0f);
             ImGui::DragFloat("Max##AO", &scene->aoMax, 0.1f, 0.000f, 1000.0f);
+
             ImGui::SeparatorText("Lights");
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
+
             ImGui::SeparatorText("Shadows");
             if (ImGui::BeginCombo("Type###Shadow", ShadowTypeNames[(int)scene->shadowType].c_str())) {
                 for (int i = 0; i < ShadowType::ShadowTypeCount; i++) {
@@ -337,6 +341,11 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
                 }
                 ImGui::EndCombo();
             }
+
+            ImGui::SeparatorText("TAA");
+            ImGui::Checkbox("Enable##TAA", &scene->taaEnabled);
+            ImGui::Checkbox("Reconstruction##TAA", &scene->taaReconstruct);
+            ImGui::Checkbox("Jitter##TAA", &scene->mainCamera->useJitter);
         }
         // todo: scene camera prameters, speed, etc
     }

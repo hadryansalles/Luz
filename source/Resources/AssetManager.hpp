@@ -209,14 +209,14 @@ struct LightNode : Node {
     float shadowMapFar = 2000.0f;
 
     struct VolumetricScreenSpaceParams {
-        float absorption = 0.5;
+        float absorption = 0.5f;
         int samples = 128;
     } volumetricScreenSpaceParams;
 
     struct VolumetricShadowMapParams {
-        float weight = 0.0001;
-        float absorption = 1.0;
-        float density = 1.094;
+        float weight = 0.0001f;
+        float absorption = 1.0f;
+        float density = 1.094f;
         int samples = 128;
     } volumetricShadowMapParams;
 
@@ -246,6 +246,7 @@ struct CameraNode : Node {
     glm::vec3 center = glm::vec3(0);
     glm::vec3 rotation = glm::vec3(0);
 
+    bool useJitter = true;
     float zoom = 10.0f;
 
     float farDistance = 1000.0f;
@@ -262,7 +263,15 @@ struct CameraNode : Node {
 
     glm::mat4 GetView();
     glm::mat4 GetProj();
+    glm::mat4 GetProjJittered();
     glm::mat4 GetProj(float zNear, float zFar);
+
+    glm::vec2 GetJitter();
+    void NextJitter();
+
+private:
+    glm::vec2 jitter = glm::vec2(0);
+    uint32_t jitterIndex = 0;
 };
 
 struct SceneAsset : Asset {
@@ -277,11 +286,14 @@ struct SceneAsset : Asset {
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
 
-    float camSpeed = 0.01;
-    float zoomSpeed = 0.1;
-    float rotationSpeed = 0.3;
+    float camSpeed = 0.01f;
+    float zoomSpeed = 1.0f;
+    float rotationSpeed = 0.3f;
     bool autoOrbit = false;
     Ref<CameraNode> mainCamera;
+
+    bool taaEnabled = true;
+    bool taaReconstruct = true;
 
     template<typename T>
     Ref<T> Add() {

@@ -5,10 +5,7 @@
 #include "LuzCommon.h"
 
 layout(push_constant) uniform Constants {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int modelID;
-    int lightIndex;
+    ShadowMapConstants ctx;
 };
 
 layout(location = 0) in vec3 inPosition;

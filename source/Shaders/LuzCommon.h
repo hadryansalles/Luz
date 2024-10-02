@@ -10,6 +10,7 @@ using mat4 = glm::mat4;
 #define LUZ_PI 3.14159265359
 #define PI 3.14159265359
 #define GOLDEN_RATIO 2.118033988749895
+#define LUZ_EPS 0.000001f
 
 #define LUZ_BINDING_TEXTURE 0
 #define LUZ_BINDING_BUFFER 1
@@ -29,6 +30,9 @@ using mat4 = glm::mat4;
 
 #define VOLUMETRIC_TYPE_SCREEN_SPACE 1
 #define VOLUMETRIC_TYPE_SHADOW_MAP 2
+
+#define LUZ_HISTOGRAM_THREADS 16
+#define LUZ_HISTOGRAM_BINS 256
 
 struct LightBlock {
     vec3 color;
@@ -95,9 +99,13 @@ struct SceneBlock {
 
     mat4 proj;
     mat4 view;
-    mat4 projView;
+    mat4 viewProj;
+    mat4 prevViewProj;
     mat4 inverseProj;
     mat4 inverseView;
+
+    vec2 jitter;
+    vec2 prevJitter;
 
     vec3 camPos;
     int numLights;
@@ -113,6 +121,13 @@ struct SceneBlock {
     int tlasRid;
 
     int shadowType;
+    int pad[3];
+};
+
+struct OpaqueConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int modelID;
 };
 
 struct ShadowMapConstants {
@@ -162,10 +177,49 @@ struct FontRenderingConstants {
     int fontRID;
 };
 
-struct PostProcessingConstants {
-    int lightRID;
-    int historyRID;
+struct LightConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int frame;
+    int albedoRID;
+    int normalRID;
+    int materialRID;
+    int emissionRID;
+    int depthRID;
 };
+
+struct ComposeConstants {
+    int imageType;
+    int lightRID;
+    int albedoRID;
+    int normalRID;
+
+    int materialRID;
+    int emissionRID;
+    int depthRID;
+    int debugRID;
+
+    float exposure;
+    float pad[3];
+};
+
+struct PostProcessingConstants {
+    int lightInputRID;
+    int lightOutputRID;
+    int lightHistoryRID;
+    int depthRID;
+
+    vec2 size;
+    int sceneBufferIndex;
+    int reconstruct;
+    float deltaTime;
+
+    int histogramRID;
+    int histogramAverageRID;
+    float histogramMinLog;
+    float histogramOneOverLog;
+};
+
 
 #if !defined(LUZ_ENGINE)
 
@@ -205,12 +259,10 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer IndexBuffer {
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
 
+#define scene sceneBuffers[ctx.sceneBufferIndex].block
 #define tlas tlasBuffer[scene.tlasRid]
-#define scene sceneBuffers[sceneBufferIndex].block
-#define scene2 sceneBuffers[ctx.sceneBufferIndex].block
-#define model modelsBuffers[modelBufferIndex].models[modelID]
+#define model modelsBuffers[ctx.modelBufferIndex].models[ctx.modelID]
 #define vertexBuffer vertexBuffers[model.vertexBuffer]
-#define sceneBlock sceneBuffers[ctx.sceneBufferIndex].block
 #define lineBlocks lineBuffers[ctx.linesRID].data
 
 #endif

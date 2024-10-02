@@ -13,6 +13,8 @@ struct GPUSceneImpl {
 
     SceneBlock sceneBlock;
     std::vector<ModelBlock> modelsBlock;
+    bool anyVolumetricLight = false;
+    bool anyShadowMap = false;
 
     ModelBlock defaultModelBlock = {
         .modelMat = glm::mat4(1),
@@ -221,11 +223,18 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.numLights = 0;
 
     s.camPos = camera->eye;
-    s.proj = camera->GetProj();
+    s.prevViewProj = s.viewProj;
+    s.prevJitter = camera->GetJitter();
+    camera->NextJitter();
+    s.jitter = camera->GetJitter();
+    s.proj = camera->GetProjJittered();
     s.view = camera->GetView();
-    s.projView = camera->GetProj() * camera->GetView();
-    s.inverseProj = glm::inverse(camera->GetProj());
+    s.viewProj = camera->GetProjJittered() * camera->GetView();
+    s.inverseProj = glm::inverse(camera->GetProjJittered());
     s.inverseView = glm::inverse(camera->GetView());
+
+    impl->anyShadowMap = scene->shadowType == ShadowType::ShadowMap;
+    impl->anyVolumetricLight = false;
 
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
         LightBlock& block = s.lights[s.numLights++];
@@ -244,12 +253,14 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         if (light->volumetricType == LightNode::VolumetricType::ScreenSpace) {
             block.volumetricSamples = light->volumetricScreenSpaceParams.samples;
             block.volumetricAbsorption = light->volumetricScreenSpaceParams.absorption;
-        }
-        else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
+            impl->anyVolumetricLight = true;
+        } else if (light->volumetricType == LightNode::VolumetricType::ShadowMap) {
             block.volumetricWeight = light->volumetricShadowMapParams.weight;
             block.volumetricSamples = light->volumetricShadowMapParams.samples;
             block.volumetricDensity = light->volumetricShadowMapParams.density;
             block.volumetricAbsorption = light->volumetricShadowMapParams.absorption;
+            impl->anyVolumetricLight = true;
+            impl->anyShadowMap = true;
         }
 
         bool isPoint = false;
@@ -387,4 +398,8 @@ RID GPUScene::GetFontBitmap() {
 
 vkw::Buffer GPUScene::GetLinesBuffer() {
     return impl->linesBuffer;
+}
+
+bool GPUScene::AnyVolumetricLight() {
+    return impl->anyVolumetricLight;
 }

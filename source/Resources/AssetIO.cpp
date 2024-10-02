@@ -184,10 +184,10 @@ UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager) {
             materials[i]->color = glm::make_vec4(mat.values["baseColorFactor"].ColorFactor().data());
         }
         if (mat.values.find("roughnessFactor") != mat.values.end()) {
-            materials[i]->roughness = mat.values["roughnessFactor"].Factor();
+            materials[i]->roughness = (float)mat.values["roughnessFactor"].Factor();
         }
         if (mat.values.find("metallicFactor") != mat.values.end()) {
-            materials[i]->metallic = mat.values["metallicFactor"].Factor();
+            materials[i]->metallic = (float)mat.values["metallicFactor"].Factor();
         }
         // additional
         if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {

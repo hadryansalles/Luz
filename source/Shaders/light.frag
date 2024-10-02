@@ -2,18 +2,13 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
-layout(push_constant) uniform PresentConstants {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int frame;
-    int albedoRID;
-    int normalRID;
-    int materialRID;
-    int emissionRID;
-    int depthRID;
+#include "LuzCommon.h"
+
+layout(push_constant) uniform Constants {
+    LightConstants ctx;
 };
 
-#include "LuzCommon.h"
+#include "utils.glsl"
 
 layout(location = 0) in vec2 fragTexCoord;
 
@@ -53,14 +48,6 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 DepthToWorld(vec2 screenPos, float depth) {
-    vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
-    vec4 viewSpacePos = scene.inverseProj*clipSpacePos;
-    viewSpacePos /= viewSpacePos.w;
-    vec4 worldSpacePos = scene.inverseView*viewSpacePos;
-    return worldSpacePos.xyz;
-}
-
 vec2 WhiteNoise(vec3 p3) {
 	p3 = fract(p3 * vec3(.1031, .1030, .0973));
     p3 += dot(p3, p3.yzx+33.33);
@@ -84,7 +71,7 @@ vec3 HemisphereSample(vec2 rng) {
 vec4 BlueNoiseSample(int i) {
     vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
     ivec2 fragUV = ivec2(mod(gl_FragCoord.xy, blueNoiseSize));
-    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + frame%128));
+    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
 }
 
 vec3 aces(vec3 x) {
@@ -104,27 +91,17 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     vec3 lightBitangent = normalize(cross(lightTangent, L));
     float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
-        // vec2 whiteNoise = WhiteNoise(vec3(gl_FragCoord.xy, float(frame * numSamples + i)));
         vec2 blueNoise = BlueNoiseSample(i).rg;
-        // vec2 rng = (scene.useBlueNoise) * blueNoise + (1 - scene.useBlueNoise)*whiteNoise;
-        // vec2 rng = (0) * blueNoise + (1 - 0)*whiteNoise;
-        // vec2 rng = WhiteNoise(vec3(WhiteNoise(fragPos.xyz*(frame%128 + 1)), frame%16 + numSamples*i));
         vec2 rng = blueNoise;
         vec2 diskSample = DiskSample(rng, radius);
-        // vec2 diskSample = BlueNoiseInDisk[(i+frame)%64];
-        // Ray Query for shadow
         float tMax = length(L);
         vec3 direction = normalize(L + diskSample.x * lightTangent + diskSample.y * lightBitangent);
-        // Initializes a ray query object but does not start traversal
         rayQueryEXT rayQuery;
         rayQueryInitializeEXT(rayQuery, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, O, 0.001, direction, tMax);
 
-        // Start traversal: return false if traversal is complete
         while(rayQueryProceedEXT(rayQuery)) {}
 
-        // Returns type of committed (true) intersection
         if(rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-            // Got an intersection == Shadow
             numShadows++;
         }
     }
@@ -192,11 +169,12 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
 }
 
 void main() {
-    vec4 albedo = pow(texture(textures[albedoRID], fragTexCoord), vec4(2.2));
-    vec3 N = texture(textures[normalRID], fragTexCoord).xyz;
-    vec4 material = texture(textures[materialRID], fragTexCoord);
-    vec4 emission = texture(textures[emissionRID], fragTexCoord);
-    float depth = texture(textures[depthRID], fragTexCoord).r;
+    vec4 albedo = pow(texture(textures[ctx.albedoRID], fragTexCoord), vec4(2.2));
+    vec3 N = texture(textures[ctx.normalRID], fragTexCoord).xyz;
+    vec4 material = texture(textures[ctx.materialRID], fragTexCoord);
+    vec4 emission = texture(textures[ctx.emissionRID], fragTexCoord);
+    float depth = texture(textures[ctx.depthRID], fragTexCoord).r;
+
     if (length(N) == 0.0f) {
         outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
         return;
@@ -253,16 +231,5 @@ void main() {
     float rayTracedAo = TraceAORays(shadowOrigin, N);
     vec3 ambient = scene.ambientLightColor*scene.ambientLightIntensity*albedo.rgb*occlusion*rayTracedAo;
     vec3 color = ambient + Lo + emission.rgb;
-
-    // color = color / (color + vec3(1.0));
-    // color = pow(color, vec3(1.0/2.2));
     outColor = vec4(color, 1.0);
-
-    // vec3 totalRadiance = color + emission.rgb;
-
-    // exposure tone mapping
-    // vec3 mapped = vec3(1.0) - exp(-totalRadiance * scene.exposure);
-    // mapped = aces(mapped);
-    
-    // gamma correction 
 }

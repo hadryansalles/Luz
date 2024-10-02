@@ -1,0 +1,308 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform Constants {
+    PostProcessingConstants ctx;
+};
+
+#include "utils.glsl"
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+vec2 get_uv(ivec2 pos) {
+    return (vec2(pos) + vec2(0.5)) / ctx.size;
+}
+
+vec2 get_motion_vector(vec2 uv) {
+    float depth = texture(textures[ctx.depthRID], uv).x;
+    vec3 worldPos = DepthToWorld(uv, depth);
+    vec4 previousNDC = scene.prevViewProj * vec4(worldPos, 1.0);
+    vec4 currentNDC = scene.viewProj * vec4(worldPos, 1.0);
+    previousNDC.xyz /= previousNDC.w;
+    currentNDC.xyz /= currentNDC.w;
+    return ((currentNDC.xy - scene.jitter) - (previousNDC.xy - scene.prevJitter)) * vec2(0.5);
+}
+
+void get_neighbor_3x3(vec2 uv, out vec4 cmin, out vec4 cmax, out vec4 cavg, out vec4 sourceSample) {
+    vec2 du = vec2(1.0 / ctx.size.x, 0.0);
+    vec2 dv = vec2(0.0, 1.0 / ctx.size.y);
+
+    vec4 ctl = texture(textures[ctx.lightInputRID], uv - dv - du);
+    vec4 ctc = texture(textures[ctx.lightInputRID], uv - dv);
+    vec4 ctr = texture(textures[ctx.lightInputRID], uv - dv + du);
+    vec4 cml = texture(textures[ctx.lightInputRID], uv - du);
+    vec4 cmc = texture(textures[ctx.lightInputRID], uv);
+    vec4 cmr = texture(textures[ctx.lightInputRID], uv + du);
+    vec4 cbl = texture(textures[ctx.lightInputRID], uv + dv - du);
+    vec4 cbc = texture(textures[ctx.lightInputRID], uv + dv);
+    vec4 cbr = texture(textures[ctx.lightInputRID], uv + dv + du);
+
+    cmin = min(ctl, min(ctc, min(ctr, min(cml, min(cmc, min(cmr, min(cbl, min(cbc, cbr))))))));
+    cmax = max(ctl, max(ctc, max(ctr, max(cml, max(cmc, max(cmr, max(cbl, max(cbc, cbr))))))));
+    cavg = (ctl + ctc + ctr + cml + cmc + cmr + cbl + cbc + cbr) / 9.0;
+
+    vec4 cmin5 = min(ctc, min(cml, min(cmc, min(cmr, cbc))));
+    vec4 cmax5 = max(ctc, max(cml, max(cmc, max(cmr, cbc))));
+    vec4 cavg5 = (ctc + cml + cmc + cmr + cbc) / 5.0;
+    cmin = 0.5 * (cmin + cmin5);
+    cmax = 0.5 * (cmax + cmax5);
+    cavg = 0.5 * (cavg + cavg5);
+
+    if (ctx.reconstruct == 1) {
+        sourceSample = vec4(0.0);
+        float weightSum = 0.0;
+        float weight = MitchellFilter(length(vec2(-1, -1)));
+        sourceSample += ctl * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(0, -1)));
+        sourceSample += ctc * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(1, -1)));
+        sourceSample += ctr * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(-1, 0)));
+        sourceSample += cml * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(0, 0)));
+        sourceSample += cmc * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(1, 0)));
+        sourceSample += cmr * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(-1, 1)));
+        sourceSample += cbl * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(0, 1)));
+        sourceSample += cbc * weight;
+        weightSum += weight;
+        weight = MitchellFilter(length(vec2(1, 1)));
+        sourceSample += cbr * weight;
+        weightSum += weight;
+        sourceSample /= weightSum;
+    }
+}
+
+vec3 find_closest_3x3(vec2 uv) {
+    vec2 dd = abs(1.0 / ctx.size);
+    vec2 du = vec2(dd.x, 0.0);
+    vec2 dv = vec2(0.0, dd.y);
+
+    vec3 dtl = vec3(-1, -1, texture(textures[ctx.depthRID], uv - dv - du).x);
+    vec3 dtc = vec3( 0, -1, texture(textures[ctx.depthRID], uv - dv).x);
+    vec3 dtr = vec3( 1, -1, texture(textures[ctx.depthRID], uv - dv + du).x);
+
+    vec3 dml = vec3(-1, 0, texture(textures[ctx.depthRID], uv - du).x);
+    vec3 dmc = vec3( 0, 0, texture(textures[ctx.depthRID], uv).x);
+    vec3 dmr = vec3( 1, 0, texture(textures[ctx.depthRID], uv + du).x);
+
+    vec3 dbl = vec3(-1, 1, texture(textures[ctx.depthRID], uv + dv - du).x);
+    vec3 dbc = vec3( 0, 1, texture(textures[ctx.depthRID], uv + dv).x);
+    vec3 dbr = vec3( 1, 1, texture(textures[ctx.depthRID], uv + dv + du).x);
+
+    vec3 dmin = dtl;
+    if (dmin.z > dtc.z) dmin = dtc;
+    if (dmin.z > dtr.z) dmin = dtr;
+
+    if (dmin.z > dml.z) dmin = dml;
+    if (dmin.z > dmc.z) dmin = dmc;
+    if (dmin.z > dmr.z) dmin = dmr;
+
+    if (dmin.z > dbl.z) dmin = dbl;
+    if (dmin.z > dbc.z) dmin = dbc;
+    if (dmin.z > dbr.z) dmin = dbr;
+
+
+    return vec3(uv + dd.xy * dmin.xy, dmin.z);
+}
+
+vec4 clip_aabb(vec3 aabb_min, vec3 aabb_max, vec4 p, vec4 q) {
+    vec4 r = q - p;
+    vec3 rmax = aabb_max - p.xyz;
+    vec3 rmin = aabb_min - p.xyz;
+
+    const float eps = 0.00000001;
+
+    if (r.x > rmax.x + eps)
+        r *= (rmax.x / r.x);
+    if (r.y > rmax.y + eps)
+        r *= (rmax.y / r.y);
+    if (r.z > rmax.z + eps)
+        r *= (rmax.z / r.z);
+
+    if (r.x < rmin.x - eps)
+        r *= (rmin.x / r.x);
+    if (r.y < rmin.y - eps)
+        r *= (rmin.y / r.y);
+    if (r.z < rmin.z - eps)
+        r *= (rmin.z / r.z);
+
+    return p + r;
+}
+
+void anti_flicker(vec4 sourceSample, vec4 historySample, inout float sourceWeight, inout float historyWeight) {
+    vec3 compressedSource = sourceSample.rgb * rcp(max(max(sourceSample.r, sourceSample.g), sourceSample.b) + 1.0);
+    vec3 compressedHistory = historySample.rgb * rcp(max(max(historySample.r, historySample.g), historySample.b) + 1.0);
+    float luminanceSource = Luminance(compressedSource);
+    float luminanceHistory = Luminance(compressedHistory); 
+    sourceWeight *= 1.0 / (1.0 + luminanceSource);
+    historyWeight *= 1.0 / (1.0 + luminanceHistory);
+}
+
+float luminance_feedback(vec4 sourceSample, vec4 historySample) {
+    float lum0 = Luminance(sourceSample.rgb);
+    float lum1 = Luminance(historySample.rgb);
+    float unbiased_diff = abs(lum0 - lum1) / max(lum0, max(lum1, 0.2));
+    float unbiased_weight = 1.0 - unbiased_diff;
+    float unbiased_weight_sqr = unbiased_weight * unbiased_weight;
+    float k_feedback = mix(0.05, 0.2, unbiased_weight_sqr);
+    return k_feedback;
+}
+
+vec4 neighbor_clip(vec4 sourceSample, vec4 historySample, vec2 sourceUv, vec2 historyUv) {
+    vec3 cmin = vec3(1e20);
+    vec3 cmax = vec3(-1e20);
+    
+    // Sample 3x3 neighborhood
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(x, y) / ctx.size;
+            vec3 neighborSample = texture(textures[ctx.lightInputRID], sourceUv + offset).rgb;
+            cmin = min(cmin, neighborSample);
+            cmax = max(cmax, neighborSample);
+        }
+    }
+    
+    // Expand the bounding box slightly
+    vec3 cavg = (cmin + cmax) * 0.5;
+    vec3 csize = (cmax - cmin) * 0.5;
+    cmin = cavg - csize * 1.5;
+    cmax = cavg + csize * 1.5;
+    
+    // Clip history sample to the bounding box
+    return clip_aabb(cmin, cmax, sourceSample, historySample);
+}
+
+vec4 get_reconstruction_3x3(ivec2 pos) {
+    vec4 sourceSample = vec4(0.0);
+    float weightSum = 0.0;
+    // Top row
+    {
+        ivec2 samplePos = clamp(pos + ivec2(-1, -1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(-1, -1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(0, -1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(0, -1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(1, -1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(1, -1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+
+    // Middle row
+    {
+        ivec2 samplePos = clamp(pos + ivec2(-1, 0), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(-1, 0));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(0, 0), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(0, 0));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(1, 0), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(1, 0));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+
+    // Bottom row
+    {
+        ivec2 samplePos = clamp(pos + ivec2(-1, 1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(-1, 1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(0, 1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(0, 1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    {
+        ivec2 samplePos = clamp(pos + ivec2(1, 1), ivec2(0), ivec2(ctx.size) - ivec2(1));
+        vec4 neighborSample = texture(textures[ctx.lightInputRID], get_uv(samplePos));
+        float subSampleDistance = length(vec2(1, 1));
+        float subSampleWeight = MitchellFilter(subSampleDistance);
+        sourceSample += neighborSample * subSampleWeight;
+        weightSum += subSampleWeight;
+    }
+    return sourceSample / weightSum;
+}
+
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+
+    if (any(greaterThanEqual(pixelPos, ctx.size))) {
+        return;
+    }
+
+    vec2 sourceUv = get_uv(pixelPos);
+    vec2 historyUv = sourceUv - get_motion_vector(find_closest_3x3(sourceUv).xy);
+
+    vec4 historySample = texture(textures[ctx.lightHistoryRID], historyUv);
+
+    vec4 sourceSample, cmin, cmax, cavg;
+    get_neighbor_3x3(sourceUv, cmin, cmax, cavg, sourceSample);
+
+    if (ctx.reconstruct == 0 || any(isnan(sourceSample))) {
+        sourceSample = texture(textures[ctx.lightInputRID], sourceUv);
+    }
+
+    if (any(greaterThan(historyUv, vec2(1.0))) || any(lessThan(historyUv, vec2(0.0)))) {
+        imageStore(images[ctx.lightOutputRID], pixelPos, sourceSample);
+        return;
+    }
+
+    historySample = clip_aabb(cmin.rgb, cmax.rgb, clamp(cavg, cmin, cmax), historySample);
+
+    float sourceWeight = 0.05;
+    float historyWeight = 1.0 - sourceWeight;
+
+    anti_flicker(sourceSample, historySample, sourceWeight, historyWeight);
+
+    vec4 result = (sourceSample * sourceWeight + historySample * historyWeight) / max(sourceWeight + historyWeight, 0.0000001);
+    if (any(isnan(result))) {
+        result = sourceSample;
+    }
+
+    imageStore(images[ctx.lightOutputRID], pixelPos, result);
+}

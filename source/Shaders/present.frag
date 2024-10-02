@@ -4,15 +4,8 @@
 
 #include "LuzCommon.h"
 
-layout(push_constant) uniform PresentConstants {
-    int presentMode;
-    int lightRID;
-    int albedoRID;
-    int normalRID;
-    int materialRID;
-    int emissionRID;
-    int depthRID;
-    int debugRID;
+layout(push_constant) uniform Constants {
+    ComposeConstants ctx;
 };
 
 layout(location = 0) in vec2 fragTexCoord;
@@ -25,10 +18,31 @@ float LinearizeDepth(float depth) {
     return (2.0*near)/(far+near - depth*(far-near));
 }
 
+vec3 Tonemap(vec3 color) {
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0/2.2)); 
+    return color;
+}
+
+vec3 TonemapACES(vec3 color) {
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    color = (color * (a * color + b)) / (color * (c * color + d) + e);
+    return pow(color, vec3(1.0 / 2.2));
+}
+
+vec3 TonemapExposure(vec3 color, float exposure) {
+    vec3 mapped = vec3(1.0) - exp(-color * exposure);
+    return pow(mapped, vec3(1.0 / 2.2));
+}
+
 void main() {
-    int imageType = presentMode;
+    int imageType = ctx.imageType;
     vec2 fragCoord = fragTexCoord;
-    if(presentMode == 6) {
+    if(ctx.imageType == 6) {
         fragCoord = vec2(fragTexCoord.x*3, fragTexCoord.y*2);
         if(fragTexCoord.y < 0.5) {
             if(fragTexCoord.x < 1.0/3.0) {
@@ -54,23 +68,23 @@ void main() {
         }
         fragCoord.x = 1.0/6.0 + fragCoord.x*2.0/3.0;
     }
-    int imageRID = lightRID;
+    int imageRID = ctx.lightRID;
     if(imageType == 1) {
-        imageRID = albedoRID;
+        imageRID = ctx.albedoRID;
     } else if(imageType == 2) {
-        imageRID = normalRID;
+        imageRID = ctx.normalRID;
     } else if(imageType == 3) {
-        imageRID = materialRID;
+        imageRID = ctx.materialRID;
     } else if(imageType == 4) {
-        imageRID = emissionRID;
+        imageRID = ctx.emissionRID;
     } else if(imageType == 5) {
-        imageRID = depthRID;
-    }    
+        imageRID = ctx.depthRID;
+    }
     vec4 value = texture(textures[imageRID], fragCoord);
-    vec4 debugColor = texture(textures[debugRID], fragCoord);
+    vec4 debugColor = texture(textures[ctx.debugRID], fragCoord);
     if (imageType == 0) {
-        vec3 color = value.rgb / (value.rgb + vec3(1.0));
-        color = pow(color, vec3(1.0/2.2));
+        // vec3 color = ExposureToneMapping(value.rgb, ctx.exposure);
+        vec3 color = TonemapACES(value.rgb);
         color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
         value = vec4(color, 1.0);
     } else if(imageType == 2) {
