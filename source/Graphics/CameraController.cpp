@@ -4,6 +4,7 @@
 #include "Window.hpp"
 
 #include "AssetManager.hpp"
+#include <cmath>
 
 void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNode>& cam, bool viewportHovered, float deltaTime) {
     if (!viewportHovered) {
