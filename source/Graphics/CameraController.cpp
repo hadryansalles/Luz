@@ -26,7 +26,7 @@ void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNo
     glm::vec2 move(.0f);
     glm::vec3 fpsMove(.0f, .0f, .0f);
 
-    float dt = deltaTime;
+    float dt = fminf(deltaTime, 33.3f);
     float scroll = Window::GetDeltaScroll();
     float slowDown = Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 0.1f : 1.0f;
     float speedUp = 1.0f;
@@ -58,7 +58,7 @@ void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNo
     }
 
     if (scene->autoOrbit) {
-        drag.x = 1*deltaTime;
+        drag.x = 1*dt;
     }
 
     glm::mat4 view = cam->GetView();
