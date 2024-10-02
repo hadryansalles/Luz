@@ -82,7 +82,7 @@ void CameraController::Update(Ref<struct SceneAsset>& scene, Ref<struct CameraNo
     case CameraNode::CameraMode::Orbit:
         targetMoveSpeed = maxMoveSpeed * glm::vec3(move.x, move.y, -scroll);
         moveSpeed = glm::mix(moveSpeed, targetMoveSpeed, dt / accelerationTime);
-        cam->zoom *= std::powf(10, moveSpeed.z * zoomSpeed);
+        cam->zoom *= (float)std::pow(10, moveSpeed.z * zoomSpeed);
         cam->center -= (right * moveSpeed.x - up * moveSpeed.y);
         break;
     case CameraNode::CameraMode::Fly:
