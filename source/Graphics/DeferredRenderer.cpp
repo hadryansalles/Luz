@@ -463,9 +463,6 @@ void LuminanceHistogramPass() {
     vkw::CmdBarrier();
 
     float* average = (float*)vkw::MapBuffer(ctx.luminanceAverage);
-    if (*average > LUZ_EPS) {
-        Log::Info("Luminance Average: %f", *average);
-    }
     vkw::UnmapBuffer(ctx.luminanceAverage);
 }
 

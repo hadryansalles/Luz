@@ -306,10 +306,21 @@ private:
     void FinishImgui() {
         ImGui::DestroyContext();
     }
+
 };
+
+bool CheckAssetsDirectory() {
+    return std::filesystem::is_directory("assets/");
+}
 
 int main() {
     Logger::Init();
+    if (!CheckAssetsDirectory()) {
+        Log::Error("Wrong working directory. Run from main directory (\"Luz/\")");
+        Log::Error("(Linux): ./Luz/bin/Luz");
+        Log::Error("(Windows): ./Luz/bin/Luz.exe");
+        return 0;
+    }
     LuzApplication app;
     app.run();
     return 0;
