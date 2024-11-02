@@ -64,7 +64,7 @@ git clone --recursive https://github.com/hadryansalles/Luz
 cd Luz
 mkdir build
 cmake . -Bbuild
-cmake --build build
+cmake --build build --parallel 4
 ./bin/Luz
 ```
 
