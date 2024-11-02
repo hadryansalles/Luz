@@ -63,13 +63,9 @@ If you are using another window manager (like Wayland) you can check the depende
 git clone --recursive https://github.com/hadryansalles/Luz
 cd Luz
 mkdir build
-cd build
-cmake ..
-```
-
-- GCC or Clang: 
-```sh
-make run -j
+cmake . -Bbuild
+cmake --build build
+./bin/Luz
 ```
 
 - Visual Studio: open ``build/Luz.sln`` and compile/run the project ``Luz``.
