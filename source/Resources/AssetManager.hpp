@@ -461,6 +461,11 @@ struct AssetManager {
         }
     }
 
+    bool HasLoadRequest() const;
+    void LoadRequestedProject();
+    void RequestLoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    std::string GetProjectName();
+
 private:
     struct AssetManagerImpl* impl;
     std::unordered_map<UUID, Ref<Asset>> assets;

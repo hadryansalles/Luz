@@ -67,6 +67,7 @@ public:
     static inline bool        GetFramebufferResized()          { return framebufferResized;                     }
     static inline bool        IsKeyDown(uint16_t keyCode)      { return glfwGetKey(window, keyCode);            }
     static inline bool        IsMouseDown(uint16_t buttonCode) { return glfwGetMouseButton(window, buttonCode); }
-    static inline void        SetMode(WindowMode newMode) { mode = newMode; dirty = true; }
-    static inline std::vector<std::string> GetAndClearPaths()  { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
+    static inline void        SetMode(WindowMode newMode)        { mode = newMode; dirty = true;                            }
+    static inline void        SetTitle(const std::string& title) { glfwSetWindowTitle(window, title.c_str());               }
+    static inline std::vector<std::string> GetAndClearPaths()    { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };
