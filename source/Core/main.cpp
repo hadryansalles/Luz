@@ -79,6 +79,15 @@ private:
         while (!Window::GetShouldClose()) {
             LUZ_PROFILE_FRAME();
             LUZ_PROFILE_NAMED("MainLoop");
+            if (assetManager.HasLoadRequest()) {
+                vkw::WaitIdle();
+                assetManager.LoadRequestedProject();
+                Window::SetTitle("Luz Engine - " + assetManager.GetProjectName());
+                scene = assetManager.GetInitialScene();
+                camera = assetManager.GetMainCamera(scene);
+                camera->extent = { viewportSize.x, viewportSize.y };
+                cameraController.Reset();
+            }
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);
                 if (newNodes.size()) {

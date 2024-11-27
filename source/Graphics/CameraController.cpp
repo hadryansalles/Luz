@@ -222,3 +222,8 @@ void Camera::OnImgui() {
 }
 
 */
+
+void CameraController::Reset() {
+    moveSpeed = glm::vec3(.0f);
+    rotationSpeed = glm::vec3(.0f);
+}
