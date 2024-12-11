@@ -16,3 +16,4 @@ assets/*
 !assets/default.luzbin
 !assets/font_bitmap.png
 *.ngfx-proj
+data.luzcache
