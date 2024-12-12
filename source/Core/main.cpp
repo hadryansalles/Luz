@@ -46,10 +46,37 @@ private:
     std::chrono::high_resolution_clock::time_point lastFrameTime = {};
     std::chrono::high_resolution_clock::time_point lastCameraTime = {};
 
+    struct CacheData {
+        char projectPath[1024] = "assets/default.luz";
+        char binPath[1024] = "assets/default.luzbin";
+    };
+    CacheData cacheData;
+    void ReadCache() {
+        std::ifstream cacheFile("data.luzcache", std::ios::binary);
+        if (cacheFile.is_open()) {
+            cacheFile.read((char*)&cacheData, sizeof(cacheData));
+            cacheFile.close();
+        }
+        if (!std::filesystem::exists(cacheData.projectPath) || !std::filesystem::exists(cacheData.binPath)) {
+            Log::Error("Cache file is corrupted. Resetting to default.");
+            cacheData = {};
+            WriteCache();
+        }
+    }
+    void WriteCache() {
+        std::ofstream cacheFile("data.luzcache", std::ios::binary);
+        if (cacheFile.is_open()) {
+            cacheFile.write((char*)&cacheData, sizeof(cacheData));
+            cacheFile.close();
+        }
+    }
+
     void Setup() {
         LUZ_PROFILE_FUNC();
         IMGUI_CHECKVERSION();
-        assetManager.LoadProject("assets/default.luz", "assets/default.luzbin");
+        ImGui::CreateContext();
+        ReadCache();
+        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath);
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -57,6 +84,7 @@ private:
     void Create() {
         LUZ_PROFILE_FUNC();
         Window::Create();
+        Window::SetTitle("Luz Engine - " + assetManager.GetProjectName());
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DeferredRenderer::CreateImages(Window::GetWidth(), Window::GetHeight());
         DeferredRenderer::CreateShaders();
@@ -82,11 +110,14 @@ private:
             if (assetManager.HasLoadRequest()) {
                 vkw::WaitIdle();
                 assetManager.LoadRequestedProject();
-                Window::SetTitle("Luz Engine - " + assetManager.GetProjectName());
                 scene = assetManager.GetInitialScene();
                 camera = assetManager.GetMainCamera(scene);
                 camera->extent = { viewportSize.x, viewportSize.y };
                 cameraController.Reset();
+                strcpy(cacheData.projectPath, assetManager.GetCurrentProjectPath().string().c_str());
+                strcpy(cacheData.binPath, assetManager.GetCurrentBinPath().string().c_str());
+                Window::SetTitle("Luz Engine - " + assetManager.GetProjectName());
+                WriteCache();
             }
             if (const auto paths = Window::GetAndClearPaths(); paths.size()) {
                 auto newNodes = assetManager.AddAssetsToScene(scene, paths);

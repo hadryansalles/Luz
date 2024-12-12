@@ -407,5 +407,13 @@ void AssetManager::LoadRequestedProject() {
 }
 
 std::string AssetManager::GetProjectName() {
-    return impl->requestedProjectPath.stem().string();
+    return impl->currentProjectPath.stem().string();
+}
+
+std::filesystem::path AssetManager::GetCurrentProjectPath() {
+    return impl->currentProjectPath;
+}
+
+std::filesystem::path AssetManager::GetCurrentBinPath() {
+    return impl->currentBinPath;
 }

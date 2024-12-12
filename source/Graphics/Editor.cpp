@@ -493,7 +493,19 @@ void Editor::AssetsPanel(AssetManager& manager) {
                 if (std::filesystem::exists(luzbinPath)) {
                     ImGui::PushID(projectName.c_str());
                     if (ImGui::Button((LUZ_PROJECT_ICON "\n" + projectName).c_str(), ImVec2(100, 100))) {
-                        manager.RequestLoadProject(luzPath, luzbinPath);
+                    }
+                    
+                    if (ImGui::BeginPopupContextItem()) {
+                        if (ImGui::MenuItem("Open")) {
+                            manager.RequestLoadProject(luzPath, luzbinPath);
+                        }
+                        if (ImGui::MenuItem("Duplicate")) {
+                            auto newLuzPath = std::filesystem::path(luzPath).replace_filename(projectName + "_copy.luz").string();
+                            auto newLuzbinPath = std::filesystem::path(luzbinPath).replace_filename(projectName + "_copy.luzbin").string();
+                            std::filesystem::copy(luzPath, newLuzPath);
+                            std::filesystem::copy(luzbinPath, newLuzbinPath);
+                        }
+                        ImGui::EndPopup();
                     }
                     ImGui::PopID();
                 }
