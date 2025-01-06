@@ -148,6 +148,10 @@ void LightNode::Serialize(Serializer& s) {
 struct AssetManagerImpl {
     u32 lastAssetsHash = 0;
     Json lastJson;
+    std::filesystem::path currentProjectPath;
+    std::filesystem::path currentBinPath;
+    std::filesystem::path requestedProjectPath;
+    std::filesystem::path requestedBinPath;
 };
 
 AssetManager::AssetManager() {
@@ -178,6 +182,7 @@ Ref<CameraNode> AssetManager::GetMainCamera(Ref<SceneAsset>& scene) {
 void AssetManager::LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
     TimeScope t("AssetManager::LoadProject", true);
     if (!std::ifstream(path)) {
+        Log::Error("Project file not found: {} {}", path.string(), binPath.string());
         return;
     }
     Json j;
@@ -204,6 +209,8 @@ void AssetManager::LoadProject(const std::filesystem::path& path, const std::fil
     }
     impl->lastJson = std::move(j);
     impl->lastAssetsHash = HashUUID(uuids);
+    impl->currentProjectPath = path;
+    impl->currentBinPath = binPath;
 }
 
 void AssetManager::SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
@@ -382,4 +389,31 @@ void CameraNode::NextJitter() {
     } else {
         jitter = glm::vec2(0, 0);
     }
+}
+
+void AssetManager::RequestLoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
+    impl->requestedProjectPath = path;
+    impl->requestedBinPath = binPath;
+}
+
+bool AssetManager::HasLoadRequest() const {
+    return !impl->requestedProjectPath.empty() && !impl->requestedBinPath.empty();
+}
+
+void AssetManager::LoadRequestedProject() {
+    LoadProject(impl->requestedProjectPath, impl->requestedBinPath);
+    impl->requestedProjectPath = std::filesystem::path();
+    impl->requestedBinPath = std::filesystem::path();
+}
+
+std::string AssetManager::GetProjectName() {
+    return impl->currentProjectPath.stem().string();
+}
+
+std::filesystem::path AssetManager::GetCurrentProjectPath() {
+    return impl->currentProjectPath;
+}
+
+std::filesystem::path AssetManager::GetCurrentBinPath() {
+    return impl->currentBinPath;
 }

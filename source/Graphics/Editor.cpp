@@ -18,6 +18,7 @@ struct EditorImpl {
     bool profilerPopup = true;
 
 #define LUZ_SCENE_ICON ICON_FA_GLOBE_AMERICAS
+#define LUZ_PROJECT_ICON ICON_FA_FOLDER
 #define LUZ_MESH_ICON ICON_FA_CUBE
 #define LUZ_TEXTURE_ICON ICON_FA_IMAGE
 #define LUZ_CAMERA_ICON ICON_FA_CAMERA
@@ -480,32 +481,96 @@ void Editor::AssetsPanel(AssetManager& manager) {
         ImGui::End();
         return;
     }
-    ImGui::InputText(ICON_FA_SEARCH " Filter", &impl->assetNameFilter);
-    ImGui::Checkbox(LUZ_MESH_ICON " Mesh", &impl->assetTypeFilter[int(ObjectType::MeshAsset)]);
-    ImGui::SameLine();
-    ImGui::Checkbox(LUZ_SCENE_ICON " Scene", &impl->assetTypeFilter[int(ObjectType::SceneAsset)]);
-    ImGui::SameLine();
-    ImGui::Checkbox(LUZ_TEXTURE_ICON " Texture", &impl->assetTypeFilter[int(ObjectType::TextureAsset)]);
-    ImGui::SameLine();
-    ImGui::Checkbox(LUZ_MATERIAL_ICON " Material", &impl->assetTypeFilter[int(ObjectType::MaterialAsset)]);
-    ImGui::SameLine();
-    if (ImGui::Button("All/None")) {
-        for (int i = 0; i < int(ObjectType::Count); i++) {
-            impl->assetTypeFilter[i] = !impl->assetTypeFilter[int(ObjectType::Count)-1];
+
+    if (ImGui::CollapsingHeader(LUZ_PROJECT_ICON " Projects", ImGuiTreeNodeFlags_DefaultOpen)) {
+        std::filesystem::path projectsPath = "assets";
+        for (const auto& entry : std::filesystem::directory_iterator(projectsPath)) {
+            if (entry.path().extension() == ".luz") {
+                std::string projectName = entry.path().stem().string();
+                std::string luzPath = entry.path().string();
+                auto luzbinPath = std::filesystem::path(entry.path()).replace_extension(".luzbin").string();
+
+                if (std::filesystem::exists(luzbinPath)) {
+                    ImGui::PushID(projectName.c_str());
+                    if (ImGui::Button((LUZ_PROJECT_ICON "\n" + projectName).c_str(), ImVec2(100, 100))) {
+                    }
+                    
+                    if (ImGui::BeginPopupContextItem()) {
+                        if (ImGui::MenuItem("Open")) {
+                            manager.RequestLoadProject(luzPath, luzbinPath);
+                        }
+                        if (ImGui::MenuItem("Duplicate")) {
+                            auto newLuzPath = std::filesystem::path(luzPath).replace_filename(projectName + "_copy.luz").string();
+                            auto newLuzbinPath = std::filesystem::path(luzbinPath).replace_filename(projectName + "_copy.luzbin").string();
+                            std::filesystem::copy(luzPath, newLuzPath);
+                            std::filesystem::copy(luzbinPath, newLuzbinPath);
+                        }
+                        ImGui::EndPopup();
+                    }
+                    ImGui::PopID();
+                }
+            }
         }
     }
-    for (auto& asset : manager.GetAll()) {
-        if (!impl->assetTypeFilter[int(asset->type)]) {
-            continue;
+
+    if (ImGui::CollapsingHeader(LUZ_SCENE_ICON " Scene Assets")) {
+        float panelWidth = ImGui::GetContentRegionAvail().x;
+        float buttonSize = 100.0f;
+        float padding = 5.0f;
+        int columns = (int)(panelWidth / (buttonSize + padding));
+        if (columns < 1) columns = 1;
+
+        int i = 0;
+        for (auto& asset : manager.GetAll<SceneAsset>(ObjectType::SceneAsset)) {
+            ImGui::PushID(asset->uuid);
+            
+            if (i++ > 0) {
+                ImGui::SameLine(0.0f, padding);
+                if ((i % columns) == 0) {
+                    ImGui::NewLine();
+                }
+            }
+
+            if (ImGui::Button((impl->objectTypeIcon[int(asset->type)] + "\n" + asset->name).c_str(), 
+                            ImVec2(buttonSize, buttonSize))) {
+                if (ImGui::IsMouseDoubleClicked(0)) {
+                    // Handle double click
+                    // TODO: Load/open scene
+                }
+            }
+            
+            ImGui::PopID();
         }
-        if (impl->assetNameFilter != "" && asset->name.find(impl->assetNameFilter) == std::string::npos) {
-            continue;
+    }
+
+    if (ImGui::CollapsingHeader(LUZ_MESH_ICON " Mesh Assets")) {
+        for (auto& asset : manager.GetAll<MeshAsset>(ObjectType::MeshAsset)) {
+            ImGui::PushID(asset->uuid);
+            if (ImGui::CollapsingHeader((impl->objectTypeIcon[int(asset->type)] + " " + asset->name).c_str())) {
+                // todo: inspect mesh asset
+            }
+            ImGui::PopID();
         }
-        ImGui::PushID(asset->uuid);
-        if (ImGui::CollapsingHeader((impl->objectTypeIcon[int(asset->type)] + " " + asset->name).c_str())) {
-            // todo: check type and inspect
+    }
+
+    if (ImGui::CollapsingHeader(LUZ_TEXTURE_ICON " Texture Assets")) {
+        for (auto& asset : manager.GetAll<TextureAsset>(ObjectType::TextureAsset)) {
+            ImGui::PushID(asset->uuid);
+            if (ImGui::CollapsingHeader((impl->objectTypeIcon[int(asset->type)] + " " + asset->name).c_str())) {
+                // todo: inspect texture asset
+            }
+            ImGui::PopID();
         }
-        ImGui::PopID();
+    }
+
+    if (ImGui::CollapsingHeader(LUZ_MATERIAL_ICON " Material Assets")) {
+        for (auto& asset : manager.GetAll<MaterialAsset>(ObjectType::MaterialAsset)) {
+            ImGui::PushID(asset->uuid);
+            if (ImGui::CollapsingHeader((impl->objectTypeIcon[int(asset->type)] + " " + asset->name).c_str())) {
+                // todo: inspect material asset
+            }
+            ImGui::PopID();
+        }
     }
     ImGui::End();
 }
