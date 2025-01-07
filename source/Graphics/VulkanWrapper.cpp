@@ -82,6 +82,15 @@ namespace vkw {
 
 void AcquireImage();
 
+struct ImageDelete {
+    VkImage image;
+    VkImageView view;
+    VmaAllocation allocation;
+    std::vector<VkImageView> layersView;
+    std::vector<ImTextureID> imguiRIDs;
+    int32_t rid = -1;
+};
+
 struct Context {
     void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
     void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
@@ -199,6 +208,8 @@ struct Context {
 
     std::map<std::string, float> timeStampTable;
 
+    std::vector<ImageDelete> imagesToDelete;
+
     void CreateInstance(GLFWwindow* window);
     void DestroyInstance();
 
@@ -267,20 +278,14 @@ struct ImageResource : Resource {
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
-            for (VkImageView layerView : layersView) {
-                vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
-            }
-            layersView.clear();
-            vkDestroyImageView(_ctx.device, view, _ctx.allocator);
-            vmaDestroyImage(_ctx.vmaAllocator, image, allocation);
-            if (rid >= 0) {
-                _ctx.availableImageRID.push_back(rid);
-                for (ImTextureID imguiRID : imguiRIDs) {
-                    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
-                }
-                rid = -1;
-                imguiRIDs.clear();
-            }
+            _ctx.imagesToDelete.push_back({
+                .image = image,
+                .view = view,
+                .allocation = allocation,
+                .layersView = layersView,
+                .imguiRIDs = imguiRIDs,
+                .rid = rid,
+            });
         }
     }
 };
@@ -2458,6 +2463,26 @@ VkSampler Context::CreateSampler(f32 maxLod) {
     DEBUG_VK(vkRes, "Failed to create texture sampler!");
 
     return sampler;
+}
+
+void Cleanup() {
+    for (auto& img : _ctx.imagesToDelete) {
+        for (VkImageView layerView : img.layersView) {
+            vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
+        }
+        img.layersView.clear();
+        vkDestroyImageView(_ctx.device, img.view, _ctx.allocator);
+        vmaDestroyImage(_ctx.vmaAllocator, img.image, img.allocation);
+        if (img.rid >= 0) {
+            _ctx.availableImageRID.push_back(img.rid);
+            for (ImTextureID imguiRID : img.imguiRIDs) {
+                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+            }
+            img.rid = -1;
+            img.imguiRIDs.clear();
+        }
+    }
+    _ctx.imagesToDelete.clear();
 }
 
 }

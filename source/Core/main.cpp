@@ -318,6 +318,7 @@ private:
             return;
         }
         vkw::SubmitAndPresent();
+        vkw::Cleanup();
         frameCount = (frameCount + 1) % (1 << 15);
     }
 

@@ -394,7 +394,7 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
-    if (ImGui::CollapsingHeader("Shadow Map")) {
+    if (false && ImGui::CollapsingHeader("Shadow Map")) {
         ImGui::DragFloat("Range##Shadow", &node->shadowMapRange, 0.01f);
         ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
         if (gpuScene.GetShadowMap(node->uuid).readable) {
