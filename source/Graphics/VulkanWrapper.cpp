@@ -163,6 +163,7 @@ struct Context {
         VkQueryPool queryPool;
         std::vector<std::string> timeStampNames;
         std::vector<uint64_t> timeStamps;
+        std::vector<ImageDelete> imagesToDelete;
     };
     struct InternalQueue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -208,21 +209,16 @@ struct Context {
 
     std::map<std::string, float> timeStampTable;
 
-    std::vector<ImageDelete> imagesToDelete;
-
     void CreateInstance(GLFWwindow* window);
-    void DestroyInstance();
-
-    void CreatePhysicalDevice();
-
     void CreateDevice();
-    void DestroyDevice();
-
+    void CreatePhysicalDevice();
     void CreateImGui(GLFWwindow* window);
-
     void CreateSurfaceFormats();
-
     void CreateSwapChain(uint32_t width, uint32_t height);
+
+    void DestroyCommandResources(CommandResources& resources);
+    void DestroyInstance();
+    void DestroyDevice();
     void DestroySwapChain();
 
     uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
@@ -233,6 +229,9 @@ struct Context {
     }
     inline CommandResources& GetCurrentCommandResources() {
         return queues[currentQueue].commands[swapChainCurrentFrame];
+    }
+    inline CommandResources& GetCurrentCommandResources(Queue queue) {
+        return queues[queue].commands[swapChainCurrentFrame];
     }
 
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
@@ -278,7 +277,8 @@ struct ImageResource : Resource {
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
-            _ctx.imagesToDelete.push_back({
+            // todo: delete on correct queue
+            _ctx.GetCurrentCommandResources(Queue::Graphics).imagesToDelete.push_back({
                 .image = image,
                 .view = view,
                 .allocation = allocation,
@@ -405,6 +405,11 @@ void OnSurfaceUpdate(uint32_t width, uint32_t height) {
 }
 
 void Destroy() {
+    for (int i = 0; i < Queue::Count; i++) {
+        for (auto& cmd : _ctx.queues[i].commands) {
+            _ctx.DestroyCommandResources(cmd);
+        }
+    }
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     _ctx.DestroySwapChain();
@@ -1947,6 +1952,26 @@ void Context::CreateDevice() {
     );
 }
 
+void Context::DestroyCommandResources(CommandResources& resources) {
+    for (auto& img : resources.imagesToDelete) {
+        for (VkImageView layerView : img.layersView) {
+            vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
+        }
+        img.layersView.clear();
+        vkDestroyImageView(_ctx.device, img.view, _ctx.allocator);
+        vmaDestroyImage(_ctx.vmaAllocator, img.image, img.allocation);
+        if (img.rid >= 0) {
+            _ctx.availableImageRID.push_back(img.rid);
+            for (ImTextureID imguiRID : img.imguiRIDs) {
+                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+            }
+            img.rid = -1;
+            img.imguiRIDs.clear();
+        }
+    }
+    resources.imagesToDelete.clear();
+}
+
 void Context::DestroyDevice() {
     dummyVertexBuffer = {};
     currentPipeline = {};
@@ -2268,6 +2293,8 @@ void SubmitAndPresent() {
     }
 
     _ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
+    // todo: delete on correct queue
+    _ctx.DestroyCommandResources(_ctx.GetCurrentCommandResources(Queue::Graphics));
 }
 
 uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
@@ -2463,26 +2490,6 @@ VkSampler Context::CreateSampler(f32 maxLod) {
     DEBUG_VK(vkRes, "Failed to create texture sampler!");
 
     return sampler;
-}
-
-void Cleanup() {
-    for (auto& img : _ctx.imagesToDelete) {
-        for (VkImageView layerView : img.layersView) {
-            vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
-        }
-        img.layersView.clear();
-        vkDestroyImageView(_ctx.device, img.view, _ctx.allocator);
-        vmaDestroyImage(_ctx.vmaAllocator, img.image, img.allocation);
-        if (img.rid >= 0) {
-            _ctx.availableImageRID.push_back(img.rid);
-            for (ImTextureID imguiRID : img.imguiRIDs) {
-                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
-            }
-            img.rid = -1;
-            img.imguiRIDs.clear();
-        }
-    }
-    _ctx.imagesToDelete.clear();
 }
 
 }

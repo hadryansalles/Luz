@@ -107,16 +107,16 @@ void GPUScene::Destroy() {
 
 void GPUScene::AddMesh(const Ref<MeshAsset>& asset) {
     GPUMesh& mesh = impl->meshes[asset->uuid];
-    mesh.vertexCount = asset->vertices.size();
-    mesh.indexCount = asset->indices.size();
+    mesh.vertexCount = u32(asset->vertices.size());
+    mesh.indexCount = u32(asset->indices.size());
     mesh.vertexBuffer = vkw::CreateBuffer(
-        sizeof(MeshAsset::MeshVertex) * asset->vertices.size(),
+        sizeof(MeshAsset::MeshVertex) * mesh.vertexCount,
         vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput | vkw::BufferUsage::Storage,
         vkw::Memory::GPU,
         ("VertexBuffer#" + std::to_string(asset->uuid))
     );
     mesh.indexBuffer = vkw::CreateBuffer(
-        sizeof(uint32_t) * asset->indices.size(),
+        sizeof(uint32_t) * mesh.indexCount,
         vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput | vkw::BufferUsage::Storage,
         vkw::Memory::GPU,
         ("IndexBuffer#" + std::to_string(asset->uuid))
@@ -313,7 +313,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         auto it = impl->shadowMaps.find(light->uuid);
         if (it == impl->shadowMaps.end() || (isPoint != (it->second.img.layers == 6))) {
             if (it != impl->shadowMaps.end()) {
-                Log::Debug("Deleting shadow map for light %s, image_id=%d", light->name.c_str(), it->second.img.RID());
+                impl->shadowMaps.erase(it);
             }
             impl->shadowMaps[light->uuid].img = vkw::CreateImage({
                 .width = scene->shadowResolution,
@@ -323,7 +323,6 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
                 .name = "ShadowMap" + std::to_string(light->uuid),
                 .layers = isPoint ? 6u : 1u,
             });
-            Log::Debug("Creating shadow map for light %s, image_id=%d", light->name.c_str(), impl->shadowMaps[light->uuid].img.RID());
         }
 
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
@@ -349,7 +348,7 @@ void GPUScene::UpdateResourcesGPU() {
     if (impl->modelsBlock.size() == 0) {
         return;
     }
-    vkw::CmdCopy(impl->modelsBuffer, impl->modelsBlock.data(), sizeof(ModelBlock)*impl->modelsBlock.size());
+    vkw::CmdCopy(impl->modelsBuffer, impl->modelsBlock.data(), sizeof(ModelBlock) * u32(impl->modelsBlock.size()));
     vkw::CmdCopy(impl->sceneBuffer, &impl->sceneBlock, sizeof(SceneBlock));
     vkw::CmdTimeStamp("GPUScene::BuildTLAS", [&] {
         std::vector<vkw::BLASInstance> vkwInstances(impl->meshModels.size());
@@ -368,7 +367,7 @@ void GPUScene::UpdateResourcesGPU() {
 void GPUScene::UpdateLineResources() {
     auto points = DebugDraw::GetPoints();
     if (points.size() > 0) {
-        vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3)*points.size());
+        vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3) * u32(points.size()));
     }
 }
 

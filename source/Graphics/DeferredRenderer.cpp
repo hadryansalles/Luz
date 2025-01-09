@@ -267,7 +267,6 @@ void EndPass() {
 
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
     ShadowMapData& shadowMap = gpuScene.GetShadowMap(light->uuid);
-    Log::Debug("Running shadow map for light %s, image_id=%d", light->name.c_str(), shadowMap.img.RID());
     vkw::Image& img = shadowMap.img;
     vkw::CmdBarrier(img, vkw::Layout::DepthAttachment);
 
