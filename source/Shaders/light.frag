@@ -145,18 +145,18 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
             return TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         }
     } else if (scene.shadowType == SHADOW_TYPE_MAP && light.shadowMap != -1) {
-        if (light.type == LIGHT_TYPE_POINT) {
-            vec3 lightToFrag = fragPos - light.position;
-            float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
-            if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
+        if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+            vec4 fragInLight = (light.viewProj[0] * vec4(shadowOrigin, 1));
+            float shadowDepth = texture(textures[light.shadowMap], (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+            if (fragInLight.z >= shadowDepth) {
                 return 1.0f;
             } else {
                 return 0.0f;
             }
         } else {
-            vec4 fragInLight = (light.viewProj[0] * vec4(shadowOrigin, 1));
-            float shadowDepth = texture(textures[light.shadowMap], (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
-            if (fragInLight.z >= shadowDepth) {
+            vec3 lightToFrag = fragPos - light.position;
+            float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+            if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
                 return 1.0f;
             } else {
                 return 0.0f;

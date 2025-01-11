@@ -138,6 +138,14 @@ enum Queue {
     Count = 3,
 };
 
+namespace SamplerType {
+    enum Sampler {
+        Nearest = 0,
+        Linear = 1,
+        Count = 2,
+    };
+}
+
 struct ImageDesc {
     uint32_t width;
     uint32_t height;
@@ -145,6 +153,7 @@ struct ImageDesc {
     ImageUsageFlags usage;
     std::string name = "";
     uint32_t layers = 1;
+    SamplerType::Sampler samplerType = SamplerType::Linear;
 };
 
 namespace PipelinePoint {

@@ -399,12 +399,12 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
         if (gpuScene.GetShadowMap(node->uuid).readable) {
             auto& img = gpuScene.GetShadowMap(node->uuid).img;
-            if (node->lightType == LightNode::LightType::Point) {
+            if (node->lightType == LightNode::LightType::Directional) {
+                ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
+            } else {
                 for (int i = 0; i < 6; i++) {
                     ImGui::Image(img.ImGuiRID(i), ImVec2(400, 400*img.height/img.width));
                 }
-            } else {
-                ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
             }
         }
     }
