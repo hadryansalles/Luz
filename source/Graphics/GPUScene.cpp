@@ -263,9 +263,9 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             impl->anyShadowMap = true;
         }
 
-        bool isPoint = light->lightType == LightNode::LightType::Point;
+        bool isDirectional = light->lightType == LightNode::LightType::Directional;
         glm::vec3 pos = light->GetWorldPosition();
-        if (light->lightType == LightNode::LightType::Point) {
+        if (!isDirectional) {
             glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.0f, light->shadowMapFar);
             block.viewProj[0] = proj * glm::lookAt(pos, pos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
             block.viewProj[1] = proj * glm::lookAt(pos, pos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0));
@@ -274,44 +274,71 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
             block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
         } else {
+            // Calculate view frustum corners in world space
             std::vector<glm::vec4> frustumCorners;
-            auto camProjView = glm::inverse(camera->GetProj(camera->nearDistance, camera->farDistance / light->shadowMapRange) * s.view);
             frustumCorners.reserve(8);
-            for (int i = 0; i < 2; i++) {
-                for (int j = 0; j < 2; j++) {
-                    for (int k = 0; k < 2; k++) {
-                        const glm::vec4 pt = camProjView * glm::vec4(
-                            2.0f * i - 1.0f,
-                            2.0f * j - 1.0f,
-                            2.0f * k - 1.0f,
+            
+            // Get camera view frustum with near/far adjusted by shadowMapRange
+            float adjustedFar = camera->farDistance / light->shadowMapRange;
+            glm::mat4 camProjView = glm::inverse(camera->GetProj(camera->nearDistance, adjustedFar) * s.view);
+            
+            // Get 8 corners of view frustum
+            for (int x = 0; x < 2; x++) {
+                for (int y = 0; y < 2; y++) {
+                    for (int z = 0; z < 2; z++) {
+                        glm::vec4 corner = camProjView * glm::vec4(
+                            2.0f * x - 1.0f,  // -1 or 1
+                            2.0f * y - 1.0f,  // -1 or 1 
+                            2.0f * z - 1.0f,  // -1 or 1
                             1.0f
                         );
-                        frustumCorners.push_back(pt / pt.w);
+                        frustumCorners.push_back(corner / corner.w);
                     }
                 }
             }
-            glm::vec3 frustumCenter(0.0f);
-            for (const glm::vec4& p : frustumCorners) {
-                frustumCenter += glm::vec3(p);
-            }
-            frustumCenter /= float(frustumCorners.size());
 
-            float r = light->shadowMapRange;
-            glm::mat4 view = glm::lookAt(frustumCenter + light->GetWorldFront(), frustumCenter, glm::vec3(.0f, 1.0f, .0f));
-            glm::vec3 frustumMin = frustumCorners[0];
-            glm::vec3 frustumMax = frustumCorners[0];
-            for (const glm::vec4& p : frustumCorners) {
-                frustumMin = glm::min(glm::vec3(view * p), frustumMin);
-                frustumMax = glm::max(glm::vec3(view * p), frustumMax);
+            // Calculate center of frustum
+            glm::vec3 frustumCenter(0.0f);
+            for (const auto& corner : frustumCorners) {
+                frustumCenter += glm::vec3(corner);
             }
-            frustumMin.z = frustumMin.z < 0 ? frustumMin.z * r : frustumMin.z / r;
-            frustumMax.z = frustumMax.z < 0 ? frustumMax.z / r : frustumMax.z * r;
-            glm::mat4 proj = glm::ortho(frustumMin.x, frustumMax.x, frustumMin.y, frustumMax.y, frustumMax.z, frustumMin.z);
-            block.viewProj[0] = proj * view;
+            frustumCenter /= frustumCorners.size();
+
+            // Create light view matrix looking at frustum center
+            glm::mat4 lightView = glm::lookAt(
+                frustumCenter + light->GetWorldFront(), 
+                frustumCenter,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+
+            // Transform frustum corners to light space and find bounds
+            glm::vec3 minCorner(std::numeric_limits<float>::max());
+            glm::vec3 maxCorner(std::numeric_limits<float>::lowest());
+
+            for (const auto& corner : frustumCorners) {
+                glm::vec3 lightSpaceCorner = glm::vec3(lightView * corner);
+                minCorner = glm::min(minCorner, lightSpaceCorner);
+                maxCorner = glm::max(maxCorner, lightSpaceCorner);
+            }
+
+            // Adjust z bounds based on shadowMapRange
+            float r = light->shadowMapRange;
+            minCorner.z = minCorner.z < 0 ? minCorner.z * r : minCorner.z / r;
+            maxCorner.z = maxCorner.z < 0 ? maxCorner.z / r : maxCorner.z * r;
+
+            // Create orthographic projection matrix from bounds
+            glm::mat4 lightProj = glm::ortho(
+                minCorner.x, maxCorner.x,
+                minCorner.y, maxCorner.y, 
+                maxCorner.z, minCorner.z
+            );
+
+            // Store final light space matrix
+            block.viewProj[0] = lightProj * lightView;
         }
 
         auto it = impl->shadowMaps.find(light->uuid);
-        if (it == impl->shadowMaps.end() || (isPoint != (it->second.img.layers == 6))) {
+        if (it == impl->shadowMaps.end() || (isDirectional == (it->second.img.layers == 6))) {
             if (it != impl->shadowMaps.end()) {
                 impl->shadowMaps.erase(it);
             }
@@ -321,7 +348,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
                 .format = vkw::Format::D32_sfloat,
                 .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
                 .name = "ShadowMap" + std::to_string(light->uuid),
-                .layers = isPoint ? 6u : 1u,
+                .layers = isDirectional ? 1u : 6u,
+                .samplerType = vkw::SamplerType::Nearest,
             });
         }
 

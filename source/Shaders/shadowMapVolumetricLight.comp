@@ -20,18 +20,18 @@ vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
 }
 
 float EvaluateShadow(LightBlock light, vec3 samplePos) {
-    if (light.type == LIGHT_TYPE_POINT) {
-        vec3 lightToFrag = samplePos - light.position;
-        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
-        if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
+    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+        vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
+        float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+        if (sampleInLight.z >= shadowDepth) {
             return 1.0f;
         } else {
             return 0.0f;
         }
     } else {
-        vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
-        float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
-        if (sampleInLight.z >= shadowDepth) {
+        vec3 lightToFrag = samplePos - light.position;
+        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+        if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
             return 1.0f;
         } else {
             return 0.0f;
@@ -57,7 +57,7 @@ void main() {
             continue;
         }
 
-        float weight = 0.000005;
+        float weight = 0.0001;
         int samples = 128; // todo: push constants
         float decay = 1.0;
         float density = 1.094;

@@ -195,7 +195,7 @@ struct Context {
     std::vector<int32_t> availableBufferRID;
     std::vector<int32_t> availableImageRID;
     std::vector<int32_t> availableTLASRID;
-    VkSampler genericSampler;
+    VkSampler genericSampler[SamplerType::Count];
 
     // preferred, warn if not available
     VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -237,7 +237,7 @@ struct Context {
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
-    VkSampler CreateSampler(float maxLod);
+    VkSampler CreateSampler(float maxLod, VkFilter filter);
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
@@ -583,6 +583,8 @@ Image CreateImage(const ImageDesc& desc) {
         _ctx.availableImageRID.pop_back();
     }
 
+    VkSampler sampler = _ctx.genericSampler[uint32_t(desc.samplerType)];
+
     if (desc.usage & ImageUsage::Sampled) {
         Layout::ImageLayout newLayout = Layout::ShaderRead;
         if (aspect == (Aspect::Depth | Aspect::Stencil)) {
@@ -593,14 +595,14 @@ Image CreateImage(const ImageDesc& desc) {
         res->imguiRIDs.resize(desc.layers);
         if (desc.layers > 1) {
             for (int i = 0; i < desc.layers; i++) {
-                res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+                res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(sampler, res->layersView[i], (VkImageLayout)newLayout);
             }
         } else {
-            res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+            res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(sampler, res->view, (VkImageLayout)newLayout);
         }
 
         VkDescriptorImageInfo descriptorInfo = {
-            .sampler = _ctx.genericSampler,
+            .sampler = sampler,
             .imageView = res->view,
             .imageLayout = (VkImageLayout)newLayout,
         };
@@ -616,7 +618,7 @@ Image CreateImage(const ImageDesc& desc) {
     }
     if (desc.usage & ImageUsage::Storage) {
         VkDescriptorImageInfo descriptorInfo = {
-            .sampler = _ctx.genericSampler,
+            .sampler = sampler,
             .imageView = res->view,
             .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         };
@@ -853,18 +855,42 @@ void Context::LoadShaders(Pipeline& pipeline) {
 }
 
 std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
-    char compile_string[1024];
     char inpath[256];
     char outpath[256];
     std::string cwd = std::filesystem::current_path().string();
     sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
-    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
-    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
-    DEBUG_TRACE("[ShaderCompiler] Output:");
-    while(system(compile_string)) {
-        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
-        std::cin.get();
+
+    bool needsCompile = true;
+    auto spvTime = std::filesystem::last_write_time(outpath);
+    if (std::filesystem::exists(outpath)) {
+        auto srcTime = std::filesystem::last_write_time(inpath);
+        needsCompile = (srcTime > spvTime);
+    }
+
+    // Check if any included .h files were modified
+    std::filesystem::path shaderDir = std::filesystem::path(cwd) / "source/Shaders";
+    for (const auto& entry : std::filesystem::directory_iterator(shaderDir)) {
+        if (entry.path().extension() == ".h") {
+            if (std::filesystem::exists(outpath)) {
+                auto headerTime = std::filesystem::last_write_time(entry.path());
+                if (headerTime > spvTime) {
+                    needsCompile = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (needsCompile) {
+        char compile_string[1024];
+        sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+        DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
+        DEBUG_TRACE("[ShaderCompiler] Output:");
+        while(system(compile_string)) {
+            LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
+            std::cin.get();
+        }
     }
 
     // 'ate' specify to start reading at the end of the file
@@ -1822,7 +1848,9 @@ void Context::CreateDevice() {
         vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
     }
 
-    genericSampler = CreateSampler(1.0);
+    for (int i = 0; i < SamplerType::Count; i++) {
+        genericSampler[i] = CreateSampler(1.0, VkFilter(i));
+    }
     vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
     vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
     vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
@@ -1983,7 +2011,9 @@ void Context::DestroyDevice() {
     bindlessDescriptorPool = VK_NULL_HANDLE;
     bindlessDescriptorLayout = VK_NULL_HANDLE;
     vmaDestroyAllocator(vmaAllocator);
-    vkDestroySampler(device, genericSampler, allocator);
+    for (int i = 0; i < SamplerType::Count; i++) {
+        vkDestroySampler(device, genericSampler[i], allocator);
+    }
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
 }
@@ -2458,12 +2488,12 @@ void Context::CmdBarrier() {
     vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
 
-VkSampler Context::CreateSampler(f32 maxLod) {
+VkSampler Context::CreateSampler(f32 maxLod, VkFilter filter) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     // todo: create separate one for shadow maps
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.magFilter = filter;
+    samplerInfo.minFilter = filter;
     samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;

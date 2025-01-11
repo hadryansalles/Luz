@@ -275,7 +275,7 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.lightIndex = shadowMap.lightIndex;
 
-    uint32_t layers = light->lightType == LightNode::LightType::Point ? 6u : 1u;
+    uint32_t layers = light->lightType == LightNode::LightType::Directional ? 1u : 6u;
 
     vkw::CmdBeginRendering({}, {img}, layers);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
