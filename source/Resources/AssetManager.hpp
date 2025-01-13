@@ -295,6 +295,8 @@ struct SceneAsset : Asset {
     bool taaEnabled = true;
     bool taaReconstruct = true;
 
+    int pcfSamples = 16;
+
     template<typename T>
     Ref<T> Add() {
         Ref<T> node = std::make_shared<T>();

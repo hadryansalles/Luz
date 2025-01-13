@@ -179,7 +179,7 @@ void GPUScene::AddAssets(const AssetManager& assets) {
 }
 
 void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera) {
-    LUZ_PROFILE_NAMED("UpdateResources");
+    LUZ_PROFILE_FUNC();
     std::vector<Ref<MeshNode>> meshNodes;
     scene->GetAll<MeshNode>(ObjectType::MeshNode, meshNodes);
     impl->modelsBlock.clear();
@@ -355,6 +355,32 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
 
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
         block.shadowMap = impl->shadowMaps[light->uuid].img.RID();
+
+        // Draw debug visualization for point and spot lights
+        if (light->lightType != LightNode::LightType::Directional) {
+            std::string debugName = "Light_" + std::to_string(light->uuid);
+            DebugDraw::Sphere(debugName, block.position, light->radius);
+            
+            DebugDraw::ConfigData config;
+            config.color = glm::vec4(light->color * light->intensity, 1.0f);
+            config.thickness = 2.0f;
+            config.depthAware = true;
+            config.drawTitle = false;
+            DebugDraw::Config(debugName, config);
+            
+            // Additional visualization for spot lights
+            if (light->lightType == LightNode::LightType::Spot) {
+                std::string coneDebugName = "LightCone_" + std::to_string(light->uuid);
+                float coneHeight = light->radius * 2.0f;
+                glm::vec3 coneDirection = glm::normalize(block.direction);
+                glm::vec3 coneTip = block.position + coneDirection * coneHeight;
+                float coneRadius = coneHeight * tan(block.outerAngle);
+                
+                DebugDraw::Cone(coneDebugName, block.position, coneTip, coneRadius);
+                config.color.a = 0.3f;  // Make cone semi-transparent
+                DebugDraw::Config(coneDebugName, config);
+            }
+        }
     }
     s.ambientLightColor = scene->ambientLightColor;
     s.ambientLightIntensity = scene->ambientLight;
@@ -367,6 +393,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.whiteTexture = -1;
     s.blackTexture = -1;
     s.shadowType = scene->shadowType;
+    s.pcfSamples = scene->pcfSamples;
 
     glm::vec3 starting = { 3, 0.4, 0 };
     glm::vec3 offset = { 2, 0, 0 };

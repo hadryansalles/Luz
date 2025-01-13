@@ -121,7 +121,8 @@ struct SceneBlock {
     int tlasRid;
 
     int shadowType;
-    int pad[3];
+    int pcfSamples;
+    int pad[2];
 };
 
 struct OpaqueConstants {

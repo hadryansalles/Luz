@@ -329,6 +329,7 @@ void CameraNode::Serialize(Serializer& s) {
     s("horizontalFov", horizontalFov);
     s("orthoFarDistance", orthoFarDistance);
     s("orthoNearDistance", orthoNearDistance);
+    s("jitter", useJitter);
 }
 
 glm::mat4 CameraNode::GetView() {

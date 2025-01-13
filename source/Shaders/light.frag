@@ -134,6 +134,64 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     return ao/scene.aoNumSamples;
 }
 
+float SampleShadowMapPCF(LightBlock light, vec3 fragPos, float radius) {
+    int numSamples = scene.pcfSamples;
+    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+        vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
+        vec2 baseUV = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
+        
+        float shadow = 0.0;
+        vec2 texelSize = 1.0 / textureSize(textures[light.shadowMap], 0);
+        float screenRadius = radius / fragInLight.w;
+        
+        for(int i = 0; i < numSamples; i++) {
+            vec2 blueNoise = BlueNoiseSample(i).rg * 4.0 - 2.0;
+            vec2 offset = blueNoise * texelSize * screenRadius;
+            vec2 uv = baseUV + offset;
+            float shadowDepth = texture(textures[light.shadowMap], uv).r;
+            shadow += fragInLight.z >= shadowDepth ? 1.0 : 0.0;
+        }
+        
+        return shadow / float(numSamples);
+    } else {
+        vec3 lightToFrag = fragPos - light.position;
+        float shadow = 0.0;
+        vec2 texelSize = 1.0 / textureSize(cubeTextures[light.shadowMap], 0);
+        float distanceToReceiver = length(lightToFrag);
+        vec3 lightDir = normalize(lightToFrag);
+        float distanceToOccluder = texture(cubeTextures[light.shadowMap], lightDir).r * light.zFar;
+        float penumbraWidth = (light.radius * distanceToReceiver) / (distanceToOccluder);
+        float screenRadius = penumbraWidth * 100.0;
+
+        for(int i = 0; i < numSamples; i++) {
+            vec2 blueNoise = BlueNoiseSample(i).rg * 4.0 - 2.0;
+            vec2 offset = blueNoise * texelSize * screenRadius;
+            vec3 offsetDir = normalize(lightToFrag + vec3(offset, 0));
+            float shadowDepth = texture(cubeTextures[light.shadowMap], offsetDir).r;
+            shadow += distanceToReceiver >= (shadowDepth * light.zFar) ? 1.0 : 0.0;
+        }
+        
+        return shadow / float(numSamples);
+    }
+}
+
+float SampleShadowMapTexture(LightBlock light, vec3 fragPos) {
+    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+        vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
+        vec2 uv = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
+        float shadowDepth = texture(textures[light.shadowMap], uv).r;
+        return fragInLight.z >= shadowDepth ? 1.0f : 0.0f;
+    } else {
+        vec3 lightToFrag = fragPos - light.position;
+        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+        return length(lightToFrag) >= (shadowDepth * light.zFar) ? 1.0f : 0.0f;
+    }
+}
+
+float EvaluateShadowMap(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
+    return SampleShadowMapPCF(light, fragPos, light.radius);
+}
+
 float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
     float shadowBias = max(length(fragPos - scene.camPos) * 0.01, 0.05);
     vec3 shadowOrigin = fragPos.xyz + N*shadowBias;
@@ -145,24 +203,7 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
             return TraceShadowRay(shadowOrigin, L*dist, light.numShadowSamples, light.radius);
         }
     } else if (scene.shadowType == SHADOW_TYPE_MAP && light.shadowMap != -1) {
-        if (light.type == LIGHT_TYPE_DIRECTIONAL) {
-            vec4 fragInLight = (light.viewProj[0] * vec4(shadowOrigin, 1));
-            float shadowDepth = texture(textures[light.shadowMap], (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
-            if (fragInLight.z >= shadowDepth) {
-                return 1.0f;
-            } else {
-                return 0.0f;
-            }
-        } else {
-            vec3 lightToFrag = fragPos - light.position;
-            float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
-            if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
-                return 1.0f;
-            } else {
-                return 0.0f;
-            }
-        }
-        return 0.0f;
+        return EvaluateShadowMap(light, L, N, fragPos);
     } else {
         return 1.0f;
     }

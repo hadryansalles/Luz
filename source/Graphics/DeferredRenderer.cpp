@@ -99,7 +99,6 @@ void CreateShaders() {
         .colorFormats = { },
         .useDepth = true,
         .depthFormat = { vkw::Format::D32_sfloat },
-        .cullFront = true,
     });
     CreatePipeline(ctx.composePipeline, {
         .point = vkw::PipelinePoint::Graphics,
@@ -276,8 +275,8 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     constants.lightIndex = shadowMap.lightIndex;
 
     uint32_t layers = light->lightType == LightNode::LightType::Directional ? 1u : 6u;
-
-    vkw::CmdBeginRendering({}, {img}, layers);
+    vkw::CullMode::Mode cullMode = light->lightType == LightNode::LightType::Directional ? vkw::CullMode::Front : vkw::CullMode::Back;
+    vkw::CmdBeginRendering({}, {img}, layers, cullMode);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     auto& allModels = gpuScene.GetMeshModels();

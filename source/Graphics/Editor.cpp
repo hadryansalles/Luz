@@ -333,6 +333,7 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
 
             ImGui::SeparatorText("Shadows");
+            ImGui::SliderInt("PCF Samples", &scene->pcfSamples, 1, 64);
             if (ImGui::BeginCombo("Type###Shadow", ShadowTypeNames[(int)scene->shadowType].c_str())) {
                 for (int i = 0; i < ShadowType::ShadowTypeCount; i++) {
                     bool selected = scene->shadowType == i;

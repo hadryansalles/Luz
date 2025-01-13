@@ -974,11 +974,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         // line thickness in terms of number of fragments
         rasterizer.lineWidth = 1.0f;
-        if (desc.cullFront) {
-            rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-        } else {
-            rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        }
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f;
@@ -1038,6 +1034,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         std::vector<VkDynamicState> dynamicStates;
         dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
         dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+        dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
 
         // define the type of input of our pipeline
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -1198,7 +1195,7 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount) {
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, CullMode::Mode cullMode) {
     auto& cmd = _ctx.GetCurrentCommandResources();
 
     glm::ivec2 offset(0, 0);
@@ -1262,7 +1259,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
     scissor.extent.height = extent.y;
     vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
     vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
-
+    vkCmdSetCullMode(cmd.buffer, VkCullModeFlagBits(cullMode));
     vkCmdBeginRendering(cmd.buffer, &renderingInfo);
 }
 
