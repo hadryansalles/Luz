@@ -30,6 +30,9 @@ struct Editor {
     void DebugDrawPanel();
     bool ViewportPanel(vkw::Image& image, glm::ivec2& newSize);
     void Select(AssetManager& assetManager, const std::vector<Ref<Node>>& uuids);
+    void GetViewportMousePos(float& x, float& y) const;
+    void SetPickingId(UUID id);
+
 private:
     EditorImpl* impl;
 };

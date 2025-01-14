@@ -312,13 +312,27 @@ struct SceneAsset : Asset {
 
     template<typename T>
     Ref<T> Get(UUID id) {
-        // todo: search recursively
-        for (auto& node : nodes) {
+        // Helper function for recursive search
+        std::function<Ref<T>(const Ref<Node>&)> searchNode = [&](const Ref<Node>& node) -> Ref<T> {
             if (node->uuid == id) {
                 return std::dynamic_pointer_cast<T>(node);
             }
+            
+            for (const auto& child : node->children) {
+                if (auto result = searchNode(child)) {
+                    return result;
+                }
+            }
+            return nullptr;
+        };
+
+        // Search through root nodes
+        for (auto& node : nodes) {
+            if (auto result = searchNode(node)) {
+                return result;
+            }
         }
-        return {};
+        return nullptr;
     }
 
     template<typename T>
@@ -358,11 +372,12 @@ struct AssetManager {
     AssetManager();
     ~AssetManager();
     std::vector<Ref<Node>> AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
-    void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath, bool createNew = false);
     void SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
     Ref<SceneAsset> GetInitialScene();
     Ref<CameraNode> GetMainCamera(Ref<SceneAsset>& scene);
     void OnImgui();
+    void CloseProject();
 
     template<typename T>
     Ref<T> Get(UUID uuid) {
@@ -466,6 +481,7 @@ struct AssetManager {
     bool HasLoadRequest() const;
     void LoadRequestedProject();
     void RequestLoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    void RequestNewProject();
     std::string GetProjectName();
     std::filesystem::path GetCurrentProjectPath();
     std::filesystem::path GetCurrentBinPath();

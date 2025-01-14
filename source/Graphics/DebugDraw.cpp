@@ -210,7 +210,7 @@ void DebugDraw::Update() {
 }
 
 std::vector<glm::vec3> DebugDraw::GetPoints() {
-#ifdef LUZ_DEBUG
+#ifdef LUZ_DEBUG || LUZ_RELEASE_WITH_DEBUG_DRAW
     std::vector<glm::vec3> allPoints;
     for (auto& it : impl->gizmos) {
         auto& points = it.second.points;
@@ -223,7 +223,7 @@ std::vector<glm::vec3> DebugDraw::GetPoints() {
 }
 
 std::vector<DebugDraw::DrawData> DebugDraw::Get() {
-#ifdef LUZ_DEBUG
+#ifdef LUZ_DEBUG || LUZ_RELEASE_WITH_DEBUG_DRAW
     std::vector<DebugDraw::DrawData> data;
     for (auto& it : impl->gizmos) {
         data.push_back(it.second);

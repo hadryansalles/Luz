@@ -179,11 +179,25 @@ Ref<CameraNode> AssetManager::GetMainCamera(Ref<SceneAsset>& scene) {
     return scene->mainCamera;
 }
 
-void AssetManager::LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath) {
+void AssetManager::CloseProject() {
+    assets.clear();
+    initialScene = 0;
+    impl->lastJson = Json();
+    impl->lastAssetsHash = 0;
+    impl->currentProjectPath = std::filesystem::path();
+    impl->currentBinPath = std::filesystem::path();
+}
+
+void AssetManager::LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath, bool createNew) {
     TimeScope t("AssetManager::LoadProject", true);
     if (!std::ifstream(path)) {
-        Log::Error("Project file not found: {} {}", path.string(), binPath.string());
-        return;
+        if (createNew) {
+            CloseProject();
+            SaveProject(path, binPath);
+        } else {
+            Log::Error("Project file not found: {} {}", path.string(), binPath.string());
+            return;
+        }
     }
     Json j;
     BinaryStorage storage;
@@ -254,6 +268,7 @@ void AssetManager::SaveProject(const std::filesystem::path& path, const std::fil
     impl->lastJson["initialScene"] = initialScene;
     AssetIO::WriteFile(path, impl->lastJson.dump());
     impl->lastAssetsHash = assetsHash;
+    Log::Info("Saved project: %s %s", path.string().c_str(), binPath.string().c_str());
 }
 
 void AssetManager::OnImgui() {
@@ -397,12 +412,28 @@ void AssetManager::RequestLoadProject(const std::filesystem::path& path, const s
     impl->requestedBinPath = binPath;
 }
 
+void AssetManager::RequestNewProject() {
+    std::filesystem::path basePath = "assets/default";
+    std::filesystem::path luzPath = basePath;
+    std::filesystem::path binPath = basePath;
+    int counter = 0;
+    
+    while (std::filesystem::exists(luzPath.string() + ".luz")) {
+        counter++;
+        luzPath = basePath.string() + std::to_string(counter);
+        binPath = basePath.string() + std::to_string(counter);
+    }
+
+    impl->requestedProjectPath = luzPath.string() + ".luz";
+    impl->requestedBinPath = binPath.string() + ".luzbin";
+}
+
 bool AssetManager::HasLoadRequest() const {
     return !impl->requestedProjectPath.empty() && !impl->requestedBinPath.empty();
 }
 
 void AssetManager::LoadRequestedProject() {
-    LoadProject(impl->requestedProjectPath, impl->requestedBinPath);
+    LoadProject(impl->requestedProjectPath, impl->requestedBinPath, true);
     impl->requestedProjectPath = std::filesystem::path();
     impl->requestedBinPath = std::filesystem::path();
 }

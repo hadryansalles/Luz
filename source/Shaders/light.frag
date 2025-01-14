@@ -68,12 +68,6 @@ vec3 HemisphereSample(vec2 rng) {
     return vec3(x, y, sqrt(max(0.0, 1.0 - rng.x)));
 }
 
-vec4 BlueNoiseSample(int i) {
-    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
-    ivec2 fragUV = ivec2(mod(gl_FragCoord.xy, blueNoiseSize));
-    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
-}
-
 vec3 aces(vec3 x) {
   const float a = 2.51;
   const float b = 0.03;
@@ -91,7 +85,7 @@ float TraceShadowRay(vec3 O, vec3 L, float numSamples, float radius) {
     vec3 lightBitangent = normalize(cross(lightTangent, L));
     float numShadows = 0;
     for(int i = 0; i < numSamples; i++) {
-        vec2 blueNoise = BlueNoiseSample(i).rg;
+        vec2 blueNoise = BlueNoiseSample(i, gl_FragCoord.xy).rg;
         vec2 rng = blueNoise;
         vec2 diskSample = DiskSample(rng, radius);
         float tMax = length(L);
@@ -118,7 +112,7 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
     float tMin = scene.aoMin;
     float tMax = scene.aoMax;
     for(int i = 0; i < scene.aoNumSamples; i++) {
-        vec2 rng = BlueNoiseSample(i).rg;
+        vec2 rng = BlueNoiseSample(i, gl_FragCoord.xy).rg;
         vec3 randomVec = HemisphereSample(rng);
         vec3 direction = tangent*randomVec.x + bitangent*randomVec.y + normal*randomVec.z;
         // Ray Query for shadow
@@ -132,47 +126,6 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
         }
     }
     return ao/scene.aoNumSamples;
-}
-
-float SampleShadowMapPCF(LightBlock light, vec3 fragPos, float radius) {
-    int numSamples = scene.pcfSamples;
-    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
-        vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
-        vec2 baseUV = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
-        
-        float shadow = 0.0;
-        vec2 texelSize = 1.0 / textureSize(textures[light.shadowMap], 0);
-        float screenRadius = radius / fragInLight.w;
-        
-        for(int i = 0; i < numSamples; i++) {
-            vec2 blueNoise = BlueNoiseSample(i).rg * 4.0 - 2.0;
-            vec2 offset = blueNoise * texelSize * screenRadius;
-            vec2 uv = baseUV + offset;
-            float shadowDepth = texture(textures[light.shadowMap], uv).r;
-            shadow += fragInLight.z >= shadowDepth ? 1.0 : 0.0;
-        }
-        
-        return shadow / float(numSamples);
-    } else {
-        vec3 lightToFrag = fragPos - light.position;
-        float shadow = 0.0;
-        vec2 texelSize = 1.0 / textureSize(cubeTextures[light.shadowMap], 0);
-        float distanceToReceiver = length(lightToFrag);
-        vec3 lightDir = normalize(lightToFrag);
-        float distanceToOccluder = texture(cubeTextures[light.shadowMap], lightDir).r * light.zFar;
-        float penumbraWidth = (light.radius * distanceToReceiver) / (distanceToOccluder);
-        float screenRadius = penumbraWidth * 100.0;
-
-        for(int i = 0; i < numSamples; i++) {
-            vec2 blueNoise = BlueNoiseSample(i).rg * 4.0 - 2.0;
-            vec2 offset = blueNoise * texelSize * screenRadius;
-            vec3 offsetDir = normalize(lightToFrag + vec3(offset, 0));
-            float shadowDepth = texture(cubeTextures[light.shadowMap], offsetDir).r;
-            shadow += distanceToReceiver >= (shadowDepth * light.zFar) ? 1.0 : 0.0;
-        }
-        
-        return shadow / float(numSamples);
-    }
 }
 
 float SampleShadowMapTexture(LightBlock light, vec3 fragPos) {
@@ -189,7 +142,7 @@ float SampleShadowMapTexture(LightBlock light, vec3 fragPos) {
 }
 
 float EvaluateShadowMap(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
-    return SampleShadowMapPCF(light, fragPos, light.radius);
+    return SampleShadowMapPCF(light, fragPos, light.radius, gl_FragCoord.xy);
 }
 
 float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {

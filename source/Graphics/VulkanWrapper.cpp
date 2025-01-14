@@ -868,10 +868,10 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
         needsCompile = (srcTime > spvTime);
     }
 
-    // Check if any included .h files were modified
+    // Check if any included files were modified
     std::filesystem::path shaderDir = std::filesystem::path(cwd) / "source/Shaders";
     for (const auto& entry : std::filesystem::directory_iterator(shaderDir)) {
-        if (entry.path().extension() == ".h") {
+        if (entry.path().extension() == ".glsl" || entry.path().extension() == ".h") {
             if (std::filesystem::exists(outpath)) {
                 auto headerTime = std::filesystem::last_write_time(entry.path());
                 if (headerTime > spvTime) {

@@ -470,13 +470,32 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
         size_t j = 0;
         size_t lastMaterialId = shapes[i].mesh.material_ids.size() > 0 ? shapes[i].mesh.material_ids[0] : -1;
         Ref<MeshAsset> asset = manager.CreateAsset<MeshAsset>(filename + ":" + shapes[i].name);
+
+        // Calculate bounds for normalization
+        glm::vec3 minBounds = glm::vec3(std::numeric_limits<float>::max());
+        glm::vec3 maxBounds = glm::vec3(std::numeric_limits<float>::lowest());
+
+        // First pass to find bounds
+        for (const auto& index : shapes[i].mesh.indices) {
+            glm::vec3 position = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+            minBounds = glm::min(minBounds, position);
+            maxBounds = glm::max(maxBounds, position);
+        }
+
+        glm::vec3 center = (minBounds + maxBounds) * 0.5f;
+
+        // Second pass to create normalized vertices
         for (const auto& index : shapes[i].mesh.indices) {
             MeshAsset::MeshVertex vertex{};
 
             vertex.position = {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
+                attrib.vertices[3 * index.vertex_index + 0] - center.x,
+                attrib.vertices[3 * index.vertex_index + 1] - center.y,
+                attrib.vertices[3 * index.vertex_index + 2] - center.z
             };
 
             if (index.normal_index != -1) {
@@ -512,6 +531,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                     Ref<MeshNode> model = manager.CreateObject<MeshNode>(asset->name);
                     Node::SetParent(model, parentNode);
                     model->mesh = asset;
+                    model->position = center;
                     if (lastMaterialId != -1) {
                         model->material = materialAssets[lastMaterialId];
                     }

@@ -193,6 +193,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         ModelBlock& block = impl->modelsBlock.emplace_back();
         Ref<MaterialAsset> material = node->material;
         block = impl->defaultModelBlock;
+        block.nodeId[0] = node->uuid;
+        block.nodeId[1] = node->uuid >> 32;
         if (material) {
             block.color = node->material->color;
             block.emission = node->material->emission;

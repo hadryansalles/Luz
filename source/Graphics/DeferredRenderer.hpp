@@ -5,6 +5,7 @@
 namespace vkw {
 
 struct Image;
+struct Buffer;
 
 }
 
@@ -52,8 +53,7 @@ void PostProcessingPass(GPUScene& gpuScene);
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
 void LuminanceHistogramPass();
 void SwapLightHistory();
-
-
+vkw::Buffer& GetMousePickingBuffer();
 vkw::Image& GetComposedImage();
 
 }

@@ -40,6 +40,7 @@ struct Context {
 
     vkw::Buffer luminanceHistogram;
     vkw::Buffer luminanceAverage;
+    vkw::Buffer mousePicking;
 };
 
 Context ctx;
@@ -242,6 +243,7 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
+    ctx.mousePicking = vkw::CreateBuffer(sizeof(uint64_t), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Mouse Picking Buffer");
     ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
     ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
@@ -467,6 +469,10 @@ void LuminanceHistogramPass() {
 
 void SwapLightHistory() {
     std::swap(ctx.lightA, ctx.lightHistory);
+}
+
+vkw::Buffer& GetMousePickingBuffer() {
+    return ctx.mousePicking;
 }
 
 vkw::Image& GetComposedImage() {
