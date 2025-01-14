@@ -40,6 +40,7 @@ struct Context {
 
     vkw::Buffer luminanceHistogram;
     vkw::Buffer luminanceAverage;
+    vkw::Buffer mousePicking;
 };
 
 Context ctx;
@@ -99,7 +100,6 @@ void CreateShaders() {
         .colorFormats = { },
         .useDepth = true,
         .depthFormat = { vkw::Format::D32_sfloat },
-        .cullFront = true,
     });
     CreatePipeline(ctx.composePipeline, {
         .point = vkw::PipelinePoint::Graphics,
@@ -243,6 +243,7 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
+    ctx.mousePicking = vkw::CreateBuffer(sizeof(uint64_t), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Mouse Picking Buffer");
     ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
     ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
@@ -275,9 +276,9 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.lightIndex = shadowMap.lightIndex;
 
-    uint32_t layers = light->lightType == LightNode::LightType::Point ? 6u : 1u;
-
-    vkw::CmdBeginRendering({}, {img}, layers);
+    uint32_t layers = light->lightType == LightNode::LightType::Directional ? 1u : 6u;
+    vkw::CullMode::Mode cullMode = light->lightType == LightNode::LightType::Directional ? vkw::CullMode::Front : vkw::CullMode::Back;
+    vkw::CmdBeginRendering({}, {img}, layers, cullMode);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     auto& allModels = gpuScene.GetMeshModels();
@@ -468,6 +469,10 @@ void LuminanceHistogramPass() {
 
 void SwapLightHistory() {
     std::swap(ctx.lightA, ctx.lightHistory);
+}
+
+vkw::Buffer& GetMousePickingBuffer() {
+    return ctx.mousePicking;
 }
 
 vkw::Image& GetComposedImage() {

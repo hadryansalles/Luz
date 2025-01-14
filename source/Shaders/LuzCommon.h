@@ -89,6 +89,9 @@ struct ModelBlock {
     int metallicRoughnessMap;
     int vertexBuffer;
     int indexBuffer;
+
+    int nodeId[2];
+    int pad[2];
 };
 
 struct SceneBlock {
@@ -121,13 +124,18 @@ struct SceneBlock {
     int tlasRid;
 
     int shadowType;
-    int pad[3];
+    int pcfSamples;
+    int pad[2];
 };
 
 struct OpaqueConstants {
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
+    int frame;
+
+    vec2 mousePos;
+    int mousePickingBufferIndex;
 };
 
 struct ShadowMapConstants {
@@ -212,12 +220,15 @@ struct PostProcessingConstants {
     vec2 size;
     int sceneBufferIndex;
     int reconstruct;
-    float deltaTime;
 
+    float histogramMinLog;
+    float deltaTime;
     int histogramRID;
     int histogramAverageRID;
-    float histogramMinLog;
+
     float histogramOneOverLog;
+    int frame;
+    int pad[2];
 };
 
 
@@ -239,6 +250,10 @@ layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform samplerCube cubeTextures[
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBuffer {
     SceneBlock block;
 } sceneBuffers[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer MousePickingBuffer {
+    int data[];
+} mousePickingBuffers[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer LineBuffer {
     LineBlock data[];

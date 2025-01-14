@@ -64,6 +64,7 @@ public:
     static inline bool        GetShouldClose()                 { return glfwWindowShouldClose(window);          }
     static inline float       GetDeltaScroll()                 { return deltaScroll;                            }
     static inline glm::vec2   GetDeltaMouse()                  { return deltaMousePos;                          }
+    static inline glm::vec2   GetMousePos()                    { return mousePos;                               }
     static inline bool        GetFramebufferResized()          { return framebufferResized;                     }
     static inline bool        IsKeyDown(uint16_t keyCode)      { return glfwGetKey(window, keyCode);            }
     static inline bool        IsMouseDown(uint16_t buttonCode) { return glfwGetMouseButton(window, buttonCode); }

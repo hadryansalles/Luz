@@ -76,7 +76,7 @@ private:
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ReadCache();
-        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath);
+        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath, false);
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -136,7 +136,7 @@ private:
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
-                assetManager.SaveProject("assets/default.luz", "assets/default.luzbin");
+                assetManager.SaveProject(cacheData.projectPath, cacheData.binPath);
             }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
@@ -226,6 +226,15 @@ private:
 
         LUZ_PROFILE_FUNC();
 
+        {
+            UUID mousePickObject = 0;
+            vkw::Buffer mousePickingBuffer = DeferredRenderer::GetMousePickingBuffer();
+            void* ptr = vkw::MapBuffer(mousePickingBuffer);
+            mousePickObject = *((UUID*)ptr);
+            vkw::UnmapBuffer(mousePickingBuffer);
+            editor.SetPickingId(mousePickObject);
+        }
+
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 
         gpuScene.UpdateResourcesGPU();
@@ -238,7 +247,9 @@ private:
         OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-
+        constants.mousePickingBufferIndex = DeferredRenderer::GetMousePickingBuffer().RID();
+        constants.frame = frameCount;
+        editor.GetViewportMousePos(constants.mousePos.x, constants.mousePos.y);
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredRenderer::BeginOpaquePass();
 

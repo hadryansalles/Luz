@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.7 FATAL_ERROR)
 
 # bin/lib output config
-set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE TYPE INTERNAL FORCE)
+set(CMAKE_CONFIGURATION_TYPES Debug Release Release_WithDebugDraw CACHE TYPE INTERNAL FORCE)
 
 # set default output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
@@ -47,6 +47,7 @@ target_compile_definitions(${PROJECT_NAME}
     PRIVATE 
     $<$<CONFIG:Debug>:LUZ_DEBUG>
     $<$<CONFIG:Release>:LUZ_RELEASE>
+    $<$<CONFIG:Release_WithDebugDraw>:LUZ_RELEASE_WITH_DEBUG_DRAW>
 )
 
 # prevent my laptop from overheating...
