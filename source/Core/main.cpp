@@ -41,6 +41,7 @@ private:
     bool viewportHovered = false;
     bool fullscreen = false;
     bool batterySaver = LUZ_BATTERY_SAVER;
+    bool atmosphericUpdate = true;
     DeferredRenderer::Output outputMode = DeferredRenderer::Output::Light;
 
     std::chrono::high_resolution_clock::time_point lastFrameTime = {};
@@ -244,6 +245,14 @@ private:
 
         auto totalTS = vkw::CmdBeginTimeStamp("Total");
 
+        if (atmosphericUpdate) {
+            auto atmosphericTS = vkw::CmdBeginTimeStamp("AtmosphericPass");
+            DeferredRenderer::AtmosphericPass(gpuScene, frameCount);
+            vkw::CmdEndTimeStamp(atmosphericTS);
+            Log::Info("Finished AtmosphericPass");
+            atmosphericUpdate = false;
+        }
+
         OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
@@ -275,11 +284,7 @@ private:
         vkw::CmdEndTimeStamp(shadowMapTS);
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
-        DeferredRenderer::LightConstants lightPassConstants;
-        lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
-        lightPassConstants.modelBufferIndex = constants.modelBufferIndex;
-        lightPassConstants.frameID = frameCount;
-        DeferredRenderer::LightPass(lightPassConstants);
+        DeferredRenderer::LightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(lightTS);
 
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
@@ -334,6 +339,7 @@ private:
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
+        atmosphericUpdate = true;
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();

@@ -11,7 +11,6 @@ layout(push_constant) uniform Constants {
 #include "utils.glsl"
 
 layout(location = 0) in vec2 fragTexCoord;
-
 layout(location = 0) out vec4 outColor;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -170,7 +169,8 @@ void main() {
     float depth = texture(textures[ctx.depthRID], fragTexCoord).r;
 
     if (length(N) == 0.0f) {
-        outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
+        // sample atmospheric scattering
+        outColor = texture(textures[ctx.atmosphericScatteringRID], fragTexCoord);
         return;
     }
 

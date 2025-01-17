@@ -190,10 +190,15 @@ struct LightConstants {
     int modelBufferIndex;
     int frame;
     int albedoRID;
+
     int normalRID;
     int materialRID;
     int emissionRID;
     int depthRID;
+
+    int atmosphericScatteringRID;
+    int atmosphericTransmittanceRID;
+    int pad[2];
 };
 
 struct ComposeConstants {
@@ -231,6 +236,15 @@ struct PostProcessingConstants {
     int pad[2];
 };
 
+struct AtmosphericConstants {
+    int sceneBufferIndex;
+    int transmittanceRID;
+    int scatteringRID;
+    int frame;
+
+    ivec2 imageSize;
+    int pad[2];
+};
 
 #if !defined(LUZ_ENGINE)
 

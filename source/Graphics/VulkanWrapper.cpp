@@ -862,21 +862,21 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
 
     bool needsCompile = true;
-    auto spvTime = std::filesystem::last_write_time(outpath);
     if (std::filesystem::exists(outpath)) {
+        auto spvTime = std::filesystem::last_write_time(outpath);
         auto srcTime = std::filesystem::last_write_time(inpath);
         needsCompile = (srcTime > spvTime);
-    }
 
-    // Check if any included files were modified
-    std::filesystem::path shaderDir = std::filesystem::path(cwd) / "source/Shaders";
-    for (const auto& entry : std::filesystem::directory_iterator(shaderDir)) {
-        if (entry.path().extension() == ".glsl" || entry.path().extension() == ".h") {
-            if (std::filesystem::exists(outpath)) {
-                auto headerTime = std::filesystem::last_write_time(entry.path());
-                if (headerTime > spvTime) {
-                    needsCompile = true;
-                    break;
+        // Check if any included files were modified
+        std::filesystem::path shaderDir = std::filesystem::path(cwd) / "source/Shaders";
+        for (const auto& entry : std::filesystem::directory_iterator(shaderDir)) {
+            if (entry.path().extension() == ".glsl" || entry.path().extension() == ".h") {
+                if (std::filesystem::exists(outpath)) {
+                    auto headerTime = std::filesystem::last_write_time(entry.path());
+                    if (headerTime > spvTime) {
+                        needsCompile = true;
+                        break;
+                    }
                 }
             }
         }
