@@ -195,7 +195,7 @@ struct Context {
     std::vector<int32_t> availableBufferRID;
     std::vector<int32_t> availableImageRID;
     std::vector<int32_t> availableTLASRID;
-    VkSampler genericSampler[SamplerType::Count];
+    VkSampler genericSampler[SamplerType::Count][WrapMode::Count];
 
     // preferred, warn if not available
     VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -237,7 +237,7 @@ struct Context {
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
-    VkSampler CreateSampler(float maxLod, VkFilter filter);
+    VkSampler CreateSampler(float maxLod, VkFilter filter, WrapMode::Mode wrapMode);
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
@@ -583,7 +583,7 @@ Image CreateImage(const ImageDesc& desc) {
         _ctx.availableImageRID.pop_back();
     }
 
-    VkSampler sampler = _ctx.genericSampler[uint32_t(desc.samplerType)];
+    VkSampler sampler = _ctx.genericSampler[uint32_t(desc.samplerType)][uint32_t(desc.wrapMode)];
 
     if (desc.usage & ImageUsage::Sampled) {
         Layout::ImageLayout newLayout = Layout::ShaderRead;
@@ -1846,7 +1846,9 @@ void Context::CreateDevice() {
     }
 
     for (int i = 0; i < SamplerType::Count; i++) {
-        genericSampler[i] = CreateSampler(1.0, VkFilter(i));
+        for (int j = 0; j < WrapMode::Count; j++) {
+            genericSampler[i][j] = CreateSampler(1.0, VkFilter(i), WrapMode::Mode(j));
+        }
     }
     vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
     vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
@@ -2009,7 +2011,9 @@ void Context::DestroyDevice() {
     bindlessDescriptorLayout = VK_NULL_HANDLE;
     vmaDestroyAllocator(vmaAllocator);
     for (int i = 0; i < SamplerType::Count; i++) {
-        vkDestroySampler(device, genericSampler[i], allocator);
+        for (int j = 0; j < WrapMode::Count; j++) {
+            vkDestroySampler(device, genericSampler[i][j], allocator);
+        }
     }
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
@@ -2485,15 +2489,15 @@ void Context::CmdBarrier() {
     vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
 
-VkSampler Context::CreateSampler(f32 maxLod, VkFilter filter) {
+VkSampler Context::CreateSampler(f32 maxLod, VkFilter filter, WrapMode::Mode wrapMode) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     // todo: create separate one for shadow maps
     samplerInfo.magFilter = filter;
     samplerInfo.minFilter = filter;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeU = (VkSamplerAddressMode)wrapMode;
+    samplerInfo.addressModeV = (VkSamplerAddressMode)wrapMode;
+    samplerInfo.addressModeW = (VkSamplerAddressMode)wrapMode;
     samplerInfo.anisotropyEnable = VK_TRUE;
 
     samplerInfo.anisotropyEnable = false;

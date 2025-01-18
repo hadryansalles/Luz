@@ -139,6 +139,9 @@ private:
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
                 assetManager.SaveProject(cacheData.projectPath, cacheData.binPath);
             }
+            if (Window::IsKeyPressed(GLFW_KEY_F1)) {
+                atmosphericUpdate = true;
+            }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
                 DeferredRenderer::CreateShaders();
@@ -245,14 +248,6 @@ private:
 
         auto totalTS = vkw::CmdBeginTimeStamp("Total");
 
-        if (atmosphericUpdate) {
-            auto atmosphericTS = vkw::CmdBeginTimeStamp("AtmosphericPass");
-            DeferredRenderer::AtmosphericPass(gpuScene, frameCount);
-            vkw::CmdEndTimeStamp(atmosphericTS);
-            Log::Info("Finished AtmosphericPass");
-            atmosphericUpdate = false;
-        }
-
         OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
@@ -276,6 +271,14 @@ private:
 
         DeferredRenderer::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
+
+        if (atmosphericUpdate) {
+            auto atmosphericTS = vkw::CmdBeginTimeStamp("AtmosphericPass");
+            DeferredRenderer::AtmosphericPass(gpuScene, frameCount);
+            vkw::CmdEndTimeStamp(atmosphericTS);
+            Log::Info("Finished AtmosphericPass");
+            atmosphericUpdate = false;
+        }
 
         auto shadowMapTS = vkw::CmdBeginTimeStamp("ShadowMaps");
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
@@ -339,7 +342,6 @@ private:
 
     void RecreateFrameResources() {
         LUZ_PROFILE_FUNC();
-        atmosphericUpdate = true;
         // busy wait while the window is minimized
         while (Window::GetWidth() == 0 || Window::GetHeight() == 0) {
             Window::WaitEvents();
@@ -358,6 +360,7 @@ private:
         }
         DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
         camera->extent = {viewportSize.x, viewportSize.y};
+        atmosphericUpdate = true;
     }
 
     void FinishImgui() {

@@ -360,7 +360,9 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::Checkbox("Reconstruction##TAA", &scene->taaReconstruct);
             ImGui::Checkbox("Jitter##TAA", &scene->mainCamera->useJitter);
         }
-        // todo: scene camera prameters, speed, etc
+        if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Field of View", &scene->mainCamera->horizontalFov, 0.1, 0.1, 180.0);
+        }
     }
     ImGui::End();
 }

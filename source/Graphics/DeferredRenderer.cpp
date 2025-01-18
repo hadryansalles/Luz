@@ -253,19 +253,24 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
+    glm::uvec2 atmosphericSize = {1920 / 4, 1080 / 4};
     ctx.atmosphericTransmittance = vkw::CreateImage({
-        .width = width,
-        .height = height,
+        .width = atmosphericSize.x,
+        .height = atmosphericSize.y,
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-        .name = "Atmospheric Transmittance"
+        .name = "Atmospheric Transmittance",
+        .samplerType = vkw::SamplerType::Linear,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
     });
     ctx.atmosphericScattering = vkw::CreateImage({
-        .width = width,
-        .height = height,
+        .width = atmosphericSize.x,
+        .height = atmosphericSize.y,
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-        .name = "Atmospheric Scattering"
+        .name = "Atmospheric Scattering",
+        .samplerType = vkw::SamplerType::Linear,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
     });
     ctx.mousePicking = vkw::CreateBuffer(sizeof(uint64_t), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Mouse Picking Buffer");
     ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
@@ -462,7 +467,7 @@ void AtmosphericPass(GPUScene& gpuScene, int frame) {
     constants.transmittanceRID = ctx.atmosphericTransmittance.RID();
     constants.scatteringRID = ctx.atmosphericScattering.RID();
     constants.frame = frame;
-    constants.imageSize = {ctx.atmosphericTransmittance.width, ctx.atmosphericTransmittance.height};
+    constants.size = glm::vec2(ctx.atmosphericTransmittance.width, ctx.atmosphericTransmittance.height);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.atmosphericTransmittance.width / 32 + 1, ctx.atmosphericTransmittance.height / 32 + 1, 1});
     vkw::CmdBarrier(ctx.atmosphericTransmittance, vkw::Layout::ShaderRead);

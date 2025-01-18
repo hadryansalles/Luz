@@ -242,7 +242,7 @@ struct AtmosphericConstants {
     int scatteringRID;
     int frame;
 
-    ivec2 imageSize;
+    vec2 size;
     int pad[2];
 };
 

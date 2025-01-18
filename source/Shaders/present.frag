@@ -85,7 +85,8 @@ void main() {
     if (imageType == 0) {
         // vec3 color = ExposureToneMapping(value.rgb, ctx.exposure);
         vec3 color = TonemapACES(value.rgb);
-        color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
+        // vec3 color = value.rgb;
+        // color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
         value = vec4(color, 1.0);
     } else if(imageType == 2) {
         value = (value + 1.0)/2.0;

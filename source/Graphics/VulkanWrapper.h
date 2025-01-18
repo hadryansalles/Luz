@@ -146,6 +146,16 @@ namespace SamplerType {
     };
 }
 
+namespace WrapMode {
+    enum Mode {
+        Repeat = 0,
+        MirrorRepeat = 1,
+        ClampToEdge = 2,
+        ClampToBorder = 3,
+        Count = 4,
+    };
+}
+
 struct ImageDesc {
     uint32_t width;
     uint32_t height;
@@ -154,6 +164,7 @@ struct ImageDesc {
     std::string name = "";
     uint32_t layers = 1;
     SamplerType::Sampler samplerType = SamplerType::Linear;
+    WrapMode::Mode wrapMode = WrapMode::Repeat;
 };
 
 namespace PipelinePoint {
