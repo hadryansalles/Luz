@@ -24,6 +24,7 @@ struct Context {
     vkw::Pipeline postProcessingPipeline;
     vkw::Pipeline luminanceHistogramPipeline;
     vkw::Pipeline luminanceHistogramAveragePipeline;
+    vkw::Pipeline atmosphericPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -37,9 +38,12 @@ struct Context {
     vkw::Image lightHistory;
     vkw::Image compose;
     vkw::Image debug;
+    vkw::Image atmosphericTransmittance;
+    vkw::Image atmosphericScattering;
 
     vkw::Buffer luminanceHistogram;
     vkw::Buffer luminanceAverage;
+    vkw::Buffer mousePicking;
 };
 
 Context ctx;
@@ -99,7 +103,6 @@ void CreateShaders() {
         .colorFormats = { },
         .useDepth = true,
         .depthFormat = { vkw::Format::D32_sfloat },
-        .cullFront = true,
     });
     CreatePipeline(ctx.composePipeline, {
         .point = vkw::PipelinePoint::Graphics,
@@ -169,6 +172,13 @@ void CreateShaders() {
             {.stage = vkw::ShaderStage::Compute, .path = "histogramAverage.comp"},
         },
         .name = "LuminanceHistogramAverage Pipeline",
+    });
+    CreatePipeline(ctx.atmosphericPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "atmospheric.comp"},
+        },
+        .name = "Atmospheric Pipeline",
     });
 }
 
@@ -243,6 +253,26 @@ void CreateImages(uint32_t width, uint32_t height) {
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Compose Attachment"
     });
+    glm::uvec2 atmosphericSize = {1920 / 4, 1080 / 4};
+    ctx.atmosphericTransmittance = vkw::CreateImage({
+        .width = atmosphericSize.x,
+        .height = atmosphericSize.y,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Atmospheric Transmittance",
+        .samplerType = vkw::SamplerType::Linear,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
+    });
+    ctx.atmosphericScattering = vkw::CreateImage({
+        .width = atmosphericSize.x,
+        .height = atmosphericSize.y,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Atmospheric Scattering",
+        .samplerType = vkw::SamplerType::Linear,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
+    });
+    ctx.mousePicking = vkw::CreateBuffer(sizeof(uint64_t), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Mouse Picking Buffer");
     ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
     ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
@@ -275,9 +305,10 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.lightIndex = shadowMap.lightIndex;
 
-    uint32_t layers = light->lightType == LightNode::LightType::Point ? 6u : 1u;
-
-    vkw::CmdBeginRendering({}, {img}, layers);
+    bool isDirectional = light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun;
+    uint32_t layers = isDirectional ? 1u : 6u;
+    vkw::CullMode::Mode cullMode = isDirectional ? vkw::CullMode::Front : vkw::CullMode::Back;
+    vkw::CmdBeginRendering({}, {img}, layers, cullMode);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     auto& allModels = gpuScene.GetMeshModels();
@@ -321,19 +352,25 @@ void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame) {
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
-void LightPass(LightConstants constants) {
-    std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
+void LightPass(GPUScene& gpuScene, int frame) {
+    std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission, ctx.atmosphericScattering, ctx.atmosphericTransmittance };
     for (auto& attach : attachs) {
         vkw::CmdBarrier(attach, vkw::Layout::ShaderRead);
     }
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ColorAttachment);
 
+    LightConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.frame = frame;
     constants.albedoRID = ctx.albedo.RID();
     constants.normalRID = ctx.normal.RID();
     constants.materialRID = ctx.material.RID();
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
+    constants.atmosphericScatteringRID = ctx.atmosphericScattering.RID();
+    constants.atmosphericTransmittanceRID = ctx.atmosphericTransmittance.RID();
 
     vkw::CmdBeginRendering({ ctx.lightA }, {});
     vkw::CmdBindPipeline(ctx.lightPipeline);
@@ -422,6 +459,22 @@ void LineRenderingPass(GPUScene& gpuScene) {
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
+void AtmosphericPass(GPUScene& gpuScene, int frame) {
+    vkw::CmdBarrier(ctx.atmosphericTransmittance, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.atmosphericScattering, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.atmosphericPipeline);
+    AtmosphericConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.transmittanceRID = ctx.atmosphericTransmittance.RID();
+    constants.scatteringRID = ctx.atmosphericScattering.RID();
+    constants.frame = frame;
+    constants.size = glm::vec2(ctx.atmosphericTransmittance.width, ctx.atmosphericTransmittance.height);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.atmosphericTransmittance.width / 32 + 1, ctx.atmosphericTransmittance.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.atmosphericTransmittance, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.atmosphericScattering, vkw::Layout::ShaderRead);
+}
+
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     if (scene->taaEnabled) {
         vkw::CmdBarrier(ctx.depth, vkw::Layout::General);
@@ -468,6 +521,10 @@ void LuminanceHistogramPass() {
 
 void SwapLightHistory() {
     std::swap(ctx.lightA, ctx.lightHistory);
+}
+
+vkw::Buffer& GetMousePickingBuffer() {
+    return ctx.mousePicking;
 }
 
 vkw::Image& GetComposedImage() {

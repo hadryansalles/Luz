@@ -138,6 +138,24 @@ enum Queue {
     Count = 3,
 };
 
+namespace SamplerType {
+    enum Sampler {
+        Nearest = 0,
+        Linear = 1,
+        Count = 2,
+    };
+}
+
+namespace WrapMode {
+    enum Mode {
+        Repeat = 0,
+        MirrorRepeat = 1,
+        ClampToEdge = 2,
+        ClampToBorder = 3,
+        Count = 4,
+    };
+}
+
 struct ImageDesc {
     uint32_t width;
     uint32_t height;
@@ -145,6 +163,8 @@ struct ImageDesc {
     ImageUsageFlags usage;
     std::string name = "";
     uint32_t layers = 1;
+    SamplerType::Sampler samplerType = SamplerType::Linear;
+    WrapMode::Mode wrapMode = WrapMode::Repeat;
 };
 
 namespace PipelinePoint {
@@ -162,6 +182,15 @@ namespace ShaderStage {
         Compute = 0x00000020,
         AllGraphics = 0x0000001F,
         All = 0x7FFFFFFF,
+    };
+}
+
+namespace CullMode {
+    enum Mode {
+        None = 0,
+        Front = 1,
+        Back = 2,
+        FrontAndBack = 3,
     };
 }
 
@@ -233,7 +262,7 @@ void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CullMode::Mode cullMode = CullMode::Back);
 void CmdEndRendering();
 void CmdBeginPresent();
 void CmdEndPresent();

@@ -15,7 +15,15 @@ layout(location = 0) out vec4 fragPos;
 
 void main() {
     LightBlock light = scene.lights[ctx.lightIndex];
-    if (light.type == LIGHT_TYPE_POINT) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
+        gl_Layer = 0;
+        for(int i = 0; i < 3; i++) {
+            fragPos = light.viewProj[0] * gl_in[i].gl_Position;
+            gl_Position = fragPos;
+            EmitVertex();
+        }
+        EndPrimitive();
+    } else {
         for(int face = 0; face < 6; face++) {
             gl_Layer = face;
             for(int i = 0; i < 3; i++) {
@@ -25,13 +33,5 @@ void main() {
             }
             EndPrimitive();
         }
-    } else {
-        gl_Layer = 0;
-        for(int i = 0; i < 3; i++) {
-            fragPos = light.viewProj[0] * gl_in[i].gl_Position;
-            gl_Position = fragPos;
-            EmitVertex();
-        }
-        EndPrimitive();
     }
 } 

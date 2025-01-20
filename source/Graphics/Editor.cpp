@@ -16,6 +16,9 @@ struct EditorImpl {
     std::vector<Ref<Node>> selectedNodes;
     std::vector<Ref<Node>> copiedNodes;
     bool profilerPopup = true;
+    glm::vec2 viewportMousePos;
+    UUID pickingId = 0;
+    bool handlePicking = false;
 
 #define LUZ_SCENE_ICON ICON_FA_GLOBE_AMERICAS
 #define LUZ_PROJECT_ICON ICON_FA_FOLDER
@@ -276,6 +279,14 @@ void Editor::DemoPanel() {
 }
 
 void Editor::ScenePanel(Ref<SceneAsset>& scene) {
+    if (impl->handlePicking) {
+        Ref<MeshNode> node = scene->Get<MeshNode>(impl->pickingId);
+        Log::Info("Picking uuid=%ld node=%s", impl->pickingId, node ? node->name.c_str() : "null");
+        if (node) {
+            impl->selectedNodes = { node };
+        }
+        impl->handlePicking = false;
+    }
     if (ImGui::Begin("Scene")) {
         ImGui::Text("Name: %s", scene->name.c_str());
         ImGui::Text("Add");
@@ -290,6 +301,14 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             auto newLight = scene->Add<LightNode>();
             newLight->name = "New Light";
             impl->selectedNodes = { newLight };
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Sun")) {
+            auto newSun = scene->Add<LightNode>();
+            newSun->name = "New Sun";
+            newSun->lightType = LightNode::LightType::Sun;
+            newSun->SetDefaultSun();
+            impl->selectedNodes = { newSun };
         }
         if (ImGui::CollapsingHeader("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (auto& node : scene->nodes) {
@@ -333,6 +352,7 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::DragInt("Samples##lights", (int*)&scene->lightSamples, 1, 0, 256);
 
             ImGui::SeparatorText("Shadows");
+            ImGui::SliderInt("PCF Samples", &scene->pcfSamples, 1, 64);
             if (ImGui::BeginCombo("Type###Shadow", ShadowTypeNames[(int)scene->shadowType].c_str())) {
                 for (int i = 0; i < ShadowType::ShadowTypeCount; i++) {
                     bool selected = scene->shadowType == i;
@@ -348,7 +368,9 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::Checkbox("Reconstruction##TAA", &scene->taaReconstruct);
             ImGui::Checkbox("Jitter##TAA", &scene->mainCamera->useJitter);
         }
-        // todo: scene camera prameters, speed, etc
+        if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Field of View", &scene->mainCamera->horizontalFov, 0.1, 0.1, 180.0);
+        }
     }
     ImGui::End();
 }
@@ -391,6 +413,10 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
     if (node->lightType == LightNode::LightType::Spot) {
         ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
         ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);
+    } else if (node->lightType == LightNode::LightType::Sun) {
+        ImGui::DragFloat("Sun Rotation", &node->sunRotation, 0.05, 0.0, 360.0);
+        ImGui::DragFloat("Sun Time", &node->sunTime, 0.05, 0.0, 24.0);
+        ImGui::DragFloat("Sun Radius", &node->sunRadius, 0.01, 0.01, 10.0);
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
@@ -399,12 +425,12 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
         if (gpuScene.GetShadowMap(node->uuid).readable) {
             auto& img = gpuScene.GetShadowMap(node->uuid).img;
-            if (node->lightType == LightNode::LightType::Point) {
+            if (node->lightType == LightNode::LightType::Directional || node->lightType == LightNode::LightType::Sun) {
+                ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
+            } else {
                 for (int i = 0; i < 6; i++) {
                     ImGui::Image(img.ImGuiRID(i), ImVec2(400, 400*img.height/img.width));
                 }
-            } else {
-                ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
             }
         }
     }
@@ -422,10 +448,10 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
             ImGui::DragFloat("Absorption##Volumetric", &node->volumetricScreenSpaceParams.absorption, 0.01f, 0.0f, 1.0f);
             ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples, 1, 0, 256);
         } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
-            ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight);
-            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption);
-            ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density);
-            ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples);
+            ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight, 0.01f, 0.0f, 10.0f);
+            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption, 0.01f, 0.0f, 1.0f);
+            ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density, 0.01f, 0.0f, 100.0f);
+            ImGui::DragInt("Samples##Volumetric", &node->volumetricShadowMapParams.samples, 1, 1, 256);
         }
     }
 }
@@ -484,6 +510,11 @@ void Editor::AssetsPanel(AssetManager& manager) {
 
     if (ImGui::CollapsingHeader(LUZ_PROJECT_ICON " Projects", ImGuiTreeNodeFlags_DefaultOpen)) {
         std::filesystem::path projectsPath = "assets";
+        
+        if (ImGui::Button("New Project")) {
+            manager.RequestNewProject();
+        }
+        
         for (const auto& entry : std::filesystem::directory_iterator(projectsPath)) {
             if (entry.path().extension() == ".luz") {
                 std::string projectName = entry.path().stem().string();
@@ -586,11 +617,29 @@ bool Editor::ViewportPanel(vkw::Image& image, glm::ivec2& newViewportSize) {
         ImGuizmo::SetDrawlist();
         ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
         hovered = ImGui::IsWindowHovered() && !ImGuizmo::IsUsing();
+        
+        if (hovered) {
+            impl->viewportMousePos = Window::GetMousePos();
+            ImVec2 windowPos = ImGui::GetWindowPos();
+            impl->viewportMousePos.x -= windowPos.x;
+            impl->viewportMousePos.y -= windowPos.y;
+
+            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                impl->handlePicking = true;
+            }
+        }
+
+
         ImGui::EndChild();
     }
     ImGui::PopStyleVar(2);
     ImGui::End();
     return hovered;
+}
+
+void Editor::GetViewportMousePos(float& x, float& y) const {
+    x = impl->viewportMousePos.x;
+    y = impl->viewportMousePos.y;
 }
 
 void Editor::ProfilerPanel() {
@@ -651,4 +700,8 @@ void Editor::ProfilerPopup() {
         ImGui::SetWindowPos({ maxPos.x - panelSize.x, 0});
     }
     ImGui::End();
+}
+
+void Editor::SetPickingId(UUID id) {
+    impl->pickingId = id;
 }

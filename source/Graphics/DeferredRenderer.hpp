@@ -5,6 +5,7 @@
 namespace vkw {
 
 struct Image;
+struct Buffer;
 
 }
 
@@ -13,17 +14,6 @@ struct SceneAsset;
 struct GPUScene;
 
 namespace DeferredRenderer {
-
-struct LightConstants {
-    int sceneBufferIndex;
-    int modelBufferIndex;
-    int frameID;
-    int albedoRID;
-    int normalRID;
-    int materialRID;
-    int emissionRID;
-    int depthRID;
-};
 
 enum Output : uint32_t {
     Light,
@@ -43,7 +33,7 @@ void Destroy();
 void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame);
 void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame);
 void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
-void LightPass(LightConstants constants);
+void LightPass(GPUScene& gpuScene, int frame);
 void ComposePass(bool separatePass, Output output, Ref<SceneAsset>& scene);
 void LineRenderingPass(GPUScene& gpuScene);
 void BeginOpaquePass();
@@ -52,8 +42,9 @@ void PostProcessingPass(GPUScene& gpuScene);
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
 void LuminanceHistogramPass();
 void SwapLightHistory();
+void AtmosphericPass(GPUScene& gpuScene, int frame);
 
-
+vkw::Buffer& GetMousePickingBuffer();
 vkw::Image& GetComposedImage();
 
 }

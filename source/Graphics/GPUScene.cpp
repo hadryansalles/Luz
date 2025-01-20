@@ -37,6 +37,8 @@ struct GPUSceneImpl {
 
     vkw::Image blueNoise;
     vkw::Image font;
+
+    void UpdateShadowMap(LightBlock& block, const Ref<LightNode>& light, const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera);
 };
 
 GPUScene::GPUScene() {
@@ -107,16 +109,16 @@ void GPUScene::Destroy() {
 
 void GPUScene::AddMesh(const Ref<MeshAsset>& asset) {
     GPUMesh& mesh = impl->meshes[asset->uuid];
-    mesh.vertexCount = asset->vertices.size();
-    mesh.indexCount = asset->indices.size();
+    mesh.vertexCount = u32(asset->vertices.size());
+    mesh.indexCount = u32(asset->indices.size());
     mesh.vertexBuffer = vkw::CreateBuffer(
-        sizeof(MeshAsset::MeshVertex) * asset->vertices.size(),
+        sizeof(MeshAsset::MeshVertex) * mesh.vertexCount,
         vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput | vkw::BufferUsage::Storage,
         vkw::Memory::GPU,
         ("VertexBuffer#" + std::to_string(asset->uuid))
     );
     mesh.indexBuffer = vkw::CreateBuffer(
-        sizeof(uint32_t) * asset->indices.size(),
+        sizeof(uint32_t) * mesh.indexCount,
         vkw::BufferUsage::Index | vkw::BufferUsage::AccelerationStructureInput | vkw::BufferUsage::Storage,
         vkw::Memory::GPU,
         ("IndexBuffer#" + std::to_string(asset->uuid))
@@ -179,7 +181,7 @@ void GPUScene::AddAssets(const AssetManager& assets) {
 }
 
 void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera) {
-    LUZ_PROFILE_NAMED("UpdateResources");
+    LUZ_PROFILE_FUNC();
     std::vector<Ref<MeshNode>> meshNodes;
     scene->GetAll<MeshNode>(ObjectType::MeshNode, meshNodes);
     impl->modelsBlock.clear();
@@ -193,6 +195,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
         ModelBlock& block = impl->modelsBlock.emplace_back();
         Ref<MaterialAsset> material = node->material;
         block = impl->defaultModelBlock;
+        block.nodeId[0] = node->uuid;
+        block.nodeId[1] = node->uuid >> 32;
         if (material) {
             block.color = node->material->color;
             block.emission = node->material->emission;
@@ -232,17 +236,21 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.viewProj = camera->GetProjJittered() * camera->GetView();
     s.inverseProj = glm::inverse(camera->GetProjJittered());
     s.inverseView = glm::inverse(camera->GetView());
+    s.sunLightIndex = -1;
 
     impl->anyShadowMap = scene->shadowType == ShadowType::ShadowMap;
     impl->anyVolumetricLight = false;
 
+    auto lights = scene->GetAll<LightNode>(ObjectType::LightNode);
+
     for (const auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+        if (s.numLights >= LUZ_MAX_LIGHTS) {
+            break;
+        }
         LightBlock& block = s.lights[s.numLights++];
         block.color = light->color;
         block.intensity = light->intensity;
-        block.position = light->GetWorldPosition();
         block.innerAngle = glm::radians(light->innerAngle);
-        block.direction = light->GetWorldTransform() * glm::vec4(0, -1, 0, 0);
         block.outerAngle = glm::radians(light->outerAngle);
         block.type = light->lightType;
         block.numShadowSamples = scene->shadowType == ShadowType::ShadowRayTraced ? scene->lightSamples : 0;
@@ -263,68 +271,23 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             impl->anyShadowMap = true;
         }
 
-        bool isPoint = false;
-        glm::vec3 pos = light->GetWorldPosition();
-        if (light->lightType == LightNode::LightType::Point) {
-            isPoint = true;
-            glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.0f, light->shadowMapFar);
-            block.viewProj[0] = proj * glm::lookAt(pos, pos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
-            block.viewProj[1] = proj * glm::lookAt(pos, pos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0));
-            block.viewProj[2] = proj * glm::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
-            block.viewProj[3] = proj * glm::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
-            block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
-            block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
-        }
-        else {
-            std::vector<glm::vec4> frustumCorners;
-            auto camProjView = glm::inverse(camera->GetProj(camera->nearDistance, camera->farDistance / light->shadowMapRange) * s.view);
-            frustumCorners.reserve(8);
-            for (int i = 0; i < 2; i++) {
-                for (int j = 0; j < 2; j++) {
-                    for (int k = 0; k < 2; k++) {
-                        const glm::vec4 pt = camProjView * glm::vec4(
-                            2.0f * i - 1.0f,
-                            2.0f * j - 1.0f,
-                            2.0f * k - 1.0f,
-                            1.0f
-                        );
-                        frustumCorners.push_back(pt / pt.w);
-                    }
-                }
-            }
-            glm::vec3 frustumCenter(0.0f);
-            for (const glm::vec4& p : frustumCorners) {
-                frustumCenter += glm::vec3(p);
-            }
-            frustumCenter /= float(frustumCorners.size());
+        if (light->lightType != LightNode::LightType::Sun) {
+            block.direction = light->GetWorldTransform() * glm::vec4(0, -1, 0, 0);
+            block.position = light->GetWorldPosition();
+        } else {
+            s.sunLightIndex = s.numLights - 1;
+            float timeAngle = (light->sunTime / 24.0f) * glm::two_pi<float>();
+            float rotationAngle = glm::radians(light->sunRotation);
+            block.sunRadius = light->sunRadius;
 
-            float r = light->shadowMapRange;
-            glm::mat4 view = glm::lookAt(frustumCenter + light->GetWorldFront(), frustumCenter, glm::vec3(.0f, 1.0f, .0f));
-            glm::vec3 frustumMin = frustumCorners[0];
-            glm::vec3 frustumMax = frustumCorners[0];
-            for (const glm::vec4& p : frustumCorners) {
-                frustumMin = glm::min(glm::vec3(view * p), frustumMin);
-                frustumMax = glm::max(glm::vec3(view * p), frustumMax);
-            }
-            frustumMin.z = frustumMin.z < 0 ? frustumMin.z * r : frustumMin.z / r;
-            frustumMax.z = frustumMax.z < 0 ? frustumMax.z / r : frustumMax.z * r;
-            glm::mat4 proj = glm::ortho(frustumMin.x, frustumMax.x, frustumMin.y, frustumMax.y, frustumMax.z, frustumMin.z);
-            block.viewProj[0] = proj * view;
+            glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0, 1, 0));
+            rotation = glm::rotate(rotation, timeAngle, glm::vec3(0, 0, 1));
+
+            block.direction = rotation * glm::vec4(0, 1, 0, 0);
+            block.position = camera->farDistance * rotation * glm::vec4(0, 0, 1, 0);
         }
 
-        auto it = impl->shadowMaps.find(light->uuid);
-        if (it == impl->shadowMaps.end() || (isPoint && it->second.img.layers != 6)) {
-            // todo: add shadow map settings to scene and recreate if changed
-            impl->shadowMaps[light->uuid].img = vkw::CreateImage({
-                .width = scene->shadowResolution,
-                .height = scene->shadowResolution,
-                .format = vkw::Format::D32_sfloat,
-                .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
-                .name = "ShadowMap" + std::to_string(light->uuid),
-                .layers = light->lightType == LightNode::LightType::Point ? 6u : 1u,
-                });
-        }
-
+        impl->UpdateShadowMap(block, light, scene, camera);
         impl->shadowMaps[light->uuid].lightIndex = s.numLights - 1;
         block.shadowMap = impl->shadowMaps[light->uuid].img.RID();
     }
@@ -339,7 +302,7 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.whiteTexture = -1;
     s.blackTexture = -1;
     s.shadowType = scene->shadowType;
-
+    s.pcfSamples = scene->pcfSamples;
 
     glm::vec3 starting = { 3, 0.4, 0 };
     glm::vec3 offset = { 2, 0, 0 };
@@ -349,7 +312,7 @@ void GPUScene::UpdateResourcesGPU() {
     if (impl->modelsBlock.size() == 0) {
         return;
     }
-    vkw::CmdCopy(impl->modelsBuffer, impl->modelsBlock.data(), sizeof(ModelBlock)*impl->modelsBlock.size());
+    vkw::CmdCopy(impl->modelsBuffer, impl->modelsBlock.data(), sizeof(ModelBlock) * u32(impl->modelsBlock.size()));
     vkw::CmdCopy(impl->sceneBuffer, &impl->sceneBlock, sizeof(SceneBlock));
     vkw::CmdTimeStamp("GPUScene::BuildTLAS", [&] {
         std::vector<vkw::BLASInstance> vkwInstances(impl->meshModels.size());
@@ -368,7 +331,7 @@ void GPUScene::UpdateResourcesGPU() {
 void GPUScene::UpdateLineResources() {
     auto points = DebugDraw::GetPoints();
     if (points.size() > 0) {
-        vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3)*points.size());
+        vkw::CmdCopy(impl->linesBuffer, points.data(), sizeof(glm::vec3) * u32(points.size()));
     }
 }
 
@@ -402,4 +365,96 @@ vkw::Buffer GPUScene::GetLinesBuffer() {
 
 bool GPUScene::AnyVolumetricLight() {
     return impl->anyVolumetricLight;
+}
+
+void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& light, const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera) {
+    bool isDirectional = light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun;
+    glm::vec3 pos = light->GetWorldPosition();
+    if (!isDirectional) {
+        glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.0f, light->shadowMapFar);
+        block.viewProj[0] = proj * glm::lookAt(pos, pos + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
+        block.viewProj[1] = proj * glm::lookAt(pos, pos + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0));
+        block.viewProj[2] = proj * glm::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
+        block.viewProj[3] = proj * glm::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
+        block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
+        block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
+    } else {
+        // Calculate view frustum corners in world space
+        std::vector<glm::vec4> frustumCorners;
+        frustumCorners.reserve(8);
+        
+        // Get camera view frustum with near/far adjusted by shadowMapRange
+        float adjustedFar = camera->farDistance / light->shadowMapRange;
+        glm::mat4 camProjView = glm::inverse(camera->GetProj(camera->nearDistance, adjustedFar) * camera->GetView());
+        
+        // Get 8 corners of view frustum
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 2; y++) {
+                for (int z = 0; z < 2; z++) {
+                    glm::vec4 corner = camProjView * glm::vec4(
+                        2.0f * x - 1.0f,  // -1 or 1
+                        2.0f * y - 1.0f,  // -1 or 1 
+                        2.0f * z - 1.0f,  // -1 or 1
+                        1.0f
+                    );
+                    frustumCorners.push_back(corner / corner.w);
+                }
+            }
+        }
+
+        // Calculate center of frustum
+        glm::vec3 frustumCenter(0.0f);
+        for (const auto& corner : frustumCorners) {
+            frustumCenter += glm::vec3(corner);
+        }
+        frustumCenter /= frustumCorners.size();
+
+        // Create light view matrix looking at frustum center
+        glm::mat4 lightView = glm::lookAt(
+            frustumCenter + light->GetWorldFront(), 
+            frustumCenter,
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+        // Transform frustum corners to light space and find bounds
+        glm::vec3 minCorner(std::numeric_limits<float>::max());
+        glm::vec3 maxCorner(std::numeric_limits<float>::lowest());
+
+        for (const auto& corner : frustumCorners) {
+            glm::vec3 lightSpaceCorner = glm::vec3(lightView * corner);
+            minCorner = glm::min(minCorner, lightSpaceCorner);
+            maxCorner = glm::max(maxCorner, lightSpaceCorner);
+        }
+
+        // Adjust z bounds based on shadowMapRange
+        float r = light->shadowMapRange;
+        minCorner.z = minCorner.z < 0 ? minCorner.z * r : minCorner.z / r;
+        maxCorner.z = maxCorner.z < 0 ? maxCorner.z / r : maxCorner.z * r;
+
+        // Create orthographic projection matrix from bounds
+        glm::mat4 lightProj = glm::ortho(
+            minCorner.x, maxCorner.x,
+            minCorner.y, maxCorner.y, 
+            maxCorner.z, minCorner.z
+        );
+
+        // Store final light space matrix
+        block.viewProj[0] = lightProj * lightView;
+    }
+
+    auto it = shadowMaps.find(light->uuid);
+    if (it == shadowMaps.end() || (isDirectional == (it->second.img.layers == 6))) {
+        if (it != shadowMaps.end()) {
+            shadowMaps.erase(it);
+        }
+        shadowMaps[light->uuid].img = vkw::CreateImage({
+            .width = scene->shadowResolution,
+            .height = scene->shadowResolution,
+            .format = vkw::Format::D32_sfloat,
+            .usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
+            .name = "ShadowMap" + std::to_string(light->uuid),
+            .layers = isDirectional ? 1u : 6u,
+            .samplerType = vkw::SamplerType::Nearest,
+        });
+    }
 }

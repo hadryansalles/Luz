@@ -82,6 +82,15 @@ namespace vkw {
 
 void AcquireImage();
 
+struct ImageDelete {
+    VkImage image;
+    VkImageView view;
+    VmaAllocation allocation;
+    std::vector<VkImageView> layersView;
+    std::vector<ImTextureID> imguiRIDs;
+    int32_t rid = -1;
+};
+
 struct Context {
     void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
     void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
@@ -154,6 +163,7 @@ struct Context {
         VkQueryPool queryPool;
         std::vector<std::string> timeStampNames;
         std::vector<uint64_t> timeStamps;
+        std::vector<ImageDelete> imagesToDelete;
     };
     struct InternalQueue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -185,7 +195,7 @@ struct Context {
     std::vector<int32_t> availableBufferRID;
     std::vector<int32_t> availableImageRID;
     std::vector<int32_t> availableTLASRID;
-    VkSampler genericSampler;
+    VkSampler genericSampler[SamplerType::Count][WrapMode::Count];
 
     // preferred, warn if not available
     VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -200,18 +210,15 @@ struct Context {
     std::map<std::string, float> timeStampTable;
 
     void CreateInstance(GLFWwindow* window);
-    void DestroyInstance();
-
-    void CreatePhysicalDevice();
-
     void CreateDevice();
-    void DestroyDevice();
-
+    void CreatePhysicalDevice();
     void CreateImGui(GLFWwindow* window);
-
     void CreateSurfaceFormats();
-
     void CreateSwapChain(uint32_t width, uint32_t height);
+
+    void DestroyCommandResources(CommandResources& resources);
+    void DestroyInstance();
+    void DestroyDevice();
     void DestroySwapChain();
 
     uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
@@ -223,11 +230,14 @@ struct Context {
     inline CommandResources& GetCurrentCommandResources() {
         return queues[currentQueue].commands[swapChainCurrentFrame];
     }
+    inline CommandResources& GetCurrentCommandResources(Queue queue) {
+        return queues[queue].commands[swapChainCurrentFrame];
+    }
 
     VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
-    VkSampler CreateSampler(float maxLod);
+    VkSampler CreateSampler(float maxLod, VkFilter filter, WrapMode::Mode wrapMode);
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
@@ -267,20 +277,15 @@ struct ImageResource : Resource {
 
     virtual ~ImageResource() {
         if (!fromSwapchain) {
-            for (VkImageView layerView : layersView) {
-                vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
-            }
-            layersView.clear();
-            vkDestroyImageView(_ctx.device, view, _ctx.allocator);
-            vmaDestroyImage(_ctx.vmaAllocator, image, allocation);
-            if (rid >= 0) {
-                _ctx.availableImageRID.push_back(rid);
-                for (ImTextureID imguiRID : imguiRIDs) {
-                    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
-                }
-                rid = -1;
-                imguiRIDs.clear();
-            }
+            // todo: delete on correct queue
+            _ctx.GetCurrentCommandResources(Queue::Graphics).imagesToDelete.push_back({
+                .image = image,
+                .view = view,
+                .allocation = allocation,
+                .layersView = layersView,
+                .imguiRIDs = imguiRIDs,
+                .rid = rid,
+            });
         }
     }
 };
@@ -400,6 +405,11 @@ void OnSurfaceUpdate(uint32_t width, uint32_t height) {
 }
 
 void Destroy() {
+    for (int i = 0; i < Queue::Count; i++) {
+        for (auto& cmd : _ctx.queues[i].commands) {
+            _ctx.DestroyCommandResources(cmd);
+        }
+    }
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     _ctx.DestroySwapChain();
@@ -573,6 +583,8 @@ Image CreateImage(const ImageDesc& desc) {
         _ctx.availableImageRID.pop_back();
     }
 
+    VkSampler sampler = _ctx.genericSampler[uint32_t(desc.samplerType)][uint32_t(desc.wrapMode)];
+
     if (desc.usage & ImageUsage::Sampled) {
         Layout::ImageLayout newLayout = Layout::ShaderRead;
         if (aspect == (Aspect::Depth | Aspect::Stencil)) {
@@ -583,14 +595,14 @@ Image CreateImage(const ImageDesc& desc) {
         res->imguiRIDs.resize(desc.layers);
         if (desc.layers > 1) {
             for (int i = 0; i < desc.layers; i++) {
-                res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+                res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(sampler, res->layersView[i], (VkImageLayout)newLayout);
             }
         } else {
-            res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+            res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(sampler, res->view, (VkImageLayout)newLayout);
         }
 
         VkDescriptorImageInfo descriptorInfo = {
-            .sampler = _ctx.genericSampler,
+            .sampler = sampler,
             .imageView = res->view,
             .imageLayout = (VkImageLayout)newLayout,
         };
@@ -606,7 +618,7 @@ Image CreateImage(const ImageDesc& desc) {
     }
     if (desc.usage & ImageUsage::Storage) {
         VkDescriptorImageInfo descriptorInfo = {
-            .sampler = _ctx.genericSampler,
+            .sampler = sampler,
             .imageView = res->view,
             .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         };
@@ -843,18 +855,42 @@ void Context::LoadShaders(Pipeline& pipeline) {
 }
 
 std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
-    char compile_string[1024];
     char inpath[256];
     char outpath[256];
     std::string cwd = std::filesystem::current_path().string();
     sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
-    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
-    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
-    DEBUG_TRACE("[ShaderCompiler] Output:");
-    while(system(compile_string)) {
-        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
-        std::cin.get();
+
+    bool needsCompile = true;
+    if (std::filesystem::exists(outpath)) {
+        auto spvTime = std::filesystem::last_write_time(outpath);
+        auto srcTime = std::filesystem::last_write_time(inpath);
+        needsCompile = (srcTime > spvTime);
+
+        // Check if any included files were modified
+        std::filesystem::path shaderDir = std::filesystem::path(cwd) / "source/Shaders";
+        for (const auto& entry : std::filesystem::directory_iterator(shaderDir)) {
+            if (entry.path().extension() == ".glsl" || entry.path().extension() == ".h") {
+                if (std::filesystem::exists(outpath)) {
+                    auto headerTime = std::filesystem::last_write_time(entry.path());
+                    if (headerTime > spvTime) {
+                        needsCompile = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (needsCompile) {
+        char compile_string[1024];
+        sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+        DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
+        DEBUG_TRACE("[ShaderCompiler] Output:");
+        while(system(compile_string)) {
+            LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
+            std::cin.get();
+        }
     }
 
     // 'ate' specify to start reading at the end of the file
@@ -938,11 +974,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         // line thickness in terms of number of fragments
         rasterizer.lineWidth = 1.0f;
-        if (desc.cullFront) {
-            rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-        } else {
-            rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        }
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f;
@@ -1002,6 +1034,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         std::vector<VkDynamicState> dynamicStates;
         dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
         dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+        dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
 
         // define the type of input of our pipeline
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -1162,7 +1195,7 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount) {
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, CullMode::Mode cullMode) {
     auto& cmd = _ctx.GetCurrentCommandResources();
 
     glm::ivec2 offset(0, 0);
@@ -1226,7 +1259,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
     scissor.extent.height = extent.y;
     vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
     vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
-
+    vkCmdSetCullMode(cmd.buffer, VkCullModeFlagBits(cullMode));
     vkCmdBeginRendering(cmd.buffer, &renderingInfo);
 }
 
@@ -1812,7 +1845,11 @@ void Context::CreateDevice() {
         vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
     }
 
-    genericSampler = CreateSampler(1.0);
+    for (int i = 0; i < SamplerType::Count; i++) {
+        for (int j = 0; j < WrapMode::Count; j++) {
+            genericSampler[i][j] = CreateSampler(1.0, VkFilter(i), WrapMode::Mode(j));
+        }
+    }
     vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
     vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
     vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
@@ -1942,6 +1979,26 @@ void Context::CreateDevice() {
     );
 }
 
+void Context::DestroyCommandResources(CommandResources& resources) {
+    for (auto& img : resources.imagesToDelete) {
+        for (VkImageView layerView : img.layersView) {
+            vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
+        }
+        img.layersView.clear();
+        vkDestroyImageView(_ctx.device, img.view, _ctx.allocator);
+        vmaDestroyImage(_ctx.vmaAllocator, img.image, img.allocation);
+        if (img.rid >= 0) {
+            _ctx.availableImageRID.push_back(img.rid);
+            for (ImTextureID imguiRID : img.imguiRIDs) {
+                ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+            }
+            img.rid = -1;
+            img.imguiRIDs.clear();
+        }
+    }
+    resources.imagesToDelete.clear();
+}
+
 void Context::DestroyDevice() {
     dummyVertexBuffer = {};
     currentPipeline = {};
@@ -1953,7 +2010,11 @@ void Context::DestroyDevice() {
     bindlessDescriptorPool = VK_NULL_HANDLE;
     bindlessDescriptorLayout = VK_NULL_HANDLE;
     vmaDestroyAllocator(vmaAllocator);
-    vkDestroySampler(device, genericSampler, allocator);
+    for (int i = 0; i < SamplerType::Count; i++) {
+        for (int j = 0; j < WrapMode::Count; j++) {
+            vkDestroySampler(device, genericSampler[i][j], allocator);
+        }
+    }
     vkDestroyDevice(device, allocator);
     device = VK_NULL_HANDLE;
 }
@@ -2263,6 +2324,8 @@ void SubmitAndPresent() {
     }
 
     _ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
+    // todo: delete on correct queue
+    _ctx.DestroyCommandResources(_ctx.GetCurrentCommandResources(Queue::Graphics));
 }
 
 uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
@@ -2426,15 +2489,15 @@ void Context::CmdBarrier() {
     vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
 
-VkSampler Context::CreateSampler(f32 maxLod) {
+VkSampler Context::CreateSampler(f32 maxLod, VkFilter filter, WrapMode::Mode wrapMode) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     // todo: create separate one for shadow maps
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.magFilter = filter;
+    samplerInfo.minFilter = filter;
+    samplerInfo.addressModeU = (VkSamplerAddressMode)wrapMode;
+    samplerInfo.addressModeV = (VkSamplerAddressMode)wrapMode;
+    samplerInfo.addressModeW = (VkSamplerAddressMode)wrapMode;
     samplerInfo.anisotropyEnable = VK_TRUE;
 
     samplerInfo.anisotropyEnable = false;

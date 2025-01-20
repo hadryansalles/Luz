@@ -12,26 +12,19 @@ layout(push_constant) uniform _constants {
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
-// todo: put in some header
-vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
-    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
-    ivec2 fragUV = ivec2(mod(pixelPos, blueNoiseSize));
-    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
-}
-
 float EvaluateShadow(LightBlock light, vec3 samplePos) {
-    if (light.type == LIGHT_TYPE_POINT) {
-        vec3 lightToFrag = samplePos - light.position;
-        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
-        if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
+        vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
+        float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
+        if (sampleInLight.z >= shadowDepth) {
             return 1.0f;
         } else {
             return 0.0f;
         }
     } else {
-        vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
-        float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
-        if (sampleInLight.z >= shadowDepth) {
+        vec3 lightToFrag = samplePos - light.position;
+        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+        if (length(lightToFrag) - 0.05 >= shadowDepth * light.zFar) {
             return 1.0f;
         } else {
             return 0.0f;
@@ -57,16 +50,47 @@ void main() {
             continue;
         }
 
-        float weight = 0.000005;
-        int samples = 128; // todo: push constants
-        float decay = 1.0;
-        float density = 1.094;
-        vec3 deltaPos = (camPos - worldPos) * density * (1.0 / float(samples));
-        vec3 samplePos = camPos + BlueNoiseSample(pixelPos, 0).r * length(deltaPos);
+        float weight = light.volumetricWeight;
+        int samples = light.volumetricSamples;
+        float decay = light.volumetricAbsorption;
+        float density = light.volumetricDensity;
+
+        // Calculate ray direction and length
+        vec3 rayDir = normalize(worldPos - camPos);
+        float rayLength = length(worldPos - camPos);
+        float stepSize = rayLength / float(samples);
+
+        // Add noise offset to starting position to reduce banding
+        vec3 samplePos = camPos + BlueNoiseSample(0, pixelPos).r * stepSize * rayDir;
+        
+        float transmittance = 1.0;
         for (int i = 0; i < samples; i++) {
-            samplePos -= deltaPos;
-            radiance += (1.0 - EvaluateShadow(light, samplePos)) * light.color * light.intensity * weight * decay;
-            decay *= 1.0;
+            // March along ray
+            samplePos += stepSize * rayDir;
+            
+            // Sample shadow map
+            float shadow = EvaluateShadow(light, samplePos);
+            
+            // Calculate in-scattering at this point
+            float scattering = (1.0 - shadow) * density;
+            
+            // Calculate distance attenuation for point/spot lights
+            float attenuation = 1.0;
+            if (light.type != LUZ_LIGHT_TYPE_DIRECTIONAL && light.type != LUZ_LIGHT_TYPE_SUN) {
+                float dist = length(samplePos - light.position);
+                attenuation = 1.0 / (dist * dist);
+            }
+            
+            // Accumulate light contribution with Beer-Lambert absorption and distance attenuation
+            radiance += transmittance * scattering * light.color * light.intensity * weight * attenuation;
+            
+            // Update transmittance with exponential decay
+            transmittance *= exp(-decay * stepSize);
+            
+            // Early exit if transmittance gets too low
+            if (transmittance < 0.01) {
+                break;
+            }
         }
     }
     vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);

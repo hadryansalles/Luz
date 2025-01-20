@@ -41,6 +41,7 @@ private:
     bool viewportHovered = false;
     bool fullscreen = false;
     bool batterySaver = LUZ_BATTERY_SAVER;
+    bool atmosphericUpdate = true;
     DeferredRenderer::Output outputMode = DeferredRenderer::Output::Light;
 
     std::chrono::high_resolution_clock::time_point lastFrameTime = {};
@@ -76,7 +77,7 @@ private:
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ReadCache();
-        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath);
+        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath, false);
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -136,7 +137,10 @@ private:
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
-                assetManager.SaveProject("assets/default.luz", "assets/default.luzbin");
+                assetManager.SaveProject(cacheData.projectPath, cacheData.binPath);
+            }
+            if (Window::IsKeyPressed(GLFW_KEY_F1)) {
+                atmosphericUpdate = true;
             }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
@@ -226,6 +230,15 @@ private:
 
         LUZ_PROFILE_FUNC();
 
+        {
+            UUID mousePickObject = 0;
+            vkw::Buffer mousePickingBuffer = DeferredRenderer::GetMousePickingBuffer();
+            void* ptr = vkw::MapBuffer(mousePickingBuffer);
+            mousePickObject = *((UUID*)ptr);
+            vkw::UnmapBuffer(mousePickingBuffer);
+            editor.SetPickingId(mousePickObject);
+        }
+
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 
         gpuScene.UpdateResourcesGPU();
@@ -238,7 +251,9 @@ private:
         OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-
+        constants.mousePickingBufferIndex = DeferredRenderer::GetMousePickingBuffer().RID();
+        constants.frame = frameCount;
+        editor.GetViewportMousePos(constants.mousePos.x, constants.mousePos.y);
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredRenderer::BeginOpaquePass();
 
@@ -257,6 +272,14 @@ private:
         DeferredRenderer::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
 
+        if (atmosphericUpdate) {
+            auto atmosphericTS = vkw::CmdBeginTimeStamp("AtmosphericPass");
+            DeferredRenderer::AtmosphericPass(gpuScene, frameCount);
+            vkw::CmdEndTimeStamp(atmosphericTS);
+            Log::Info("Finished AtmosphericPass");
+            atmosphericUpdate = false;
+        }
+
         auto shadowMapTS = vkw::CmdBeginTimeStamp("ShadowMaps");
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
             DeferredRenderer::ShadowMapPass(light, scene, gpuScene);
@@ -264,11 +287,7 @@ private:
         vkw::CmdEndTimeStamp(shadowMapTS);
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
-        DeferredRenderer::LightConstants lightPassConstants;
-        lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
-        lightPassConstants.modelBufferIndex = constants.modelBufferIndex;
-        lightPassConstants.frameID = frameCount;
-        DeferredRenderer::LightPass(lightPassConstants);
+        DeferredRenderer::LightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(lightTS);
 
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
@@ -341,6 +360,7 @@ private:
         }
         DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
         camera->extent = {viewportSize.x, viewportSize.y};
+        atmosphericUpdate = true;
     }
 
     void FinishImgui() {

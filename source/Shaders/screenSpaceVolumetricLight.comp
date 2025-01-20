@@ -34,7 +34,7 @@ void main() {
         }
 
         vec4 lightProjPos = scene.viewProj * vec4(light.position, 1);
-        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL) {
+        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
             lightProjPos = scene.viewProj * vec4(-light.direction * 10000.0, 1);
         }
 
@@ -49,7 +49,7 @@ void main() {
             bool inside = sampleUV.x >= 0 && sampleUV.x <= 1 && sampleUV.y >= 0 && sampleUV.y <= 1;
             if (inside && texture(textures[ctx.depthRID], sampleUV).r == 1.0) {
                 vec3 sampleRadiance = light.color * light.intensity * absorption;
-                if (light.type == LUZ_LIGHT_TYPE_POINT) {
+                if (light.type == LUZ_LIGHT_TYPE_POINT || light.type == LUZ_LIGHT_TYPE_SPOT) {
                     vec3 sampleWorldPos = DepthToWorld(sampleUV, texture(textures[ctx.depthRID], sampleUV).r);
                     sampleRadiance *= 5.0 / length(sampleWorldPos - light.position);
                 }
