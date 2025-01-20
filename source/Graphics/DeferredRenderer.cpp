@@ -305,8 +305,9 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.lightIndex = shadowMap.lightIndex;
 
-    uint32_t layers = light->lightType == LightNode::LightType::Directional ? 1u : 6u;
-    vkw::CullMode::Mode cullMode = light->lightType == LightNode::LightType::Directional ? vkw::CullMode::Front : vkw::CullMode::Back;
+    bool isDirectional = light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun;
+    uint32_t layers = isDirectional ? 1u : 6u;
+    vkw::CullMode::Mode cullMode = isDirectional ? vkw::CullMode::Front : vkw::CullMode::Back;
     vkw::CmdBeginRendering({}, {img}, layers, cullMode);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));

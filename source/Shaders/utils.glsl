@@ -104,7 +104,7 @@ vec4 BlueNoiseSample(int i, vec2 fragCoord) {
 
 float SampleShadowMapPCF(LightBlock light, vec3 fragPos, float radius, vec2 fragCoord) {
     int numSamples = scene.pcfSamples;
-    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
         vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
         vec2 baseUV = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
         

@@ -13,7 +13,7 @@ layout(push_constant) uniform _constants {
 layout (local_size_x = 32, local_size_y = 32) in;
 
 float EvaluateShadow(LightBlock light, vec3 samplePos) {
-    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
         vec4 sampleInLight = (light.viewProj[0] * vec4(samplePos, 1));
         float shadowDepth = texture(textures[light.shadowMap], (sampleInLight.xy * 0.5 + vec2(0.5f, 0.5f))).r;
         if (sampleInLight.z >= shadowDepth) {
@@ -76,7 +76,7 @@ void main() {
             
             // Calculate distance attenuation for point/spot lights
             float attenuation = 1.0;
-            if (light.type != LIGHT_TYPE_DIRECTIONAL) {
+            if (light.type != LUZ_LIGHT_TYPE_DIRECTIONAL && light.type != LUZ_LIGHT_TYPE_SUN) {
                 float dist = length(samplePos - light.position);
                 attenuation = 1.0 / (dist * dist);
             }

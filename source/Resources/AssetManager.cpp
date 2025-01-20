@@ -141,6 +141,25 @@ void LightNode::Serialize(Serializer& s) {
     s("volumetricShadowAbsorption", volumetricShadowMapParams.absorption);
     s("volumetricShadowDensity", volumetricShadowMapParams.density);
     s("volumetricShadowSamples", volumetricShadowMapParams.samples);
+
+    s("sunTime", sunTime);
+    s("sunRotation", sunRotation);
+    s("sunRadius", sunRadius);
+}
+
+void LightNode::SetDefaultSun() {
+    sunTime = 9.0f;
+    sunRotation = 0.0f;
+    position = glm::vec3(0);
+    rotation = glm::vec3(0);
+    scale = glm::vec3(1);
+    color = glm::vec3(1);
+    intensity = 2.0f;
+    innerAngle = 60.0f;
+    outerAngle = 50.0f;
+    radius = 0.0f;
+    lightType = LightType::Sun;
+    sunRadius = 2.0;
 }
 
 // Asset Manager

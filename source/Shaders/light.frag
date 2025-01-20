@@ -129,7 +129,7 @@ float TraceAORays(vec3 fragPos, vec3 normal) {
 }
 
 float SampleShadowMapTexture(LightBlock light, vec3 fragPos) {
-    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
         vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
         vec2 uv = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
         float shadowDepth = texture(textures[light.shadowMap], uv).r;
@@ -150,7 +150,7 @@ float EvaluateShadow(LightBlock light, vec3 L, vec3 N, vec3 fragPos) {
     vec3 shadowOrigin = fragPos.xyz + N * shadowBias;
     float dist = length(light.position - fragPos.xyz);
     if (scene.shadowType == SHADOW_TYPE_RAYTRACING) {
-        if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
             return TraceShadowRay(shadowOrigin, light.direction * dot(light.direction, L) * dist, light.numShadowSamples, light.radius);
         } else {
             return TraceShadowRay(shadowOrigin, L * dist, light.numShadowSamples, light.radius);
@@ -174,20 +174,12 @@ vec3 MultipleScatteringContributionFromTexture(float height, float angle) {
     return texture(textures[ctx.atmosphericScatteringRID], vec2(u, v)).xyz;
 }
 
-vec3 EvaluateSkyBkp(vec3 rayDirection) {
-    // ivec2 iResolution = textureSize(textures[ctx.depthRID], 0);
-    // vec2 uv = (2.0 * gl_FragCoord.xy - iResolution.xy) / iResolution.y;
-    // uv.y *= -1;
-    // float fieldOfView = 90.0;
-    // float z = 1.0 / tan(fieldOfView * 0.5 * pi / 180.0);
-    // mat3 cameraOrientation = RotationAxisAngle(vec3(0.0, 0.0, 0.0), 0.0);
-    // rayDirection = cameraOrientation * normalize(vec3(uv, -z));
+vec3 EvaluateSky(vec3 rayDirection, LightBlock light) {
+    const float sunNightIntensity = 0.001;
+    float sunIntensity = light.intensity;
     rayDirection = normalize(rayDirection);
-    // return rayDirection;
     vec3 cameraPosition = vec3(0.0, bottomRadius + 0.2e3, 0.0);
-    float sunTime = 2.4 * scene.exposure;
-    float sunAngle = (sunTime - 12.0) * pi / 12.0;
-    vec3 lightDirection = normalize(vec3(sin(sunAngle), cos(sunAngle), 0.0));
+    vec3 lightDirection = normalize(-light.direction);
     int sampleCount = 32;
     vec3 lightSum = vec3(0.0);
     vec3 transmittanceFromCameraToSpace = vec3(1.0);
@@ -244,10 +236,12 @@ vec3 EvaluateSkyBkp(vec3 rayDirection) {
 
     float distanceToGround;
     bool hitGround = IntersectSphere(cameraPosition, rayDirection, bottomRadius, distanceToGround) && distanceToGround > 0.0;
+    const float sunAngularRadiusScale = 0.004685;
+    const float sunDirectIntensity = 1.0;
     if (!hitGround) {
         float angle = dot(rayDirection, lightDirection);
-        if (angle > cos(sunAngularRadius)) {
-            lightSum += sunIntensity * transmittanceFromCameraToSpace;
+        if (angle > cos(light.sunRadius * sunAngularRadiusScale)) {
+            lightSum += sunIntensity * sunDirectIntensity * transmittanceFromCameraToSpace;
         }
     }
 
@@ -266,7 +260,11 @@ void main() {
     if (length(N) == 0.0f) {
         vec3 fragPos = DepthToWorld(fragTexCoord, 1.0);
         vec3 rayDirection = normalize(fragPos - scene.camPos);
-        outColor = vec4(EvaluateSkyBkp(rayDirection), 1.0);
+        if (scene.sunLightIndex != -1) {
+            outColor = vec4(EvaluateSky(rayDirection, scene.lights[scene.sunLightIndex]), 1.0);
+        } else {
+            outColor = vec4(scene.ambientLightColor * scene.ambientLightIntensity, 1.0);
+        }
         return;
     }
 
@@ -284,15 +282,15 @@ void main() {
         vec3 L_ = light.position - fragPos.xyz;
         vec3 L = normalize(L_);
         float attenuation = 1;
-        if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
             L = normalize(-light.direction);
-        } else if (light.type == LIGHT_TYPE_SPOT) {
+        } else if (light.type == LUZ_LIGHT_TYPE_SPOT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist * dist);
             float theta = dot(L, normalize(-light.direction));
             float epsilon = light.innerAngle - light.outerAngle;
             attenuation *= clamp((theta - light.outerAngle) / epsilon, 0.0, 1.0);
-        } else if (light.type == LIGHT_TYPE_POINT) {
+        } else if (light.type == LUZ_LIGHT_TYPE_POINT) {
             float dist = length(light.position - fragPos.xyz);
             attenuation = 1.0 / (dist * dist);
         }

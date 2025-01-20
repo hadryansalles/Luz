@@ -34,7 +34,7 @@ void main() {
         }
 
         vec4 lightProjPos = scene.viewProj * vec4(light.position, 1);
-        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL) {
+        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
             lightProjPos = scene.viewProj * vec4(-light.direction * 10000.0, 1);
         }
 

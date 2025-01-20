@@ -302,6 +302,14 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             newLight->name = "New Light";
             impl->selectedNodes = { newLight };
         }
+        ImGui::SameLine();
+        if (ImGui::Button("Sun")) {
+            auto newSun = scene->Add<LightNode>();
+            newSun->name = "New Sun";
+            newSun->lightType = LightNode::LightType::Sun;
+            newSun->SetDefaultSun();
+            impl->selectedNodes = { newSun };
+        }
         if (ImGui::CollapsingHeader("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (auto& node : scene->nodes) {
                 impl->OnNode(node);
@@ -405,6 +413,10 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
     if (node->lightType == LightNode::LightType::Spot) {
         ImGui::DragFloat("Inner Angle", &node->innerAngle, 0.05, 0.0, 90.0);
         ImGui::DragFloat("Outer Angle", &node->outerAngle, 0.05, 0.0, 90.0);
+    } else if (node->lightType == LightNode::LightType::Sun) {
+        ImGui::DragFloat("Sun Rotation", &node->sunRotation, 0.05, 0.0, 360.0);
+        ImGui::DragFloat("Sun Time", &node->sunTime, 0.05, 0.0, 24.0);
+        ImGui::DragFloat("Sun Radius", &node->sunRadius, 0.01, 0.01, 10.0);
     }
     ImGui::DragFloat("Intensity", &node->intensity, 0.1, 0, 1000, "%.2f", ImGuiSliderFlags_Logarithmic);
     ImGui::DragFloat("Radius", &node->radius, 0.1, 0.0001, 10000);
@@ -413,7 +425,7 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         ImGui::DragFloat("Far##Shadow", &node->shadowMapFar, 0.1f);
         if (gpuScene.GetShadowMap(node->uuid).readable) {
             auto& img = gpuScene.GetShadowMap(node->uuid).img;
-            if (node->lightType == LightNode::LightType::Directional) {
+            if (node->lightType == LightNode::LightType::Directional || node->lightType == LightNode::LightType::Sun) {
                 ImGui::Image(img.ImGuiRID(), ImVec2(400, 400*img.height/img.width));
             } else {
                 for (int i = 0; i < 6; i++) {

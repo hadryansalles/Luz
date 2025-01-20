@@ -24,6 +24,10 @@ vec3 Tonemap(vec3 color) {
     return color;
 }
 
+vec3 ExposureToneMapping(vec3 color, float exposure) {
+    return vec3(1.0) - exp(-color * exposure);
+}
+
 vec3 TonemapACES(vec3 color) {
     const float a = 2.51;
     const float b = 0.03;
@@ -83,8 +87,8 @@ void main() {
     vec4 value = texture(textures[imageRID], fragCoord);
     vec4 debugColor = texture(textures[ctx.debugRID], fragCoord);
     if (imageType == 0) {
-        // vec3 color = ExposureToneMapping(value.rgb, ctx.exposure);
-        vec3 color = TonemapACES(value.rgb);
+        vec3 color = ExposureToneMapping(value.rgb, ctx.exposure);
+        // vec3 color = TonemapACES(value.rgb);
         // vec3 color = value.rgb;
         // color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
         value = vec4(color, 1.0);

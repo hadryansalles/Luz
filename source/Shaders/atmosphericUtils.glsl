@@ -7,8 +7,6 @@ const vec3 rayleighScatteringCoefficient = vec3(5.8e-6, 13.5e-6, 33.1e-6);
 const float mieScatteringCoefficient = 3.996e-06;
 const float mieExtinctionCoefficient = 4.440e-06;
 const vec3 ozoneAbsorptionCoefficient = vec3(0.650e-6, 1.881e-6, 0.085e-6);
-const float sunAngularRadius = 0.004685 * 2.0;
-const float sunIntensity = 2.0;
 
 float RayleighPhase(float angle) {
     return 3.0 / (16.0 * pi) * (1.0 + (angle * angle));

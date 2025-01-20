@@ -24,6 +24,7 @@ using mat4 = glm::mat4;
 #define LUZ_LIGHT_TYPE_POINT 0
 #define LUZ_LIGHT_TYPE_SPOT 1
 #define LUZ_LIGHT_TYPE_DIRECTIONAL 2
+#define LUZ_LIGHT_TYPE_SUN 3
 
 #define SHADOW_TYPE_RAYTRACING 1
 #define SHADOW_TYPE_MAP 2
@@ -57,7 +58,9 @@ struct LightBlock {
 
     float volumetricDensity;
     int volumetricSamples;
-    int pad[2];
+    float sunRadius;
+    // todo: sky fov?
+    int pad[1];
 };
 
 struct LineBlock {
@@ -125,7 +128,8 @@ struct SceneBlock {
 
     int shadowType;
     int pcfSamples;
-    int pad[2];
+    int sunLightIndex;
+    int pad[1];
 };
 
 struct OpaqueConstants {
@@ -253,10 +257,6 @@ struct AtmosphericConstants {
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_ray_query : enable
 #extension GL_EXT_shader_image_load_formatted : require
-
-#define LIGHT_TYPE_POINT 0
-#define LIGHT_TYPE_DIRECTIONAL 2
-#define LIGHT_TYPE_SPOT 1
 
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler2D textures[];
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform samplerCube cubeTextures[];

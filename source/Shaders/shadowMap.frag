@@ -12,7 +12,7 @@ layout(location = 0) in vec4 fragPos;
 
 void main() {
     LightBlock light = scene.lights[ctx.lightIndex];
-    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
         gl_FragDepth = gl_FragCoord.z;
     } else {
         gl_FragDepth = length(light.position - fragPos.xyz) / light.zFar;

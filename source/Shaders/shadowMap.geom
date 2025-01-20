@@ -15,7 +15,7 @@ layout(location = 0) out vec4 fragPos;
 
 void main() {
     LightBlock light = scene.lights[ctx.lightIndex];
-    if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
         gl_Layer = 0;
         for(int i = 0; i < 3; i++) {
             fragPos = light.viewProj[0] * gl_in[i].gl_Position;

@@ -186,9 +186,10 @@ struct LightNode : Node {
         Point = 0,
         Spot = 1,
         Directional = 2,
-        LightTypeCount = 3,
+        Sun = 3,
+        LightTypeCount = 4,
     };
-    inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
+    inline static const char* typeNames[] = { "Point", "Spot", "Directional", "Sun" };
 
     enum VolumetricType {
         Disabled = 0,
@@ -205,9 +206,15 @@ struct LightNode : Node {
     float innerAngle = 60.f;
     float outerAngle = 50.f;
 
+    float sunTime = 9.0f;
+    float sunRotation = 0.0f;
+    // todo: check if this is physically based
+    float sunRadius = 0.004685 * 2.0;
+    // todo: add param for night??
+
     float shadowMapRange = 3.0f;
     float shadowMapFar = 2000.0f;
-
+    
     struct VolumetricScreenSpaceParams {
         float absorption = 0.5f;
         int samples = 128;
@@ -224,6 +231,7 @@ struct LightNode : Node {
 
     LightNode();
     virtual void Serialize(Serializer& s);
+    void SetDefaultSun();
 };
 
 struct CameraNode : Node {
@@ -285,6 +293,15 @@ struct SceneAsset : Asset {
     float exposure = 2.0f;
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
+
+    bool sunEnabled = true;
+    bool sunShadows = true;
+    glm::vec3 sunDirection = glm::vec3(0, 1, 0);
+    glm::vec3 sunColor = glm::vec3(1);
+    float sunIntensity = 2.0f;
+    float sunRadius = 0.01f;
+    // todo: check if this is physically based
+    float sunAngularRadius = 0.004685 * 2.0;
 
     float camSpeed = 0.01f;
     float zoomSpeed = 1.0f;
