@@ -17,6 +17,7 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 - Temporal Anti-Aliasing
 - Screen Space Volumetric Light
 - Shadow Maps (Point/Directional)
+- Atmospheric Scattering
 - Scene Serialization (JSON)
 - Deferred Rendering
 - Real-time ray traced shadows and ambient occlusion
@@ -82,3 +83,4 @@ cmake --build build --parallel 4
 - [stb_image](https://github.com/nothings/stb) used to load image files
 - [tiny_obj_loader](https://github.com/tinyobjloader/tinyobjloader) used to load wavefront .obj files
 - [optick](https://github.com/bombomby/optick) used to profile the engine
+- [pbr-sky](https://www.shadertoy.com/view/slyBDG) used as reference for atmospheric sky model
