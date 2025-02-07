@@ -51,16 +51,17 @@ struct LightBlock {
     int shadowMap;
 
     mat4 viewProj[6];
+
     float zFar;
     int volumetricType;
     float volumetricWeight;
-    float volumetricAbsorption;
+    float volumetricDecay;
 
+    float volumetricAbsorption;
     float volumetricDensity;
     int volumetricSamples;
     float sunRadius;
     // todo: sky fov?
-    int pad[1];
 };
 
 struct LineBlock {

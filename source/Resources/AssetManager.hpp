@@ -216,7 +216,8 @@ struct LightNode : Node {
     float shadowMapFar = 2000.0f;
     
     struct VolumetricScreenSpaceParams {
-        float absorption = 0.5f;
+        float decay = 0.5f;
+        float weight = 0.5f;
         int samples = 128;
     } volumetricScreenSpaceParams;
 

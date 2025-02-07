@@ -445,7 +445,8 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
             ImGui::EndCombo();
         }
         if (node->volumetricType == LightNode::VolumetricType::ScreenSpace) {
-            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricScreenSpaceParams.absorption, 0.01f, 0.0f, 1.0f);
+            ImGui::DragFloat("Decay##Volumetric", &node->volumetricScreenSpaceParams.decay, 0.01f, 0.0f, 1.0f);
+            ImGui::DragFloat("Weight##Volumetric", &node->volumetricScreenSpaceParams.weight, 0.01f, 0.0f, 10.0f);
             ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples, 1, 0, 256);
         } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
             ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight, 0.01f, 0.0f, 10.0f);
