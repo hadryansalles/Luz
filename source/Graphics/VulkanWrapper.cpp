@@ -938,7 +938,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 
     VkPushConstantRange pushConstant{};
     pushConstant.offset = 0;
-    pushConstant.size = 256;
+    pushConstant.size = 128;
     pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};

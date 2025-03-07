@@ -402,6 +402,33 @@ UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager) {
     return loadedScenes.size() ? loadedScenes[0]->uuid : 0;
 }
 
+void PrepareMesh(Ref<MeshAsset>& mesh) {
+    if (true) {
+        std::vector<glm::vec3> positions;
+        positions.resize(mesh->vertices.size());
+        for (int i = 0; i < mesh->vertices.size(); i++)
+        {
+            positions[i] = mesh->vertices[i].position;
+        }
+        
+        for (size_t i = 0; i < mesh->indices.size(); i += 3) {
+            u32 i0 = mesh->indices[i + 0];
+            u32 i1 = mesh->indices[i + 1];
+            u32 i2 = mesh->indices[i + 2];
+
+            glm::vec3 v0 = positions[i0];
+            glm::vec3 v1 = positions[i1];
+            glm::vec3 v2 = positions[i2];
+
+            glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+
+            mesh->vertices[i0].normal = normal;
+            mesh->vertices[i1].normal = normal;
+            mesh->vertices[i2].normal = normal;
+        }
+    }
+}
+
 UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
@@ -542,6 +569,8 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                 }
             }
         }
+
+        PrepareMesh(asset);
     }
     Log::Info("Objects: %d", parentNode->children.size());
     return scene->uuid;
