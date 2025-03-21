@@ -5,13 +5,9 @@
 
 #include "LuzCommon.h"
 
-layout(push_constant) uniform VolumeVisualizerConstants {
-    int sceneBufferIndex;
-    int volumeBufferRID;
-    int depthRID;
-    int lightIndex;
-    vec4 color;
-} ctx;
+layout(push_constant) uniform _constants {
+    VolumeVisualizerConstants ctx;
+};
 
 layout(location = 0) in vec3 inPosition;
 

@@ -458,4 +458,93 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
             .samplerType = vkw::SamplerType::Nearest,
         });
     }
+
+    if (!shadowMaps[light->uuid].volumeBuffer.resource) {
+        auto& shadowMapData = shadowMaps[light->uuid];
+        int shadowMapWidth = shadowMapData.img.width;
+        int shadowMapHeight = shadowMapData.img.height;
+        int shadowMapSize = shadowMapWidth * shadowMapHeight;
+        
+        // Create index buffer for grid triangulation
+        // For a grid of width x height, we have (width-1)*(height-1) quads, each with 2 triangles (6 indices)
+        int numQuads = (shadowMapWidth - 1) * (shadowMapHeight - 1);
+        int numIndices = numQuads * 6; // 6 indices per quad (2 triangles)
+
+        shadowMapData.volumeBuffer = vkw::CreateBuffer(
+            shadowMapSize * sizeof(glm::vec3),
+            vkw::BufferUsage::Storage | vkw::BufferUsage::Vertex,
+            vkw::Memory::GPU | vkw::Memory::CPU,
+            "Volume Vertex Buffer"
+        );
+        // Create the index buffer
+        shadowMapData.volumeIndexBuffer = vkw::CreateBuffer(
+            numIndices * sizeof(uint32_t),
+            vkw::BufferUsage::Index | vkw::BufferUsage::Storage,
+            vkw::Memory::GPU | vkw::Memory::CPU,
+            "Volume Index Buffer"
+        );
+
+        std::vector<uint32_t> indices(numIndices);
+        int indexCounter = 0;
+
+        // Generate indices for triangles
+        for (int y = 0; y < shadowMapHeight - 1; y++) {
+            for (int x = 0; x < shadowMapWidth - 1; x++) {
+                // Calculate vertex indices for the current quad
+                uint32_t topLeft = y * shadowMapWidth + x;
+                uint32_t topRight = topLeft + 1;
+                uint32_t bottomLeft = (y + 1) * shadowMapWidth + x;
+                uint32_t bottomRight = bottomLeft + 1;
+                
+                // First triangle (top-left, bottom-left, top-right)
+                indices[indexCounter++] = topLeft;
+                indices[indexCounter++] = bottomLeft;
+                indices[indexCounter++] = topRight;
+                
+                // Second triangle (bottom-left, bottom-right, top-right)
+                indices[indexCounter++] = bottomLeft;
+                indices[indexCounter++] = bottomRight;
+                indices[indexCounter++] = topRight;
+            }
+        }
+
+        // Upload indices to the buffer
+        void* mappedIndices = vkw::MapBuffer(shadowMapData.volumeIndexBuffer);
+        memcpy(mappedIndices, indices.data(), indices.size() * sizeof(uint32_t));
+        vkw::UnmapBuffer(shadowMapData.volumeIndexBuffer);
+
+        shadowMapData.volumeIndexCount = numIndices;
+
+        if (0) {
+            std::vector<glm::vec3> vertices;
+            std::vector<glm::ivec3> indices;
+            vertices = {
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+                {1.0f, 1.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 0.0f, 1.0f},
+                {0.0f, 1.0f, 1.0f},
+                {1.0f, 1.0f, 1.0f},
+                {1.0f, 0.0f, 1.0f} 
+            };
+
+            indices = {
+                {0, 1, 2}, {0, 2, 3},
+                {4, 6, 5}, {4, 7, 6},
+                {0, 4, 5}, {0, 5, 1},
+                {3, 2, 6}, {3, 6, 7},
+                {1, 4, 6}, {1, 6, 2},
+                {0, 3, 7}, {0, 7, 4},
+            };
+
+            void* mappedVertices = vkw::MapBuffer(shadowMapData.volumeBuffer);
+            memcpy(mappedVertices, vertices.data(), vertices.size() * sizeof(glm::vec3));
+            vkw::UnmapBuffer(shadowMapData.volumeBuffer);
+
+            void* mappedIndices = vkw::MapBuffer(shadowMapData.volumeIndexBuffer);
+            memcpy(mappedIndices, indices.data(), indices.size() * sizeof(uint32_t) * 3);
+            vkw::UnmapBuffer(shadowMapData.volumeIndexBuffer);
+        }
+    }
 }

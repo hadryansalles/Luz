@@ -1742,6 +1742,7 @@ void Context::CreateDevice() {
     if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
     if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
     if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+    if (supportedFeatures.fragmentStoresAndAtomics) { features2.features.fragmentStoresAndAtomics = VK_TRUE; }
 
     auto requiredExtensions = _ctx.requiredExtensions;
     auto allExtensions = _ctx.availableExtensions;

@@ -9,11 +9,11 @@ layout(push_constant) uniform _constants {
 };
 
 layout (local_size_x = 32, local_size_y = 32) in;
-
 void main() {
     ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    int shadowMapWidth = imageSize(images[ctx.shadowMapRID]).x;
-    int shadowMapHeight = imageSize(images[ctx.shadowMapRID]).y;
+
+    int shadowMapWidth = textureSize(textures[ctx.shadowMapRID], 0).x;
+    int shadowMapHeight = textureSize(textures[ctx.shadowMapRID], 0).y;
 
     if (pixelPos.x >= shadowMapWidth || pixelPos.y >= shadowMapHeight) {
         return;
@@ -24,16 +24,25 @@ void main() {
         return;
     }
 
-    float depth = imageLoad(images[ctx.shadowMapRID], pixelPos).r;
+    float depth = texture(textures[ctx.shadowMapRID], vec2(float(pixelPos.x) / shadowMapWidth, float(pixelPos.y) / shadowMapHeight)).r;
+    if (depth == 1.0) {
+        depth = 0.0;
+    }
 
-    // Convert depth to world position
     float x = (float(pixelPos.x) / shadowMapWidth) * 2.0 - 1.0;
     float y = (float(pixelPos.y) / shadowMapHeight) * 2.0 - 1.0;
     vec4 clipSpacePos = vec4(x, y, depth, 1.0);
-    vec4 viewSpacePos = scene.inverseProj * clipSpacePos;
-    viewSpacePos.xyz /= viewSpacePos.w;
-    vec4 worldSpacePos = scene.inverseView * viewSpacePos;
+
+    // Transform to Light Space
+    mat4 lightViewProj = light.viewProj[0];
+    mat4 inverseLightViewProj = inverse(lightViewProj);
+
+    vec4 lightViewSpacePos = inverseLightViewProj * clipSpacePos;
+    lightViewSpacePos.xyz /= lightViewSpacePos.w;
 
     int index = pixelPos.y * shadowMapWidth + pixelPos.x;
-    vec3Buffers[ctx.volumeBufferRID].data[index] = worldSpacePos.xyz;
+
+    floatBuffers[ctx.volumeBufferRID].data[3 * index] = lightViewSpacePos.x;
+    floatBuffers[ctx.volumeBufferRID].data[3 * index + 1] = lightViewSpacePos.y;
+    floatBuffers[ctx.volumeBufferRID].data[3 * index + 2] = lightViewSpacePos.z;
 }

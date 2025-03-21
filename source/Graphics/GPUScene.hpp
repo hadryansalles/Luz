@@ -14,6 +14,7 @@ struct ShadowMapData {
     int lightIndex = -1;
     vkw::Buffer volumeBuffer;
     vkw::Buffer volumeIndexBuffer;
+    uint32_t volumeIndexCount = 0;
 };
 
 struct GPUMesh {
