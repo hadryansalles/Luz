@@ -91,7 +91,7 @@ void main() {
         // vec3 color = TonemapACES(value.rgb);
         // vec3 color = value.rgb;
         // color = color * (1.0 - debugColor.a) + debugColor.rgb * debugColor.a;
-        value = vec4(color, 1.0);
+        value = vec4(color, 1.0) + debugColor;
     } else if(imageType == 2) {
         value = (value + 1.0)/2.0;
     } else if(imageType == 5) {

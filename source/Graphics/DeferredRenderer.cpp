@@ -25,6 +25,8 @@ struct Context {
     vkw::Pipeline luminanceHistogramPipeline;
     vkw::Pipeline luminanceHistogramAveragePipeline;
     vkw::Pipeline atmosphericPipeline;
+    vkw::Pipeline lightVolumePipeline;
+    vkw::Pipeline volumeVisualizerPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -44,6 +46,15 @@ struct Context {
     vkw::Buffer luminanceHistogram;
     vkw::Buffer luminanceAverage;
     vkw::Buffer mousePicking;
+};
+
+struct VolumeVisualizerConstants {
+    int sceneBufferIndex;
+    int volumeBufferRID;
+    int depthRID;
+    int lightIndex;
+    
+    vec4 color;
 };
 
 Context ctx;
@@ -179,6 +190,25 @@ void CreateShaders() {
             {.stage = vkw::ShaderStage::Compute, .path = "atmospheric.comp"},
         },
         .name = "Atmospheric Pipeline",
+    });
+    CreatePipeline(ctx.lightVolumePipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "lightVolume.comp"},
+        },
+        .name = "LightVolume Pipeline",
+    });
+    CreatePipeline(ctx.volumeVisualizerPipeline, {
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "volumeVisualizer.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "volumeVisualizer.frag"},
+        },
+        .name = "VolumeVisualizer Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.debug.format},
+        .useDepth = false,
+        .wireframe = true,
     });
 }
 
@@ -475,6 +505,132 @@ void AtmosphericPass(GPUScene& gpuScene, int frame) {
     vkw::CmdBarrier(ctx.atmosphericScattering, vkw::Layout::ShaderRead);
 }
 
+void GenerateLightVolume(const Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
+    if (light->lightType != LightNode::LightType::Directional && 
+        light->lightType != LightNode::LightType::Sun) {
+        return;
+    }
+
+    auto& shadowMapData = gpuScene.GetShadowMap(light->uuid);
+
+    if (!shadowMapData.volumeBuffer.resource) {
+        int shadowMapWidth = shadowMapData.img.width;
+        int shadowMapHeight = shadowMapData.img.height;
+        int shadowMapSize = shadowMapWidth * shadowMapHeight;
+        
+        shadowMapData.volumeBuffer = vkw::CreateBuffer(
+            shadowMapSize * sizeof(glm::vec3),
+            vkw::BufferUsage::Storage | vkw::BufferUsage::Vertex,
+            vkw::Memory::GPU | vkw::Memory::CPU,
+            "Volume Vertex Buffer"
+        );
+        
+        // Create index buffer for grid triangulation
+        // For a grid of width x height, we have (width-1)*(height-1) quads, each with 2 triangles (6 indices)
+        int numQuads = (shadowMapWidth - 1) * (shadowMapHeight - 1);
+        int numIndices = numQuads * 6; // 6 indices per quad (2 triangles)
+        
+        std::vector<uint32_t> indices(numIndices);
+        int indexCounter = 0;
+        
+        // Generate indices for triangles
+        for (int y = 0; y < shadowMapHeight - 1; y++) {
+            for (int x = 0; x < shadowMapWidth - 1; x++) {
+                // Calculate vertex indices for the current quad
+                uint32_t topLeft = y * shadowMapWidth + x;
+                uint32_t topRight = topLeft + 1;
+                uint32_t bottomLeft = (y + 1) * shadowMapWidth + x;
+                uint32_t bottomRight = bottomLeft + 1;
+                
+                // First triangle (top-left, bottom-left, top-right)
+                indices[indexCounter++] = topLeft;
+                indices[indexCounter++] = bottomLeft;
+                indices[indexCounter++] = topRight;
+                
+                // Second triangle (bottom-left, bottom-right, top-right)
+                indices[indexCounter++] = bottomLeft;
+                indices[indexCounter++] = bottomRight;
+                indices[indexCounter++] = topRight;
+            }
+        }
+        
+        // Create the index buffer
+        shadowMapData.volumeIndexBuffer = vkw::CreateBuffer(
+            numIndices * sizeof(uint32_t),
+            vkw::BufferUsage::Index | vkw::BufferUsage::Storage,
+            vkw::Memory::GPU | vkw::Memory::CPU,
+            "Volume Index Buffer"
+        );
+        
+        // Upload indices to the buffer
+        void* mappedIndices = vkw::MapBuffer(shadowMapData.volumeIndexBuffer);
+        memcpy(mappedIndices, indices.data(), indices.size() * sizeof(uint32_t));
+        vkw::UnmapBuffer(shadowMapData.volumeIndexBuffer);
+    }
+
+    {
+        std::vector<glm::vec3> vertices;
+        std::vector<glm::ivec3> indices;
+        // Create a cube geometry for debugging
+        // Define the 8 vertices of a cube
+        vertices = {
+            {0.0f, 0.0f, 0.0f}, // 0
+            {0.0f, 1.0f, 0.0f}, // 1
+            {1.0f, 1.0f, 0.0f}, // 2
+            {1.0f, 0.0f, 0.0f}, // 3
+
+            {0.0f, 0.0f, 1.0f}, // 4
+            {0.0f, 1.0f, 1.0f}, // 5
+            {1.0f, 1.0f, 1.0f}, // 6
+            {1.0f, 0.0f, 1.0f}  // 7
+        };
+
+        indices = {
+            {0, 1, 2}, {0, 2, 3}, // Front face
+            {4, 6, 5}, {4, 7, 6}, // Back face
+
+            {0, 4, 5}, {0, 5, 1},
+
+            // 3 -> 2 -> 6 -> 7
+            {3, 2, 6}, {3, 6, 7},
+
+            // 1 -> 4 -> 6 -> 2
+            {1, 4, 6}, {1, 6, 2},
+
+            {1, 4, 6}, {1, 6, 2},
+            {1, 4, 6}, {1, 6, 2},
+            {1, 4, 6}, {1, 6, 2},
+            {1, 4, 6}, {1, 6, 2},
+            {1, 4, 6}, {1, 6, 2},
+
+        };
+
+        void* mappedVertices = vkw::MapBuffer(shadowMapData.volumeBuffer);
+        memcpy(mappedVertices, vertices.data(), vertices.size() * sizeof(glm::vec3));
+        vkw::UnmapBuffer(shadowMapData.volumeBuffer);
+
+        void* mappedIndices = vkw::MapBuffer(shadowMapData.volumeIndexBuffer);
+        memcpy(mappedIndices, indices.data(), indices.size() * sizeof(uint32_t));
+        vkw::UnmapBuffer(shadowMapData.volumeIndexBuffer);
+
+        return;
+    }
+    
+    LightVolumeConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.lightIndex = shadowMapData.lightIndex;
+    constants.shadowMapRID = shadowMapData.img.RID();
+    constants.volumeBufferRID = shadowMapData.volumeBuffer.RID();
+    
+    vkw::CmdBindPipeline(ctx.lightVolumePipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    
+    int shadowMapWidth = shadowMapData.img.width;
+    int shadowMapHeight = shadowMapData.img.height;
+    vkw::CmdDispatch({(shadowMapWidth + 31) / 32, (shadowMapHeight + 31) / 32, 1});
+    vkw::CmdBarrier();
+}
+
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     if (scene->taaEnabled) {
         vkw::CmdBarrier(ctx.depth, vkw::Layout::General);
@@ -536,6 +692,42 @@ void ViewportOnImGui() {
 
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+}
+
+void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) {
+    if (light->lightType != LightNode::LightType::Directional && 
+        light->lightType != LightNode::LightType::Sun) {
+        return;
+    }
+
+    auto& shadowMapData = gpuScene.GetShadowMap(light->uuid);
+    
+    if (!shadowMapData.volumeBuffer.resource) {
+        return;
+    }
+    
+    vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
+    
+    vkw::CmdBeginRendering({ ctx.debug }, {}, 1, vkw::CullMode::None);
+    vkw::CmdBindPipeline(ctx.volumeVisualizerPipeline);
+    
+    VolumeVisualizerConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.volumeBufferRID = shadowMapData.volumeBuffer.RID();
+    constants.lightIndex = shadowMapData.lightIndex;
+    constants.color = vec4(0.0f, 1.0f, 0.0f, 1.0f);
+    
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    
+    int shadowMapSize = shadowMapData.img.width * shadowMapData.img.height;
+    // vkw::CmdDrawMesh(shadowMapData.volumeBuffer, shadowMapData.volumeIndexBuffer, shadowMapSize);
+
+    vkw::CmdDrawMesh(shadowMapData.volumeBuffer, shadowMapData.volumeIndexBuffer, 36);
+    
+    vkw::CmdEndRendering();
+    
+    // vkw::CmdBarrier(ctx.debug, vkw::Layout::ShaderRead);
+    // vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
 }
 
 }

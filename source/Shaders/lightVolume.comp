@@ -1,0 +1,39 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    LightVolumeConstants ctx;
+};
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    int shadowMapWidth = imageSize(images[ctx.shadowMapRID]).x;
+    int shadowMapHeight = imageSize(images[ctx.shadowMapRID]).y;
+
+    if (pixelPos.x >= shadowMapWidth || pixelPos.y >= shadowMapHeight) {
+        return;
+    }
+
+    LightBlock light = scene.lights[ctx.lightIndex];
+    if (light.type != LUZ_LIGHT_TYPE_DIRECTIONAL && light.type != LUZ_LIGHT_TYPE_SUN) {
+        return;
+    }
+
+    float depth = imageLoad(images[ctx.shadowMapRID], pixelPos).r;
+
+    // Convert depth to world position
+    float x = (float(pixelPos.x) / shadowMapWidth) * 2.0 - 1.0;
+    float y = (float(pixelPos.y) / shadowMapHeight) * 2.0 - 1.0;
+    vec4 clipSpacePos = vec4(x, y, depth, 1.0);
+    vec4 viewSpacePos = scene.inverseProj * clipSpacePos;
+    viewSpacePos.xyz /= viewSpacePos.w;
+    vec4 worldSpacePos = scene.inverseView * viewSpacePos;
+
+    int index = pixelPos.y * shadowMapWidth + pixelPos.x;
+    vec3Buffers[ctx.volumeBufferRID].data[index] = worldSpacePos.xyz;
+}

@@ -230,7 +230,7 @@ private:
 
         LUZ_PROFILE_FUNC();
 
-        {
+        if (0) {
             UUID mousePickObject = 0;
             vkw::Buffer mousePickingBuffer = DeferredRenderer::GetMousePickingBuffer();
             void* ptr = vkw::MapBuffer(mousePickingBuffer);
@@ -272,7 +272,7 @@ private:
         DeferredRenderer::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
 
-        if (atmosphericUpdate) {
+        if (false && atmosphericUpdate) {
             auto atmosphericTS = vkw::CmdBeginTimeStamp("AtmosphericPass");
             DeferredRenderer::AtmosphericPass(gpuScene, frameCount);
             vkw::CmdEndTimeStamp(atmosphericTS);
@@ -297,6 +297,14 @@ private:
         }
         vkw::CmdEndTimeStamp(volumetricTS);
 
+        auto lightVolumeTS = vkw::CmdBeginTimeStamp("LightVolumePass");
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            if (light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun) {
+                DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
+            }
+        }
+        vkw::CmdEndTimeStamp(lightVolumeTS);
+
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
         DeferredRenderer::TAAPass(gpuScene, scene);
         vkw::CmdEndTimeStamp(taaTS);
@@ -304,6 +312,14 @@ private:
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
         DeferredRenderer::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);
+
+        auto debugLightVolumeTS = vkw::CmdBeginTimeStamp("DebugLightVolumePass");
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            if (light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun) {
+                DeferredRenderer::VisualizeVolumeBufferPass(light, gpuScene);
+            }
+        }
+        vkw::CmdEndTimeStamp(debugLightVolumeTS);
 
         auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
         DeferredRenderer::LuminanceHistogramPass();

@@ -36,6 +36,7 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
 void LightPass(GPUScene& gpuScene, int frame);
 void ComposePass(bool separatePass, Output output, Ref<SceneAsset>& scene);
 void LineRenderingPass(GPUScene& gpuScene);
+void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene);
 void BeginOpaquePass();
 void EndPass();
 void PostProcessingPass(GPUScene& gpuScene);
@@ -43,6 +44,7 @@ void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
 void LuminanceHistogramPass();
 void SwapLightHistory();
 void AtmosphericPass(GPUScene& gpuScene, int frame);
+void GenerateLightVolume(const Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
 
 vkw::Buffer& GetMousePickingBuffer();
 vkw::Image& GetComposedImage();

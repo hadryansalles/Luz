@@ -251,6 +251,13 @@ struct AtmosphericConstants {
     int pad[2];
 };
 
+struct LightVolumeConstants {
+    int sceneBufferIndex;
+    int lightIndex;
+    int shadowMapRID;
+    int volumeBufferRID;
+};
+
 #if !defined(LUZ_ENGINE)
 
 #extension GL_ARB_separate_shader_objects : enable
@@ -285,6 +292,10 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer VertexBuffer {
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer IndexBuffer {
     uint indices[];
 } indexBuffers[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer Vec3Buffer {
+    vec3 data[];
+} vec3Buffers[];
 
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];

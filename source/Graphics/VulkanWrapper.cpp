@@ -971,7 +971,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         // fragments beyond near and far planes are clamped to them
         rasterizer.depthClampEnable = VK_FALSE;
         rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer.polygonMode = desc.wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
         // line thickness in terms of number of fragments
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;

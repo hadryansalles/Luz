@@ -115,6 +115,7 @@ struct Buffer {
     BufferUsageFlags usage;
     MemoryFlags memory;
     uint32_t RID();
+    bool Valid();
 };
 
 struct Image {
@@ -216,6 +217,7 @@ struct PipelineDesc {
     Format depthFormat;
     bool cullFront = false;
     bool lineTopology = false;
+    bool wireframe = false;
 };
 
 struct BLAS {
