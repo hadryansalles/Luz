@@ -299,9 +299,7 @@ private:
 
         auto lightVolumeTS = vkw::CmdBeginTimeStamp("LightVolumePass");
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
-            if (light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun) {
-                DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
-            }
+            DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
         }
         vkw::CmdEndTimeStamp(lightVolumeTS);
 
@@ -309,21 +307,28 @@ private:
         DeferredRenderer::TAAPass(gpuScene, scene);
         vkw::CmdEndTimeStamp(taaTS);
 
+
+        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
+        DeferredRenderer::LuminanceHistogramPass();
+        vkw::CmdEndTimeStamp(histogramTS);
+
+        auto lightVolumeRenderTS = vkw::CmdBeginTimeStamp("LightVolumeRenderPass");
+        DeferredRenderer::BeginLightVolumeRenderPass();
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredRenderer::RenderLightVolume(gpuScene, light);
+        }
+        DeferredRenderer::EndLightVolumeRenderPass();
+        vkw::CmdEndTimeStamp(lightVolumeRenderTS);
+
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
         DeferredRenderer::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);
 
         auto debugLightVolumeTS = vkw::CmdBeginTimeStamp("DebugLightVolumePass");
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
-            if (light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun) {
-                DeferredRenderer::VisualizeVolumeBufferPass(light, gpuScene);
-            }
+            DeferredRenderer::VisualizeVolumeBufferPass(light, gpuScene);
         }
         vkw::CmdEndTimeStamp(debugLightVolumeTS);
-
-        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
-        DeferredRenderer::LuminanceHistogramPass();
-        vkw::CmdEndTimeStamp(histogramTS);
 
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {

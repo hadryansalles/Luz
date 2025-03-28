@@ -146,6 +146,8 @@ void LightNode::Serialize(Serializer& s) {
     s("sunTime", sunTime);
     s("sunRotation", sunRotation);
     s("sunRadius", sunRadius);
+
+    s("debugVolume", debugVolume);
 }
 
 void LightNode::SetDefaultSun() {

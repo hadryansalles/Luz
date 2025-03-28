@@ -61,7 +61,11 @@ struct LightBlock {
     float volumetricDensity;
     int volumetricSamples;
     float sunRadius;
-    // todo: sky fov?
+    
+    int volumeBuffer;
+    int volumeIndexBuffer;
+    int volumeIndexCount;
+    float scatteringCoefficient;
 };
 
 struct LineBlock {
@@ -265,6 +269,16 @@ struct VolumeVisualizerConstants {
     int lightIndex;
     vec4 color;
     vec2 imageSize;
+};
+
+struct LightVolumeRenderConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int lightIndex;
+    int depthRID;
+    
+    int lightRID;
+    int pad[3];
 };
 
 #if !defined(LUZ_ENGINE)

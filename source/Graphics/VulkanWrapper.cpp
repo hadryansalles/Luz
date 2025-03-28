@@ -129,6 +129,7 @@ struct Context {
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
         VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
+        VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,
     };
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -991,7 +992,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         VkPipelineDepthStencilStateCreateInfo depthStencil = {};
         depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         depthStencil.depthTestEnable = VK_TRUE;
-        depthStencil.depthWriteEnable = VK_TRUE;
+        depthStencil.depthWriteEnable = desc.depthWrite;
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f;
@@ -1195,7 +1196,7 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, CullMode::Mode cullMode) {
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, CullMode::Mode cullMode, bool clearBuffers) {
     auto& cmd = _ctx.GetCurrentCommandResources();
 
     glm::ivec2 offset(0, 0);
@@ -1224,7 +1225,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
         colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachInfos[i].loadOp = clearBuffers ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_NONE;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachInfos[i].clearValue.color = { 0, 0, 0, 0 };
     }
@@ -1240,7 +1241,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         depthAttachInfo.imageView = depthAttach.resource->view;
         depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
-        depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachInfo.loadOp = clearBuffers ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_NONE;
         depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
         renderingInfo.pDepthAttachment = &depthAttachInfo;

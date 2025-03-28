@@ -194,10 +194,10 @@ struct LightNode : Node {
     enum VolumetricType {
         Disabled = 0,
         ScreenSpace = 1,
-        ShadowMap = 2,
+        LightVolume = 2,
         VolumetricLightCount = 3,
     };
-    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "ShadowMap"};
+    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "LightVolume"};
 
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
@@ -214,6 +214,8 @@ struct LightNode : Node {
 
     float shadowMapRange = 3.0f;
     float shadowMapFar = 2000.0f;
+
+    bool debugVolume = false;
     
     struct VolumetricScreenSpaceParams {
         float decay = 0.5f;

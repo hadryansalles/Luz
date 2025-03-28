@@ -218,6 +218,7 @@ struct PipelineDesc {
     bool cullFront = false;
     bool lineTopology = false;
     bool wireframe = false;
+    bool depthWrite = true;
 };
 
 struct BLAS {
@@ -264,7 +265,7 @@ void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CullMode::Mode cullMode = CullMode::Back);
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CullMode::Mode cullMode = CullMode::Back, bool clearBuffers = true);
 void CmdEndRendering();
 void CmdBeginPresent();
 void CmdEndPresent();

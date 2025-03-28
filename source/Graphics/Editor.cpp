@@ -435,6 +435,7 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
         }
     }
     if (ImGui::CollapsingHeader("Volumetric Light")) {
+        ImGui::Checkbox("Debug Volume", &node->debugVolume);
         if (ImGui::BeginCombo("Volumetric", LightNode::volumetricTypeNames[node->volumetricType])) {
             for (int i = 0; i < LightNode::VolumetricType::VolumetricLightCount; i++) {
                 bool selected = node->volumetricType == i;
@@ -448,7 +449,7 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
             ImGui::DragFloat("Decay##Volumetric", &node->volumetricScreenSpaceParams.decay, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("Weight##Volumetric", &node->volumetricScreenSpaceParams.weight, 0.01f, 0.0f, 10.0f);
             ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples, 1, 0, 256);
-        } else if (node->volumetricType == LightNode::VolumetricType::ShadowMap) {
+        } else if (node->volumetricType == LightNode::VolumetricType::LightVolume) {
             ImGui::DragFloat("Weight##Volumetric", &node->volumetricShadowMapParams.weight, 0.01f, 0.0f, 10.0f);
             ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("Density##Volumetric", &node->volumetricShadowMapParams.density, 0.01f, 0.0f, 100.0f);

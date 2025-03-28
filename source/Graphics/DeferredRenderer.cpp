@@ -27,6 +27,7 @@ struct Context {
     vkw::Pipeline atmosphericPipeline;
     vkw::Pipeline lightVolumePipeline;
     vkw::Pipeline volumeVisualizerPipeline;
+    vkw::Pipeline lightVolumeRenderPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -200,6 +201,19 @@ void CreateShaders() {
         .colorFormats = {ctx.debug.format},
         .useDepth = false,
         .wireframe = true,
+    });
+    CreatePipeline(ctx.lightVolumeRenderPipeline, {
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "lightVolumeRender.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "lightVolumeRender.frag"},
+        },
+        .name = "LightVolumeRender Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.lightA.format},
+        .useDepth = false,
+        .depthFormat = {ctx.depth.format},
+        .depthWrite = false,
     });
 }
 
@@ -428,10 +442,6 @@ void ComposePass(bool separatePass, Output output, Ref<SceneAsset>& scene) {
 }
 
 void LineRenderingPass(GPUScene& gpuScene) {
-    auto strips = DebugDraw::Get();
-    if (strips.size() == 0) {
-        return;
-    }
     vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
     vkw::CmdBeginRendering({ ctx.debug });
     vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
@@ -445,6 +455,7 @@ void LineRenderingPass(GPUScene& gpuScene) {
     constants.lineCount = 0;
 
     uint32_t offset = 0;
+    auto strips = DebugDraw::Get();
     for (const auto& s : strips) {
         if (!s.config.hide) {
             constants.color = s.config.color;
@@ -583,6 +594,10 @@ void ViewportOnImGui() {
 }
 
 void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) {
+    if (!light->debugVolume) {
+        return;
+    }
+
     if (light->lightType != LightNode::LightType::Directional && 
         light->lightType != LightNode::LightType::Sun) {
         return;
@@ -597,7 +612,7 @@ void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) 
     vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
     
-    vkw::CmdBeginRendering({ ctx.debug }, {}, 1, vkw::CullMode::None);
+    vkw::CmdBeginRendering({ ctx.debug }, {}, 1, vkw::CullMode::None, false);
     vkw::CmdBindPipeline(ctx.volumeVisualizerPipeline);
     
     VolumeVisualizerConstants constants;
@@ -613,6 +628,45 @@ void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) 
     int shadowMapSize = shadowMapData.img.width * shadowMapData.img.height;
     vkw::CmdDrawMesh(shadowMapData.volumeBuffer, shadowMapData.volumeIndexBuffer, shadowMapData.volumeIndexCount);
     vkw::CmdEndRendering();
+}
+
+void BeginLightVolumeRenderPass() {
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ColorAttachment);
+    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
+    
+    vkw::CmdBeginRendering({ ctx.lightA }, ctx.depth, 1, vkw::CullMode::Back, false);
+    vkw::CmdBindPipeline(ctx.lightVolumeRenderPipeline);
+}
+
+void RenderLightVolume(GPUScene& gpuScene, const Ref<LightNode>& light) {
+    if (light->lightType != LightNode::LightType::Directional && 
+        light->lightType != LightNode::LightType::Sun) {
+        return;
+    }
+
+    if (light->volumetricType != LightNode::VolumetricType::LightVolume) {
+        return;
+    }
+
+    auto& shadowMapData = gpuScene.GetShadowMap(light->uuid);
+    if (!shadowMapData.volumeBuffer.resource) {
+        return;
+    }
+
+    LightVolumeRenderConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.lightRID = ctx.lightA.RID();
+    constants.lightIndex = shadowMapData.lightIndex;
+
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDrawMesh(shadowMapData.volumeBuffer, shadowMapData.volumeIndexBuffer, shadowMapData.volumeIndexCount);
+}
+
+void EndLightVolumeRenderPass() {
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
 }

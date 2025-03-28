@@ -45,6 +45,9 @@ void LuminanceHistogramPass();
 void SwapLightHistory();
 void AtmosphericPass(GPUScene& gpuScene, int frame);
 void GenerateLightVolume(const Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene);
+void BeginLightVolumeRenderPass();
+void RenderLightVolume(GPUScene& gpuScene, const Ref<LightNode>& light);
+void EndLightVolumeRenderPass();
 
 vkw::Buffer& GetMousePickingBuffer();
 vkw::Image& GetComposedImage();
