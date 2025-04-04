@@ -992,7 +992,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
         VkPipelineDepthStencilStateCreateInfo depthStencil = {};
         depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         depthStencil.depthTestEnable = VK_TRUE;
-        depthStencil.depthWriteEnable = desc.depthWrite;
+        depthStencil.depthWriteEnable = VK_TRUE;
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f;
@@ -1075,7 +1075,14 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
             blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
             blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
             blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-            blendAttachments[i].blendEnable = VK_FALSE;
+            blendAttachments[i].blendEnable = desc.blending;
+            if (desc.blending) {
+                blendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blendAttachments[i].colorBlendOp = VK_BLEND_OP_ADD;
+                blendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                blendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+            }
         }
 
         VkPipelineColorBlendStateCreateInfo colorBlendState{};

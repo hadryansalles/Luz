@@ -148,6 +148,7 @@ void LightNode::Serialize(Serializer& s) {
     s("sunRadius", sunRadius);
 
     s("debugVolume", debugVolume);
+    s("updateShadowMatrix", updateShadowMatrix);
 }
 
 void LightNode::SetDefaultSun() {

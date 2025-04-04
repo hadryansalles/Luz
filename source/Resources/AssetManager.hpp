@@ -216,6 +216,7 @@ struct LightNode : Node {
     float shadowMapFar = 2000.0f;
 
     bool debugVolume = false;
+    bool updateShadowMatrix = true;
     
     struct VolumetricScreenSpaceParams {
         float decay = 0.5f;

@@ -218,7 +218,7 @@ struct PipelineDesc {
     bool cullFront = false;
     bool lineTopology = false;
     bool wireframe = false;
-    bool depthWrite = true;
+    bool blending = false;
 };
 
 struct BLAS {

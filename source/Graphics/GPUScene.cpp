@@ -379,7 +379,7 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
         block.viewProj[3] = proj * glm::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
         block.viewProj[4] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0));
         block.viewProj[5] = proj * glm::lookAt(pos, pos + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0));
-    } else {
+    } else if (light->updateShadowMatrix) {
         // Calculate view frustum corners in world space
         std::vector<glm::vec4> frustumCorners;
         frustumCorners.reserve(8);
@@ -514,37 +514,5 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
         vkw::UnmapBuffer(shadowMapData.volumeIndexBuffer);
 
         shadowMapData.volumeIndexCount = numIndices;
-
-        if (0) {
-            std::vector<glm::vec3> vertices;
-            std::vector<glm::ivec3> indices;
-            vertices = {
-                {0.0f, 0.0f, 0.0f},
-                {0.0f, 1.0f, 0.0f},
-                {1.0f, 1.0f, 0.0f},
-                {1.0f, 0.0f, 0.0f},
-                {0.0f, 0.0f, 1.0f},
-                {0.0f, 1.0f, 1.0f},
-                {1.0f, 1.0f, 1.0f},
-                {1.0f, 0.0f, 1.0f} 
-            };
-
-            indices = {
-                {0, 1, 2}, {0, 2, 3},
-                {4, 6, 5}, {4, 7, 6},
-                {0, 4, 5}, {0, 5, 1},
-                {3, 2, 6}, {3, 6, 7},
-                {1, 4, 6}, {1, 6, 2},
-                {0, 3, 7}, {0, 7, 4},
-            };
-
-            void* mappedVertices = vkw::MapBuffer(shadowMapData.volumeBuffer);
-            memcpy(mappedVertices, vertices.data(), vertices.size() * sizeof(glm::vec3));
-            vkw::UnmapBuffer(shadowMapData.volumeBuffer);
-
-            void* mappedIndices = vkw::MapBuffer(shadowMapData.volumeIndexBuffer);
-            memcpy(mappedIndices, indices.data(), indices.size() * sizeof(uint32_t) * 3);
-            vkw::UnmapBuffer(shadowMapData.volumeIndexBuffer);
-        }
     }
 }

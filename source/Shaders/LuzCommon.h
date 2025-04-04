@@ -260,6 +260,11 @@ struct LightVolumeConstants {
     int lightIndex;
     int shadowMapRID;
     int volumeBufferRID;
+
+    vec2 imageSize;
+    int lightRID;
+    int lightVolumeRID;
+    int pad[1];
 };
 
 struct VolumeVisualizerConstants {

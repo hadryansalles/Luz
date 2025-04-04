@@ -28,6 +28,7 @@ struct Context {
     vkw::Pipeline lightVolumePipeline;
     vkw::Pipeline volumeVisualizerPipeline;
     vkw::Pipeline lightVolumeRenderPipeline;
+    vkw::Pipeline lightVolumeAddPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -38,6 +39,7 @@ struct Context {
     vkw::Image depth;
     vkw::Image lightA;
     vkw::Image lightB;
+    vkw::Image lightVolume;
     vkw::Image lightHistory;
     vkw::Image compose;
     vkw::Image debug;
@@ -125,6 +127,13 @@ void CreateShaders() {
         },
         .name = "VolumetricLight Pipeline",
     });
+    CreatePipeline(ctx.lightVolumeAddPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "lightVolumeAdd.comp"},
+        },
+        .name = "LightVolumeAdd Pipeline",
+    });
     CreatePipeline(ctx.shadowMapVolumetricLightPipeline, {
         .point = vkw::PipelinePoint::Compute,
         .stages = {
@@ -210,10 +219,8 @@ void CreateShaders() {
         },
         .name = "LightVolumeRender Pipeline",
         .vertexAttributes = {vkw::Format::RGB32_sfloat},
-        .colorFormats = {ctx.lightA.format},
-        .useDepth = false,
-        .depthFormat = {ctx.depth.format},
-        .depthWrite = false,
+        .colorFormats = {ctx.lightVolume.format},
+        .blending = false,
     });
 }
 
@@ -252,6 +259,13 @@ void CreateImages(uint32_t width, uint32_t height) {
         .format = vkw::Format::RGBA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Emission Attachment"
+    });
+    ctx.lightVolume = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Light Volumes"
     });
     ctx.lightA = vkw::CreateImage({
         .width = width,
@@ -631,10 +645,8 @@ void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) 
 }
 
 void BeginLightVolumeRenderPass() {
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ColorAttachment);
-    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
-    
-    vkw::CmdBeginRendering({ ctx.lightA }, ctx.depth, 1, vkw::CullMode::Back, false);
+    vkw::CmdBarrier(ctx.lightVolume, vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ ctx.lightVolume }, {}, 1, vkw::CullMode::None);
     vkw::CmdBindPipeline(ctx.lightVolumeRenderPipeline);
 }
 
@@ -666,6 +678,17 @@ void RenderLightVolume(GPUScene& gpuScene, const Ref<LightNode>& light) {
 
 void EndLightVolumeRenderPass() {
     vkw::CmdEndRendering();
+    vkw::CmdBarrier(ctx.lightVolume, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
+
+    vkw::CmdBindPipeline(ctx.lightVolumeAddPipeline);
+    LightVolumeConstants constants;
+    constants.lightRID = ctx.lightA.RID();
+    constants.lightVolumeRID = ctx.lightVolume.RID();
+    constants.imageSize = {ctx.lightVolume.width, ctx.lightVolume.height};
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.lightVolume.width / 32 + 1, ctx.lightVolume.height / 32 + 1, 1});
+
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 

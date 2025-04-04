@@ -1,0 +1,20 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    LightVolumeConstants ctx;
+};
+
+layout (local_size_x = 32, local_size_y = 32) in;
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
+        return;
+    }
+    vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
+    vec4 lightVolume = imageLoad(images[ctx.lightVolumeRID], pixelPos);
+    imageStore(images[ctx.lightRID], pixelPos, rgba + lightVolume);
+}

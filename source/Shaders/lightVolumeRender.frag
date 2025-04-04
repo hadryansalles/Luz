@@ -15,8 +15,12 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     vec2 fragTexCoord = gl_FragCoord.xy / vec2(textureSize(textures[ctx.lightRID], 0));
+    float depth = texture(textures[ctx.depthRID], fragTexCoord).r;
+    if (gl_FragCoord.z >= depth) {
+        discard;
+    }
     vec4 rgba = texture(textures[ctx.lightRID], fragTexCoord);
-    outColor = rgba + vec4(1);
+    outColor = rgba + vec4(0.1, 0.1, 0.1, 1.0);
     return;
 
 //     // Get the light and scene data
