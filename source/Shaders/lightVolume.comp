@@ -26,11 +26,14 @@ void main() {
 
     float depth = texture(textures[ctx.shadowMapRID], vec2(float(pixelPos.x) / shadowMapWidth, float(pixelPos.y) / shadowMapHeight)).r;
 
+    if (pixelPos.x == 0 || pixelPos.y == 0 || pixelPos.x == shadowMapWidth - 1 || pixelPos.y == shadowMapHeight - 1) {
+        depth = 0.0;
+    }
+
     float x = (float(pixelPos.x) / shadowMapWidth) * 2.0 - 1.0;
     float y = (float(pixelPos.y) / shadowMapHeight) * 2.0 - 1.0;
     vec4 clipSpacePos = vec4(x, y, depth, 1.0);
 
-    // Transform to Light Space
     mat4 lightViewProj = light.viewProj[0];
     mat4 inverseLightViewProj = inverse(lightViewProj);
 

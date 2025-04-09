@@ -283,6 +283,7 @@ struct LightVolumeRenderConstants {
     int depthRID;
     
     int lightRID;
+    int scatteringTableRID;
     int pad[3];
 };
 

@@ -7,71 +7,65 @@ layout(push_constant) uniform Constants {
     LightVolumeRenderConstants ctx;
 };
 
-layout(location = 0) in vec3 inWorldPos;
-layout(location = 1) in vec3 inLightDir;
-layout(location = 2) in float inDepth;
-
 layout(location = 0) out vec4 outColor;
 
-float henyeyGreenstein(float cosTheta, float g) {
+// Phase function: Henyey-Greenstein
+float phaseHG(float cosTheta, float g) {
     float g2 = g * g;
     return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
-}
-
-float schlickPhase(float cosTheta, float g) {
-    float k = 1.55 * g - 0.55 * g * g * g;
-    float kSq = k * k;
-    return (1.0 - kSq) / (4.0 * PI * pow(1.0 + k * cosTheta, 2.0));
 }
 
 void main() {
     vec2 fragTexCoord = gl_FragCoord.xy / vec2(textureSize(textures[ctx.lightRID], 0));
     float sceneDepth = texture(textures[ctx.depthRID], fragTexCoord).r;
-    
-    if (gl_FragCoord.z > sceneDepth) {
-        discard;
-    }
-    
+    const float depth = min(gl_FragCoord.z, sceneDepth);
+
+    float entering = gl_FrontFacing ? 1.0 : -1.0;
     LightBlock light = scene.lights[ctx.lightIndex];
     
-    float scatteringCoeff = light.volumetricScattering;
-    float absorptionCoeff = light.volumetricAbsorption;
-    float extinctionCoeff = scatteringCoeff + absorptionCoeff;
+    // Calculate view direction
+    vec3 viewPos = scene.camPos;
     
-    float densityNoise = mix(0.9, 1.1, noise(inWorldPos * 0.5));
-    scatteringCoeff *= densityNoise;
-    absorptionCoeff *= densityNoise;
-    extinctionCoeff = scatteringCoeff + absorptionCoeff;
+    // Calculate ray direction from fragment to camera
+    vec4 clipPos = vec4(fragTexCoord * 2.0 - 1.0, depth, 1.0);
+    vec4 viewPos4 = scene.inverseProj * clipPos;
+    vec3 viewDir = normalize((scene.inverseView * vec4(viewPos4.xyz / viewPos4.w, 0.0)).xyz);
     
-    float g = light.scatteringCoefficient;
+    // For directional light
+    vec3 lightDir = normalize(-light.direction);
     
-    vec3 viewDir = normalize(scene.camPos - inWorldPos);
-    float cosTheta = dot(viewDir, normalize(inLightDir));
+    // Calculate the cosine of the angle between view direction and light direction
+    float cosTheta = dot(viewDir, lightDir);
     
-    float phase = henyeyGreenstein(cosTheta, g);
+    // Parameters for light scattering
+    float extinction = light.volumetricAbsorption + light.volumetricScattering;
+    float scattering = light.volumetricScattering;
     
-    float distanceToCamera = length(scene.camPos - inWorldPos);
-    float transmittance = exp(-extinctionCoeff * distanceToCamera);
+    // Calculate phase function (scattering distribution)
+    // Using Henyey-Greenstein phase function with light's scattering coefficient
+    float g = light.scatteringCoefficient; // Asymmetry parameter [-1,1]
+    float phase = phaseHG(cosTheta, g);
     
-    vec3 inScattering = light.color * light.intensity * scatteringCoeff * phase;
+    // Calculate light intensity at this depth
+    // Convert from normalized depth to world distance
+    float distanceTraveled = (2.0 * scene.proj[3][2]) / (depth * 2.0 - 1.0 - scene.proj[2][2]);
     
-    float multipleScatteringFactor = 1.0 + 0.5 * g * g;
-    inScattering *= multipleScatteringFactor;
+    // The equation: L(d, l)*pm(xl, wx)*(1-exp(-Tex * d)) / Tex
+    // where:
+    // L(d, l) = light intensity at depth d in direction l
+    // pm(xl, wx) = phase function
+    // Tex = extinction coefficient
+    // d = distance traveled
     
-    vec3 volumetricLight;
-    if (extinctionCoeff > 0.0001) {
-        volumetricLight = inScattering * (1.0 - transmittance) / extinctionCoeff;
-    } else {
-        volumetricLight = inScattering * distanceToCamera;
-    }
+    // Light intensity (radiance)
+    vec3 lightIntensity = light.color * light.intensity;
     
-    if (light.type == LUZ_LIGHT_TYPE_POINT || light.type == LUZ_LIGHT_TYPE_SPOT) {
-        float distToLight = length(light.position - inWorldPos);
-        float falloff = 1.0 / max(1.0, distToLight * distToLight);
-        volumetricLight *= falloff;
-    }
+    // Implement the scattering equation
+    float transmittance = exp(-extinction * distanceTraveled);
+    float scatteringIntegral = (1.0 - transmittance) / extinction;
     
-    float alpha = 1.0 - transmittance;
-    alpha *= light.volumetricWeight;
-    outColor = vec4(volumetricLight, alpha);
+    // Final value is light intensity * phase function * scattering integral * scattering coefficient
+    vec3 scatteredLight = lightIntensity * phase * scatteringIntegral * scattering;
+    
+    outColor = vec4(scatteredLight * 100000 * entering, 1.0);
 }
