@@ -264,10 +264,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.volumetricWeight = light->volumetricScreenSpaceParams.weight;
             impl->anyVolumetricLight = true;
         } else if (light->volumetricType == LightNode::VolumetricType::LightVolume) {
-            block.volumetricWeight = light->volumetricShadowMapParams.weight;
-            block.volumetricSamples = light->volumetricShadowMapParams.samples;
-            block.volumetricDensity = light->volumetricShadowMapParams.density;
             block.volumetricAbsorption = light->volumetricShadowMapParams.absorption;
+            block.volumetricScattering = light->volumetricShadowMapParams.scattering;
             impl->anyVolumetricLight = true;
             impl->anyShadowMap = true;
         }

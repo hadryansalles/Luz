@@ -14,7 +14,16 @@ void main() {
     if (pixelPos.x >= ctx.imageSize.x || pixelPos.y >= ctx.imageSize.y) {
         return;
     }
+    
     vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
     vec4 lightVolume = imageLoad(images[ctx.lightVolumeRID], pixelPos);
-    imageStore(images[ctx.lightRID], pixelPos, rgba + lightVolume);
+    
+    // Blend using pre-multiplied alpha 
+    // For premultiplied alpha: result = src + dst * (1 - src.a)
+    vec3 blendedLight = lightVolume.rgb + rgba.rgb * (1.0 - lightVolume.a);
+    float blendedAlpha = lightVolume.a + rgba.a * (1.0 - lightVolume.a);
+    
+    vec4 result = vec4(lightVolume.rgb + rgba.rgb, 1.0);
+    
+    imageStore(images[ctx.lightRID], pixelPos, result);
 }

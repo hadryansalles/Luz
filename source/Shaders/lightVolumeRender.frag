@@ -13,52 +13,65 @@ layout(location = 2) in float inDepth;
 
 layout(location = 0) out vec4 outColor;
 
+float henyeyGreenstein(float cosTheta, float g) {
+    float g2 = g * g;
+    return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+}
+
+float schlickPhase(float cosTheta, float g) {
+    float k = 1.55 * g - 0.55 * g * g * g;
+    float kSq = k * k;
+    return (1.0 - kSq) / (4.0 * PI * pow(1.0 + k * cosTheta, 2.0));
+}
+
 void main() {
     vec2 fragTexCoord = gl_FragCoord.xy / vec2(textureSize(textures[ctx.lightRID], 0));
-    float depth = texture(textures[ctx.depthRID], fragTexCoord).r;
-    if (gl_FragCoord.z >= depth) {
+    float sceneDepth = texture(textures[ctx.depthRID], fragTexCoord).r;
+    
+    if (gl_FragCoord.z > sceneDepth) {
         discard;
     }
-    vec4 rgba = texture(textures[ctx.lightRID], fragTexCoord);
-    outColor = rgba + vec4(0.1, 0.1, 0.1, 1.0);
-    return;
-
-//     // Get the light and scene data
-//     LightBlock light = scene.lights[ctx.lightIndex];
     
-//     // Sample depth texture
+    LightBlock light = scene.lights[ctx.lightIndex];
     
-//     // Reconstruct world position from depth
-//     vec2 texCoord = gl_FragCoord.xy / vec2(textureSize(textures[ctx.depthRID], 0));
-//     vec4 clipPos = vec4(texCoord * 2.0 - 1.0, sceneDepth, 1.0);
-//     vec4 viewPos = scene.inverseProj * clipPos;
-//     viewPos /= viewPos.w;
-//     vec3 worldPosFromDepth = (scene.inverseView * vec4(viewPos.xyz, 1.0)).xyz;
+    float scatteringCoeff = light.volumetricScattering;
+    float absorptionCoeff = light.volumetricAbsorption;
+    float extinctionCoeff = scatteringCoeff + absorptionCoeff;
     
-//     // Calculate view ray direction
-//     vec3 viewDir = normalize(inWorldPos - scene.camPos);
+    float densityNoise = mix(0.9, 1.1, noise(inWorldPos * 0.5));
+    scatteringCoeff *= densityNoise;
+    absorptionCoeff *= densityNoise;
+    extinctionCoeff = scatteringCoeff + absorptionCoeff;
     
-//     // Phase function (simplified Henyey-Greenstein)
-//     float g = 0.2; // Asymmetry parameter
-//     float cosTheta = dot(viewDir, normalize(-inLightDir));
-//     float phase = (1.0 - g*g) / (4.0 * PI * pow(1.0 + g*g - 2.0*g*cosTheta, 1.5));
+    float g = light.scatteringCoefficient;
     
-//     // Calculate distance to scene geometry
-//     float rayLength = distance(scene.camPos, worldPosFromDepth);
-//     float volumeDepth = distance(scene.camPos, inWorldPos);
-//     float stepLength = min(rayLength, volumeDepth);
+    vec3 viewDir = normalize(scene.camPos - inWorldPos);
+    float cosTheta = dot(viewDir, normalize(inLightDir));
     
-//     // Apply scattering
-//     float transmittance = exp(-light.volumetricAbsorption * stepLength);
-//     float scattering = light.scatteringCoefficient * phase * (1.0 - transmittance) / light.volumetricAbsorption;
+    float phase = henyeyGreenstein(cosTheta, g);
     
-//     // Apply light color and intensity
-//     vec3 volumeLight = light.color * light.intensity * scattering;
+    float distanceToCamera = length(scene.camPos - inWorldPos);
+    float transmittance = exp(-extinctionCoeff * distanceToCamera);
     
-//     // Check if we're inside the volume
-//     if (inDepth > sceneDepth) {
-//         outColor = vec4(volumeLight, 1.0);
-//     } else {
-//         discard; // Outside the volume or behind scene geometry
-//     }
+    vec3 inScattering = light.color * light.intensity * scatteringCoeff * phase;
+    
+    float multipleScatteringFactor = 1.0 + 0.5 * g * g;
+    inScattering *= multipleScatteringFactor;
+    
+    vec3 volumetricLight;
+    if (extinctionCoeff > 0.0001) {
+        volumetricLight = inScattering * (1.0 - transmittance) / extinctionCoeff;
+    } else {
+        volumetricLight = inScattering * distanceToCamera;
+    }
+    
+    if (light.type == LUZ_LIGHT_TYPE_POINT || light.type == LUZ_LIGHT_TYPE_SPOT) {
+        float distToLight = length(light.position - inWorldPos);
+        float falloff = 1.0 / max(1.0, distToLight * distToLight);
+        volumetricLight *= falloff;
+    }
+    
+    float alpha = 1.0 - transmittance;
+    alpha *= light.volumetricWeight;
+    outColor = vec4(volumetricLight, alpha);
 }

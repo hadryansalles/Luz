@@ -293,7 +293,6 @@ private:
         auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
         if (gpuScene.AnyVolumetricLight()) {
             DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
-            DeferredRenderer::ShadowMapVolumetricLightPass(gpuScene, frameCount);
         }
         vkw::CmdEndTimeStamp(volumetricTS);
 
@@ -302,11 +301,6 @@ private:
             DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
         }
         vkw::CmdEndTimeStamp(lightVolumeTS);
-
-        auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
-        DeferredRenderer::TAAPass(gpuScene, scene);
-        vkw::CmdEndTimeStamp(taaTS);
-
 
         auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
         DeferredRenderer::LuminanceHistogramPass();
@@ -319,6 +313,10 @@ private:
         }
         DeferredRenderer::EndLightVolumeRenderPass();
         vkw::CmdEndTimeStamp(lightVolumeRenderTS);
+
+        auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
+        DeferredRenderer::TAAPass(gpuScene, scene);
+        vkw::CmdEndTimeStamp(taaTS);
 
         auto lineTS = vkw::CmdBeginTimeStamp("LineRenderingPass");
         DeferredRenderer::LineRenderingPass(gpuScene);

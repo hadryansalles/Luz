@@ -18,7 +18,6 @@ struct Context {
     vkw::Pipeline composePipeline;
     vkw::Pipeline shadowMapPipeline;
     vkw::Pipeline ssvlPipeline;
-    vkw::Pipeline shadowMapVolumetricLightPipeline;
     vkw::Pipeline lineRenderingPipeline;
     vkw::Pipeline fontRenderingPipeline;
     vkw::Pipeline postProcessingPipeline;
@@ -134,13 +133,6 @@ void CreateShaders() {
         },
         .name = "LightVolumeAdd Pipeline",
     });
-    CreatePipeline(ctx.shadowMapVolumetricLightPipeline, {
-        .point = vkw::PipelinePoint::Compute,
-        .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "shadowMapVolumetricLight.comp"},
-        },
-        .name = "ShadowMapVolumetricLight Pipeline",
-    });
     CreatePipeline(ctx.lineRenderingPipeline, {
         .point = vkw::PipelinePoint::Graphics,
         .stages = {
@@ -220,7 +212,7 @@ void CreateShaders() {
         .name = "LightVolumeRender Pipeline",
         .vertexAttributes = {vkw::Format::RGB32_sfloat},
         .colorFormats = {ctx.lightVolume.format},
-        .blending = false,
+        .blending = true,
     });
 }
 
@@ -374,21 +366,6 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
 void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame) {
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.ssvlPipeline);
-    VolumetricLightConstants constants;
-    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
-    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-    constants.depthRID = ctx.depth.RID();
-    constants.lightRID = ctx.lightA.RID();
-    constants.imageSize = {ctx.lightA.width, ctx.lightA.height};
-    constants.frame = frame;
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
-}
-
-void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame) {
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
-    vkw::CmdBindPipeline(ctx.shadowMapVolumetricLightPipeline);
     VolumetricLightConstants constants;
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.modelBufferIndex = gpuScene.GetModelsBuffer();
@@ -646,7 +623,7 @@ void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) 
 
 void BeginLightVolumeRenderPass() {
     vkw::CmdBarrier(ctx.lightVolume, vkw::Layout::ColorAttachment);
-    vkw::CmdBeginRendering({ ctx.lightVolume }, {}, 1, vkw::CullMode::None);
+    vkw::CmdBeginRendering({ ctx.lightVolume }, {}, 1, vkw::CullMode::None, true);
     vkw::CmdBindPipeline(ctx.lightVolumeRenderPipeline);
 }
 
