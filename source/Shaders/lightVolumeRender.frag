@@ -8,12 +8,22 @@ layout(push_constant) uniform Constants {
     LightVolumeRenderConstants ctx;
 };
 
+layout(location = 0) in vec3 fragPos;
+
 layout(location = 0) out vec4 outColor;
 
 // Henyey-Greenstein phase function - versatile for various media
 float phaseHenyeyGreenstein(float cosTheta, float g) {
     float g2 = g * g;
     return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+}
+
+vec3 DepthToWorld(vec2 screenPos, float depth) {
+    vec4 clipSpacePos = vec4(screenPos*2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePos = scene.inverseProj*clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    vec4 worldSpacePos = scene.inverseView*viewSpacePos;
+    return worldSpacePos.xyz;
 }
 
 void main() {
@@ -24,12 +34,13 @@ void main() {
     float entering = gl_FrontFacing ? 1.0 : -1.0;
     
     vec3 viewPos = scene.camPos;
-    vec4 clipPos = vec4(fragTexCoord * 2.0 - 1.0, depth, 1.0);
-    vec4 viewPos4 = scene.inverseProj * clipPos;
-    vec3 fragPos = (scene.inverseView * vec4(viewPos4.xyz / viewPos4.w, 0.0)).xyz;
     vec3 viewDir = normalize(fragPos - viewPos);
     vec3 lightDir = normalize(-light.direction);
     float distanceTraveled = length(fragPos - viewPos);
+    if (gl_FragCoord.z > sceneDepth) {
+        vec3 worldPos = DepthToWorld(fragTexCoord, sceneDepth);
+        distanceTraveled = length(worldPos - viewPos);
+    }
 
     float cosTheta = dot(viewDir, lightDir);
     float phase = phaseHenyeyGreenstein(cosTheta, light.volumetricAnisotropy);
