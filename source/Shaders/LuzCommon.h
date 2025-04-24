@@ -57,8 +57,8 @@ struct LightBlock {
     float volumetricWeight;
     float volumetricDecay;
 
-    float volumetricAbsorption;
-    float volumetricScattering;
+    float volumetricExtinction;
+    float volumetricAnisotropy;
     int volumetricSamples;
     float sunRadius;
     
@@ -66,6 +66,10 @@ struct LightBlock {
     int volumeIndexBuffer;
     int volumeIndexCount;
     float scatteringCoefficient;
+
+    float volumetricPlaneTop;
+    float volumetricPlaneBottom;
+    float pad[2];
 };
 
 struct LineBlock {

@@ -264,8 +264,10 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
             block.volumetricWeight = light->volumetricScreenSpaceParams.weight;
             impl->anyVolumetricLight = true;
         } else if (light->volumetricType == LightNode::VolumetricType::LightVolume) {
-            block.volumetricAbsorption = light->volumetricShadowMapParams.absorption;
-            block.volumetricScattering = light->volumetricShadowMapParams.scattering;
+            block.volumetricExtinction = light->volumetricShadowMapParams.extinction;
+            block.volumetricAnisotropy = light->volumetricShadowMapParams.anisotropy;
+            block.volumetricPlaneTop = light->volumetricShadowMapParams.planeTop;
+            block.volumetricPlaneBottom = light->volumetricShadowMapParams.planeBottom;
             impl->anyVolumetricLight = true;
             impl->anyShadowMap = true;
         }
@@ -466,7 +468,8 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
         // Create index buffer for grid triangulation
         // For a grid of width x height, we have (width-1)*(height-1) quads, each with 2 triangles (6 indices)
         int numQuads = (shadowMapWidth - 1) * (shadowMapHeight - 1);
-        int numIndices = numQuads * 6; // 6 indices per quad (2 triangles)
+        // Add 2 more triangles for the base face
+        int numIndices = numQuads * 6 + 6; // 6 indices per quad (2 triangles) + 6 for base face (2 triangles)
 
         shadowMapData.volumeBuffer = vkw::CreateBuffer(
             shadowMapSize * sizeof(glm::vec3),
@@ -505,6 +508,22 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
                 indices[indexCounter++] = topRight;
             }
         }
+
+        // Add base face triangles (using the bottom row vertices)
+        uint32_t bottomLeftCorner = (shadowMapHeight - 1) * shadowMapWidth;
+        uint32_t bottomRightCorner = bottomLeftCorner + (shadowMapWidth - 1);
+        uint32_t topLeftCorner = 0;
+        uint32_t topRightCorner = shadowMapWidth - 1;
+        
+        // First triangle for base (bottom-left, top-left, bottom-right)
+        indices[indexCounter++] = bottomLeftCorner;
+        indices[indexCounter++] = topLeftCorner;
+        indices[indexCounter++] = bottomRightCorner;
+        
+        // Second triangle for base (bottom-right, top-left, top-right)
+        indices[indexCounter++] = bottomRightCorner;
+        indices[indexCounter++] = topLeftCorner;
+        indices[indexCounter++] = topRightCorner;
 
         // Upload indices to the buffer
         void* mappedIndices = vkw::MapBuffer(shadowMapData.volumeIndexBuffer);

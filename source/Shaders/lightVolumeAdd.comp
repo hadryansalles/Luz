@@ -17,8 +17,8 @@ void main() {
     
     vec4 rgba = imageLoad(images[ctx.lightRID], pixelPos);
     vec4 lightVolume = imageLoad(images[ctx.lightVolumeRID], pixelPos);
+    lightVolume.rgb = max(lightVolume.rgb, 0.0);
 
-    vec4 result = vec4(max(vec3(0.0), lightVolume.rgb) + rgba.rgb, 1.0);
-    
+    vec4 result = vec4(lightVolume.rgb + rgba.rgb, 1.0);
     imageStore(images[ctx.lightRID], pixelPos, result);
 }

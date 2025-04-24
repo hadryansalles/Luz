@@ -225,8 +225,10 @@ struct LightNode : Node {
     } volumetricScreenSpaceParams;
 
     struct VolumetricShadowMapParams {
-        float scattering = 0.0001f;
-        float absorption = 1.0f;
+        float extinction = 0.0001f;
+        float anisotropy = 0.1f;
+        float planeTop = 10.0f;
+        float planeBottom = -10.0f;
     } volumetricShadowMapParams;
 
     VolumetricType volumetricType = VolumetricType::ScreenSpace;

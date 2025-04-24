@@ -451,8 +451,10 @@ void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GP
             ImGui::DragFloat("Weight##Volumetric", &node->volumetricScreenSpaceParams.weight, 0.01f, 0.0f, 10.0f);
             ImGui::DragInt("Samples##Volumetric", &node->volumetricScreenSpaceParams.samples, 1, 0, 256);
         } else if (node->volumetricType == LightNode::VolumetricType::LightVolume) {
-            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.absorption, 0.01f, 0.0f, 1.0f);
-            ImGui::DragFloat("Scattering##Volumetric", &node->volumetricShadowMapParams.scattering, 0.01f, 0.0f, 1.0f);
+            ImGui::DragFloat("Absorption##Volumetric", &node->volumetricShadowMapParams.extinction, 0.01f, 0.0f, 5.0f);
+            ImGui::DragFloat("Anisotropy##Volumetric", &node->volumetricShadowMapParams.anisotropy, 0.01f, 0.0f, 1.0f);
+            ImGui::DragFloat("Top Plane##Volumetric", &node->volumetricShadowMapParams.planeTop, 0.1f, -100.0f, 100.0f);
+            ImGui::DragFloat("Bottom Plane##Volumetric", &node->volumetricShadowMapParams.planeBottom, 0.1f, -100.0f, 100.0f);
         }
     }
 }

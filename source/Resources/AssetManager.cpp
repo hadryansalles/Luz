@@ -138,8 +138,10 @@ void LightNode::Serialize(Serializer& s) {
     s("volumetricScreenWeight", volumetricScreenSpaceParams.weight);
     s("volumetricScreenSamples", volumetricScreenSpaceParams.samples);
 
-    s("volumetricShadowAbsorption", volumetricShadowMapParams.absorption);
-    s("volumetricShadowScattering", volumetricShadowMapParams.scattering);
+    s("volumetricShadowExtinction", volumetricShadowMapParams.extinction);
+    s("volumetricShadowAnisotropy", volumetricShadowMapParams.anisotropy);
+    s("volumetricShadowPlaneTop", volumetricShadowMapParams.planeTop);
+    s("volumetricShadowPlaneBottom", volumetricShadowMapParams.planeBottom);
 
     s("sunTime", sunTime);
     s("sunRotation", sunRotation);

@@ -30,6 +30,8 @@ void main() {
         depth = 0.0;
     }
 
+    // depth = clamp(depth, light.volumetricPlaneBottom, light.volumetricPlaneTop);
+
     float x = (float(pixelPos.x) / shadowMapWidth) * 2.0 - 1.0;
     float y = (float(pixelPos.y) / shadowMapHeight) * 2.0 - 1.0;
     vec4 clipSpacePos = vec4(x, y, depth, 1.0);
