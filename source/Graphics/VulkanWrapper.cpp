@@ -504,10 +504,14 @@ Image CreateImage(const ImageDesc& desc) {
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    if (desc.depth > 1) {
+        imageInfo.imageType = VK_IMAGE_TYPE_3D;
+    } else {
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    }
     imageInfo.extent.width = desc.width;
     imageInfo.extent.height = desc.height;
-    imageInfo.extent.depth = 1;
+    imageInfo.extent.depth = desc.depth;
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = desc.layers;
     imageInfo.format = (VkFormat)desc.format;
@@ -542,7 +546,7 @@ Image CreateImage(const ImageDesc& desc) {
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = res->image;
-    if (desc.layers == 1) {
+    if (desc.layers == 1 && desc.depth == 1) {
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     } else {
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;

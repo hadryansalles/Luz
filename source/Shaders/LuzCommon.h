@@ -271,6 +271,16 @@ struct LightVolumeConstants {
     int pad[1];
 };
 
+struct VolumetricFogConstants {
+    int froxelVolumeRID;
+    int froxelVolumeAccumulatedRID;
+    int depthRID;
+    int sceneBufferIndex;
+
+    vec3 imageSize;
+    float zFar;
+};
+
 struct VolumeVisualizerConstants {
     int sceneBufferIndex;
     int volumeBufferRID;

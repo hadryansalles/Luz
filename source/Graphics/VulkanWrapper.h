@@ -166,6 +166,7 @@ struct ImageDesc {
     uint32_t layers = 1;
     SamplerType::Sampler samplerType = SamplerType::Linear;
     WrapMode::Mode wrapMode = WrapMode::Repeat;
+    uint32_t depth = 1;
 };
 
 namespace PipelinePoint {

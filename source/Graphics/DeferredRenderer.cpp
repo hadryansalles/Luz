@@ -28,6 +28,7 @@ struct Context {
     vkw::Pipeline volumeVisualizerPipeline;
     vkw::Pipeline lightVolumeRenderPipeline;
     vkw::Pipeline lightVolumeAddPipeline;
+    vkw::Pipeline volumetricFogPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -48,6 +49,9 @@ struct Context {
     vkw::Buffer luminanceHistogram;
     vkw::Buffer luminanceAverage;
     vkw::Buffer mousePicking;
+
+    vkw::Image froxelVolume;
+    vkw::Image froxelVolumeAccumulated;
 };
 
 Context ctx;
@@ -213,6 +217,29 @@ void CreateShaders() {
         .vertexAttributes = {vkw::Format::RGB32_sfloat},
         .colorFormats = {ctx.lightVolume.format},
         .blending = true,
+    });
+    CreatePipeline(ctx.volumetricFogPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricFog.comp"},
+        },
+        .name = "Volumetric Fog Pipeline",
+    });
+    ctx.froxelVolume = vkw::CreateImage({
+        .width = 190,
+        .height = 90,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::TransferDst,
+        .name = "Froxel Volume",
+        .depth = 128,
+    });
+    ctx.froxelVolumeAccumulated = vkw::CreateImage({
+        .width = 190,
+        .height = 90,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::TransferDst,
+        .name = "Froxel Volume Accumulated",
+        .depth = 128,
     });
 }
 
@@ -667,6 +694,19 @@ void EndLightVolumeRenderPass() {
     vkw::CmdDispatch({ctx.lightVolume.width / 32 + 1, ctx.lightVolume.height / 32 + 1, 1});
 
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+}
+
+void VolumetricFogPass(GPUScene& gpuScene) {
+    vkw::CmdBarrier(ctx.froxelVolume, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.volumetricFogPipeline);
+    VolumetricFogConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.froxelVolumeRID = ctx.froxelVolume.RID();
+    constants.froxelVolumeAccumulatedRID = ctx.froxelVolumeAccumulated.RID();
+    constants.depthRID = ctx.depth.RID();
+    constants.imageSize = {ctx.froxelVolume.width, ctx.froxelVolume.height, ctx.froxelVolume.depth};
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.froxelVolume.width / 32 + 1, ctx.froxelVolume.height / 32 + 1, ctx.froxelVolume.layers / 32 + 1});
 }
 
 }

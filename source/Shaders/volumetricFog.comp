@@ -1,0 +1,112 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    VolumetricFogConstants ctx;
+};
+
+#include "utils.glsl"
+
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 32) in;
+
+float phaseHenyeyGreenstein(float cosTheta, float g) {
+    float g2 = g * g;
+    return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+}
+float calculateShadowMap(LightBlock light, vec3 fragPos) {
+    if (light.shadowMap == -1) {
+        return 0.0;
+    }
+    
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
+        vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1.0));
+        vec2 uv = (fragInLight.xy * 0.5 + vec2(0.5, 0.5));
+        
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+            return 0.0;
+        }
+        
+        float shadowDepth = texture(textures[light.shadowMap], uv).r;
+        return fragInLight.z >= shadowDepth ? 1.0 : 0.0;
+    } else {
+        vec3 lightToFrag = fragPos - light.position;
+        float shadowDepth = texture(cubeTextures[light.shadowMap], lightToFrag).r;
+        return length(lightToFrag) >= (shadowDepth * light.zFar) ? 1.0 : 0.0;
+    }
+}
+
+vec3 GetFroxelPosition(ivec3 pixelPos) {
+    vec2 uv = vec2(pixelPos.xy) / vec2(ctx.imageSize.xy);
+    
+    float depth = pixelPos.z / float(ctx.imageSize.z);
+    depth = depth * depth;
+    
+    vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);
+    vec4 viewPos = scene.inverseProj * clipPos;
+    viewPos /= viewPos.w;
+    
+    viewPos.z *= ctx.zFar;
+    
+    vec4 worldPos = scene.inverseView * vec4(viewPos.xyz, 1.0);
+    
+    return worldPos.xyz;
+}
+
+void main() {
+    ivec3 gridPos = ivec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_GlobalInvocationID.z);
+    if (gridPos.x >= ctx.imageSize.x || gridPos.y >= ctx.imageSize.y || gridPos.z >= ctx.imageSize.z) {
+        return;
+    }
+    
+    vec3 worldPos = GetFroxelPosition(gridPos);
+    vec3 viewDir = normalize(worldPos - scene.camPos);
+    
+    float fogDensity = 0.05;
+    float extinction = 0.1;
+    
+    vec3 inScattering = vec3(0.0);
+    
+    for (int i = 0; i < scene.numLights; ++i) {
+        LightBlock light = scene.lights[i];
+        
+        if (light.volumetricWeight <= 0.0) {
+            continue;
+        }
+        
+        vec3 lightDir;
+        float attenuation = 1.0;
+        
+        if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
+            lightDir = normalize(-light.direction);
+        } else if (light.type == LUZ_LIGHT_TYPE_POINT || light.type == LUZ_LIGHT_TYPE_SPOT) {
+            vec3 lightToFrag = light.position - worldPos;
+            float dist = length(lightToFrag);
+            lightDir = lightToFrag / dist;
+            attenuation = 1.0 / (dist * dist);
+            
+            if (light.type == LUZ_LIGHT_TYPE_SPOT) {
+                float theta = dot(lightDir, normalize(-light.direction));
+                float epsilon = light.innerAngle - light.outerAngle;
+                attenuation *= clamp((theta - light.outerAngle) / epsilon, 0.0, 1.0);
+            }
+        }
+        
+        float shadowFactor = calculateShadowMap(light, worldPos);
+        
+        float cosTheta = dot(viewDir, lightDir);
+        float phase = phaseHenyeyGreenstein(cosTheta, light.volumetricAnisotropy);
+        
+        vec3 lightContribution = light.color * light.intensity * light.volumetricWeight * attenuation * phase * (1.0 - shadowFactor);
+        
+        lightContribution *= light.scatteringCoefficient;
+        
+        inScattering += lightContribution;
+    }
+    
+    inScattering *= fogDensity;
+    
+    imageStore(images[ctx.froxelVolumeRID], gridPos, vec4(inScattering, extinction));
+}
