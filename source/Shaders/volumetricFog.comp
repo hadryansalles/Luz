@@ -31,35 +31,51 @@ float SampleShadowMap(LightBlock light, vec3 fragPos) {
     }
 }
 
+vec3 GetFroxelUVW(vec3 froxelPos, vec3 froxelVolumeSize, float froxelVolumeDepth, mat4 proj, mat4 view, float camNear, float camFar) {
+    // Transform world position to view space
+    vec4 viewPos = view * vec4(froxelPos, 1.0);
+    
+    // Transform to clip space
+    vec4 clipPos = proj * viewPos;
+    clipPos /= clipPos.w;
+    
+    // Map clip space XY to UV (0 to 1)
+    vec2 uv = clipPos.xy * 0.5 + 0.5;
+    
+    // Compute linear depth in view space (negative Z in view space)
+    float linearDepth = -viewPos.z;
+    
+    // Map linear depth to W (0 to 1)
+    // Depth is relative to froxel volume (camNear to froxelVolumeDepth)
+    float w = (linearDepth - camNear) / (froxelVolumeDepth - camNear);
+    
+    // Clamp to ensure UVW stays within [0, 1]
+    return clamp(vec3(uv, w), 0.0, 1.0);
+}
+
 vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDepth, mat4 proj, mat4 view, float camNear, float camFar) {
     // Convert froxel index to normalized UVW (0 to 1), sampling the center of the froxel
-    vec3 uvw = (vec3(froxelIndex) + 0.5) / vec3(froxelVolumeSize);
+    vec3 uvw = (vec3(froxelIndex) + 0.5) / froxelVolumeSize;
     
-    // Map UV to NDC XY (-1 to 1)
+    // Map UV to NDC space (-1 to 1)
     vec2 ndcXY = uvw.xy * 2.0 - 1.0;
     
-    // Map W (depth) to linear depth in world space
-    // froxelVolumeDepth is the max depth of the froxel volume in world space
+    // Calculate linear depth from normalized W
     float linearDepth = camNear + uvw.z * (froxelVolumeDepth - camNear);
     
-    // Compute NDC Z from linear depth
-    // For perspective projection: Zndc = (A * Zeye + B) / -Zeye
-    // Where A = far * near / (far - near), B = far * near * (far + near) / (far - near)
-    float A = camFar * camNear / (camFar - camNear);
-    float B = camFar * camNear * (camFar + camNear) / (camFar - camNear);
-    float ndcZ = (A * linearDepth + B) / -linearDepth;
+    // Create view space position using NDC coordinates and linear depth
+    // For perspective projection, view space Z is negative
+    float viewZ = -linearDepth;
     
-    // Construct NDC position
-    vec4 ndcPos = vec4(ndcXY, ndcZ, 1.0);
+    // Reconstruct view space position
+    // X and Y depend on Z and the projection matrix
+    float viewX = ndcXY.x * -viewZ / proj[0][0];
+    float viewY = ndcXY.y * -viewZ / proj[1][1];
     
-    // Transform to view space
-    mat4 invProj = inverse(proj);
-    vec4 viewPos = invProj * ndcPos;
-    viewPos /= viewPos.w;
+    vec4 viewPos = vec4(viewX, viewY, viewZ, 1.0);
     
-    // Transform to world space
-    mat4 invView = inverse(view);
-    vec4 worldPos = invView * viewPos;
+    // Transform from view space to world space
+    vec4 worldPos = inverse(view) * viewPos;
     
     return worldPos.xyz;
 }
@@ -100,22 +116,11 @@ void main() {
             lightDir = normalize(lightToFrag);
             lightContribution *= 1.0 / dot(lightToFrag, lightToFrag);
         }
-        // lighting += lightContribution * PhaseFunction(dot(viewDir, lightDir), ctx.anisotropy) * (1.0 - SampleShadowMap(light, worldPos));
-        // lighting += 100.0 * (1.0 - SampleShadowMap(light, worldPos));
-        if (dot(worldPos - scene.camPos, forward) > ctx.zFar) {
-            lighting += vec3(10.0, 0.0, 0.0);
-        } else {
-            lighting += vec3(0.0, 10.0, 0.0);
-        }
-        // lighting += 100.0 * gridPos.z / ctx.froxelVolumeSize.z * (1.0 - SampleShadowMap(light, worldPos));
-        // lighting += length(worldPos - scene.camPos) * 100;
-        // lighting += 0.1;
+        lighting += lightContribution * PhaseFunction(dot(viewDir, lightDir), ctx.anisotropy) * (1.0 - SampleShadowMap(light, worldPos)) * 3;
     }
 
-    // lighting *= ctx.albedo;
+    lighting *= ctx.albedo;
 
     vec4 result = vec4(lighting * scattering, scattering + absorption);
-    // vec4 result = vec4(lighting, 1.0);
-    // result = vec4(0.01, 0.0, 0.0, 1.0);
     imageStore(images3D[ctx.froxelVolumeRID], ivec3(gl_GlobalInvocationID.xyz), result);
 }

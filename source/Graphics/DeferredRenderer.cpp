@@ -247,7 +247,7 @@ void CreateShaders() {
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume",
-        .wrapMode = vkw::WrapMode::ClampToEdge,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
         .depth = 128,
     });
     ctx.froxelVolumeAccumulated = vkw::CreateImage({
