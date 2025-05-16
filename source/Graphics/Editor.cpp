@@ -369,6 +369,11 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::Checkbox("Jitter##TAA", &scene->mainCamera->useJitter);
             ImGui::SeparatorText("Volumetric Fog");
             ImGui::DragFloat("Far", &scene->fogFar, 0.1, 0.0, 100.0);
+            ImGui::DragFloat("Density", &scene->fogDensity, 0.001, 0.0, 1.0);
+            ImGui::DragFloat("Scattering", &scene->fogScattering, 0.001, 0.0, 1.0);
+            ImGui::DragFloat("Absorption", &scene->fogAbsorption, 0.001, 0.0, 1.0);
+            ImGui::DragFloat("Anisotropy", &scene->fogAnisotropy, 0.001, 0.0, 1.0);
+            ImGui::ColorPicker3("Albedo", glm::value_ptr(scene->fogAlbedo));
         }
         if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Field of View", &scene->mainCamera->horizontalFov, 0.1, 0.1, 180.0);

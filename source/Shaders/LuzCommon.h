@@ -139,7 +139,10 @@ struct SceneBlock {
     int shadowType;
     int pcfSamples;
     int sunLightIndex;
-    int pad[1];
+    float camNear;
+
+    float camFar;
+    float pad[3];
 };
 
 struct OpaqueConstants {
@@ -269,7 +272,6 @@ struct LightVolumeConstants {
     vec2 imageSize;
     int lightRID;
     int lightVolumeRID;
-    int pad[1];
 };
 
 struct VolumetricFogConstants {
@@ -300,6 +302,7 @@ struct VolumeVisualizerConstants {
     int lightIndex;
     vec4 color;
     vec2 imageSize;
+    float pad[2];
 };
 
 struct LightVolumeRenderConstants {
@@ -310,7 +313,7 @@ struct LightVolumeRenderConstants {
     
     int lightRID;
     int scatteringTableRID;
-    int pad[3];
+    int pad[2];
 };
 
 #if !defined(LUZ_ENGINE)

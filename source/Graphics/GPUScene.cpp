@@ -227,6 +227,8 @@ void GPUScene::UpdateResources(const Ref<SceneAsset>& scene, const Ref<CameraNod
     s.numLights = 0;
 
     s.camPos = camera->eye;
+    s.camNear = camera->nearDistance;
+    s.camFar = camera->farDistance;
     s.prevViewProj = s.viewProj;
     s.prevJitter = camera->GetJitter();
     camera->NextJitter();

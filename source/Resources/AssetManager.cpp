@@ -107,6 +107,11 @@ void SceneAsset::Serialize(Serializer& s) {
     s("taaEnabled", taaEnabled);
     s("taaReconstruct", taaReconstruct);
     s("fogFar", fogFar);
+    s("fogDensity", fogDensity);
+    s("fogScattering", fogScattering);
+    s("fogAbsorption", fogAbsorption);
+    s("fogAnisotropy", fogAnisotropy);
+    s("fogAlbedo", fogAlbedo);
     s.Node("mainCamera", mainCamera, this);
 }
 

@@ -320,6 +320,11 @@ struct SceneAsset : Asset {
     int pcfSamples = 16;
 
     float fogFar = 50.0f;
+    float fogDensity = 0.1f;
+    float fogScattering = 0.1f;
+    float fogAbsorption = 0.1f;
+    float fogAnisotropy = 0.5f;
+    glm::vec3 fogAlbedo = glm::vec3(1.0f);
 
     template<typename T>
     Ref<T> Add() {

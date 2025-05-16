@@ -1,6 +1,7 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
 
 #include "LuzCommon.h"
 
@@ -18,7 +19,7 @@ float PhaseFunction(float cosTheta, float g) {
 float SampleShadowMap(LightBlock light, vec3 fragPos) {
     if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
         vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
-        vec2 baseUV = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
+        vec2 baseUV = (fragInLight.xy * 0.5 + 0.5);
         float shadowDepth = texture(textures[light.shadowMap], baseUV).r;
         return fragInLight.z >= shadowDepth ? 1.0 : 0.0;
     } else {
@@ -30,30 +31,59 @@ float SampleShadowMap(LightBlock light, vec3 fragPos) {
     }
 }
 
-vec3 GetWorldPosition(vec3 froxelUVW, float zFar, mat4 proj, mat4 view) {
-    vec2 ndcXY = froxelUVW.xy * 2.0 - 1.0;
-    float viewZ = froxelUVW.z * zFar;
-    vec4 viewPos = vec4(ndcXY * viewZ, -viewZ, 1.0);
-    viewPos = inverse(proj) * viewPos;
-    vec4 worldPos = inverse(view) * vec4(viewPos.xyz, 1.0);
+vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDepth, mat4 proj, mat4 view, float camNear, float camFar) {
+    // Convert froxel index to normalized UVW (0 to 1), sampling the center of the froxel
+    vec3 uvw = (vec3(froxelIndex) + 0.5) / vec3(froxelVolumeSize);
+    
+    // Map UV to NDC XY (-1 to 1)
+    vec2 ndcXY = uvw.xy * 2.0 - 1.0;
+    
+    // Map W (depth) to linear depth in world space
+    // froxelVolumeDepth is the max depth of the froxel volume in world space
+    float linearDepth = camNear + uvw.z * (froxelVolumeDepth - camNear);
+    
+    // Compute NDC Z from linear depth
+    // For perspective projection: Zndc = (A * Zeye + B) / -Zeye
+    // Where A = far * near / (far - near), B = far * near * (far + near) / (far - near)
+    float A = camFar * camNear / (camFar - camNear);
+    float B = camFar * camNear * (camFar + camNear) / (camFar - camNear);
+    float ndcZ = (A * linearDepth + B) / -linearDepth;
+    
+    // Construct NDC position
+    vec4 ndcPos = vec4(ndcXY, ndcZ, 1.0);
+    
+    // Transform to view space
+    mat4 invProj = inverse(proj);
+    vec4 viewPos = invProj * ndcPos;
+    viewPos /= viewPos.w;
+    
+    // Transform to world space
+    mat4 invView = inverse(view);
+    vec4 worldPos = invView * viewPos;
+    
     return worldPos.xyz;
 }
 
 float GetLayerThickness(int layer, vec3 froxelVolumeSize, float zFar, mat4 proj, mat4 view) {
-    return zFar / froxelVolumeSize.z;
+    return 0.01;
 }
 
 void main() {
-    ivec3 gridPos = ivec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_GlobalInvocationID.z);
+    ivec3 gridPos = ivec3(gl_GlobalInvocationID.xyz);
     if (gridPos.x >= ctx.froxelVolumeSize.x || gridPos.y >= ctx.froxelVolumeSize.y || gridPos.z >= ctx.froxelVolumeSize.z) {
         return;
     }
     
-    vec3 worldPos = GetWorldPosition(gridPos.xyz / ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view);
+    vec3 worldPos = GetFroxelPos(gridPos, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view, scene.camNear, scene.camFar);
     float layerThickness = GetLayerThickness(gridPos.z, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view);
     float dustDensity = ctx.density;
     float scattering = ctx.scattering * dustDensity * layerThickness;
     float absorption = ctx.absorption * dustDensity * layerThickness;
+
+    mat4 invView = inverse(scene.view);
+    vec3 forward = -normalize(invView[2].xyz); // Forward is negative Z in view space
+    vec3 right = normalize(invView[0].xyz);    // Right is positive X in view space
+    vec3 up = normalize(invView[1].xyz);       // Up is positive Y in view space
 
     vec3 viewDir = normalize(worldPos - scene.camPos);
     vec3 lighting = vec3(0.0);
@@ -65,17 +95,27 @@ void main() {
         }
         vec3 lightDir = light.direction;
         vec3 lightContribution = light.intensity * light.color;
-        if (light.type != LUZ_LIGHT_TYPE_DIRECTIONAL && light.type != LUZ_LIGHT_TYPE_POINT) {
+        if (light.type != LUZ_LIGHT_TYPE_DIRECTIONAL && light.type != LUZ_LIGHT_TYPE_SUN) {
             vec3 lightToFrag = light.position - worldPos;
             lightDir = normalize(lightToFrag);
             lightContribution *= 1.0 / dot(lightToFrag, lightToFrag);
         }
-        lighting += lightContribution * PhaseFunction(dot(viewDir, lightDir), ctx.anisotropy) * SampleShadowMap(light, worldPos);
+        // lighting += lightContribution * PhaseFunction(dot(viewDir, lightDir), ctx.anisotropy) * (1.0 - SampleShadowMap(light, worldPos));
+        // lighting += 100.0 * (1.0 - SampleShadowMap(light, worldPos));
+        if (dot(worldPos - scene.camPos, forward) > ctx.zFar) {
+            lighting += vec3(10.0, 0.0, 0.0);
+        } else {
+            lighting += vec3(0.0, 10.0, 0.0);
+        }
+        // lighting += 100.0 * gridPos.z / ctx.froxelVolumeSize.z * (1.0 - SampleShadowMap(light, worldPos));
+        // lighting += length(worldPos - scene.camPos) * 100;
+        // lighting += 0.1;
     }
 
     // lighting *= ctx.albedo;
 
     vec4 result = vec4(lighting * scattering, scattering + absorption);
-    result = vec4(0.001, 0.0, 0.0, 1.0);
-    imageStore(images3D[ctx.froxelVolumeRID], gridPos.xyz, result);
+    // vec4 result = vec4(lighting, 1.0);
+    // result = vec4(0.01, 0.0, 0.0, 1.0);
+    imageStore(images3D[ctx.froxelVolumeRID], ivec3(gl_GlobalInvocationID.xyz), result);
 }

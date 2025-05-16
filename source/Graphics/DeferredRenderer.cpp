@@ -247,6 +247,7 @@ void CreateShaders() {
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume",
+        .wrapMode = vkw::WrapMode::ClampToEdge,
         .depth = 128,
     });
     ctx.froxelVolumeAccumulated = vkw::CreateImage({
@@ -255,6 +256,7 @@ void CreateShaders() {
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume Accumulated",
+        .wrapMode = vkw::WrapMode::ClampToEdge,
         .depth = 128,
     });
 }
@@ -724,6 +726,11 @@ void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     constants.froxelVolumeSize = {ctx.froxelVolume.width, ctx.froxelVolume.height, ctx.froxelVolume.depth};
     constants.lightRID = ctx.lightA.RID();
     constants.zFar = scene->fogFar;
+    constants.density = scene->fogDensity;
+    constants.scattering = scene->fogScattering;
+    constants.absorption = scene->fogAbsorption;
+    constants.anisotropy = scene->fogAnisotropy;
+    constants.albedo = scene->fogAlbedo;
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.froxelVolume.width / 10, ctx.froxelVolume.height / 10, ctx.froxelVolume.depth / 8});
 
