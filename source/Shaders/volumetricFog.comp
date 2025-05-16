@@ -53,9 +53,19 @@ vec3 GetFroxelUVW(vec3 froxelPos, vec3 froxelVolumeSize, float froxelVolumeDepth
     return clamp(vec3(uv, w), 0.0, 1.0);
 }
 
+vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
+    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
+    ivec2 fragUV = ivec2(mod(pixelPos, blueNoiseSize));
+    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
+}
+
 vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDepth, mat4 proj, mat4 view, float camNear, float camFar) {
     // Convert froxel index to normalized UVW (0 to 1), sampling the center of the froxel
-    vec3 uvw = (vec3(froxelIndex) + 0.5) / froxelVolumeSize;
+    // Add blue noise offset for stochastic sampling
+    vec4 blueNoise = BlueNoiseSample(ivec2(gl_GlobalInvocationID.xy), int(gl_GlobalInvocationID.z));
+    vec3 jitter = (blueNoise.xyz - 0.5) * 0.9;
+    // vec3 jitter = vec3(0.0);
+    vec3 uvw = (vec3(froxelIndex) + 0.5 + jitter) / froxelVolumeSize;
     
     // Map UV to NDC space (-1 to 1)
     vec2 ndcXY = uvw.xy * 2.0 - 1.0;
@@ -76,7 +86,7 @@ vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDe
     
     // Transform from view space to world space
     vec4 worldPos = inverse(view) * viewPos;
-    
+
     return worldPos.xyz;
 }
 
@@ -92,7 +102,9 @@ void main() {
     
     vec3 worldPos = GetFroxelPos(gridPos, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view, scene.camNear, scene.camFar);
     float layerThickness = GetLayerThickness(gridPos.z, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view);
+    
     float dustDensity = ctx.density;
+    
     float scattering = ctx.scattering * dustDensity * layerThickness;
     float absorption = ctx.absorption * dustDensity * layerThickness;
 
@@ -121,6 +133,7 @@ void main() {
 
     lighting *= ctx.albedo;
 
-    vec4 result = vec4(lighting * scattering, scattering + absorption);
+    vec4 prev = imageLoad(images3D[ctx.froxelVolumeRID], ivec3(gl_GlobalInvocationID.xyz));
+    vec4 result = prev * 0.8 + 0.2 * vec4(lighting * scattering, scattering + absorption);
     imageStore(images3D[ctx.froxelVolumeRID], ivec3(gl_GlobalInvocationID.xyz), result);
 }

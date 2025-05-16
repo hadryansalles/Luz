@@ -315,7 +315,7 @@ private:
         vkw::CmdEndTimeStamp(lightVolumeRenderTS);
 
         auto volumetricFogTS = vkw::CmdBeginTimeStamp("VolumetricFogPass");
-        DeferredRenderer::VolumetricFogPass(gpuScene, scene);
+        DeferredRenderer::VolumetricFogPass(gpuScene, scene, frameCount);
         vkw::CmdEndTimeStamp(volumetricFogTS);
 
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");

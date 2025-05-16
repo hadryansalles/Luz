@@ -292,7 +292,7 @@ struct VolumetricFogConstants {
     int lightRID;
 
     vec3 froxelVolumeSize;
-    float pad2;
+    int frame;
 };
 
 struct VolumeVisualizerConstants {

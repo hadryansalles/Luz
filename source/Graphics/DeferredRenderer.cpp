@@ -714,7 +714,7 @@ void EndLightVolumeRenderPass() {
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
-void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
+void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene, int frame) {
     vkw::CmdBarrier(ctx.froxelVolume, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.volumetricFogPipeline);
     VolumetricFogConstants constants;
@@ -731,6 +731,7 @@ void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     constants.absorption = scene->fogAbsorption;
     constants.anisotropy = scene->fogAnisotropy;
     constants.albedo = scene->fogAlbedo;
+    constants.frame = frame;
     vkw::CmdPushConstants(&constants, sizeof(constants));
     vkw::CmdDispatch({ctx.froxelVolume.width / 10, ctx.froxelVolume.height / 10, ctx.froxelVolume.depth / 8});
 
