@@ -29,6 +29,8 @@ struct Context {
     vkw::Pipeline lightVolumeRenderPipeline;
     vkw::Pipeline lightVolumeAddPipeline;
     vkw::Pipeline volumetricFogPipeline;
+    vkw::Pipeline volumetricFogAccumulatePipeline;
+    vkw::Pipeline volumetricFogRenderPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -225,11 +227,25 @@ void CreateShaders() {
         },
         .name = "Volumetric Fog Pipeline",
     });
+    CreatePipeline(ctx.volumetricFogAccumulatePipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricFogAccumulate.comp"},
+        },
+        .name = "Volumetric Fog Accumulate Pipeline",
+    });
+    CreatePipeline(ctx.volumetricFogRenderPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricFogRender.comp"},
+        },
+        .name = "Volumetric Fog Render Pipeline",
+    });
     ctx.froxelVolume = vkw::CreateImage({
         .width = 190,
         .height = 90,
         .format = vkw::Format::RGBA32_sfloat,
-        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::TransferDst,
+        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume",
         .depth = 128,
     });
@@ -237,7 +253,7 @@ void CreateShaders() {
         .width = 190,
         .height = 90,
         .format = vkw::Format::RGBA32_sfloat,
-        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::TransferDst,
+        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume Accumulated",
         .depth = 128,
     });
@@ -696,7 +712,7 @@ void EndLightVolumeRenderPass() {
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
-void VolumetricFogPass(GPUScene& gpuScene) {
+void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     vkw::CmdBarrier(ctx.froxelVolume, vkw::Layout::General);
     vkw::CmdBindPipeline(ctx.volumetricFogPipeline);
     VolumetricFogConstants constants;
@@ -704,9 +720,28 @@ void VolumetricFogPass(GPUScene& gpuScene) {
     constants.froxelVolumeRID = ctx.froxelVolume.RID();
     constants.froxelVolumeAccumulatedRID = ctx.froxelVolumeAccumulated.RID();
     constants.depthRID = ctx.depth.RID();
-    constants.imageSize = {ctx.froxelVolume.width, ctx.froxelVolume.height, ctx.froxelVolume.depth};
+    constants.imageSize = {ctx.lightA.width, ctx.lightA.height, 1};
+    constants.froxelVolumeSize = {ctx.froxelVolume.width, ctx.froxelVolume.height, ctx.froxelVolume.depth};
+    constants.lightRID = ctx.lightA.RID();
+    constants.zFar = scene->fogFar;
     vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.froxelVolume.width / 32 + 1, ctx.froxelVolume.height / 32 + 1, ctx.froxelVolume.layers / 32 + 1});
+    vkw::CmdDispatch({ctx.froxelVolume.width / 10, ctx.froxelVolume.height / 10, ctx.froxelVolume.depth / 8});
+
+    vkw::CmdBarrier(ctx.froxelVolume, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.froxelVolumeAccumulated, vkw::Layout::General);
+
+    vkw::CmdBindPipeline(ctx.volumetricFogAccumulatePipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.froxelVolume.width / 32 + 1, ctx.froxelVolume.height / 32 + 1, 1});
+
+    vkw::CmdBarrier(ctx.froxelVolumeAccumulated, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
+
+    vkw::CmdBindPipeline(ctx.volumetricFogRenderPipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
 }

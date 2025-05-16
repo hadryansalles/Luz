@@ -367,6 +367,8 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
             ImGui::Checkbox("Enable##TAA", &scene->taaEnabled);
             ImGui::Checkbox("Reconstruction##TAA", &scene->taaReconstruct);
             ImGui::Checkbox("Jitter##TAA", &scene->mainCamera->useJitter);
+            ImGui::SeparatorText("Volumetric Fog");
+            ImGui::DragFloat("Far", &scene->fogFar, 0.1, 0.0, 100.0);
         }
         if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Field of View", &scene->mainCamera->horizontalFov, 0.1, 0.1, 180.0);

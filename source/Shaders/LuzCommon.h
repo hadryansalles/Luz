@@ -31,6 +31,7 @@ using mat4 = glm::mat4;
 
 #define VOLUMETRIC_TYPE_SCREEN_SPACE 1
 #define VOLUMETRIC_TYPE_SHADOW_MAP 2
+#define VOLUMETRIC_TYPE_FOG 3
 
 #define LUZ_HISTOGRAM_THREADS 16
 #define LUZ_HISTOGRAM_BINS 256
@@ -279,6 +280,17 @@ struct VolumetricFogConstants {
 
     vec3 imageSize;
     float zFar;
+
+    float density;
+    float scattering;
+    float absorption;
+    float anisotropy;
+    
+    vec3 albedo;
+    int lightRID;
+
+    vec3 froxelVolumeSize;
+    float pad2;
 };
 
 struct VolumeVisualizerConstants {
@@ -310,6 +322,7 @@ struct LightVolumeRenderConstants {
 #extension GL_EXT_shader_image_load_formatted : require
 
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler2D textures[];
+layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler3D textures3D[];
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBuffer {
@@ -346,6 +359,7 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer FloatBuffer {
 
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
+layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image3D images3D[];
 
 #define scene sceneBuffers[ctx.sceneBufferIndex].block
 #define tlas tlasBuffer[scene.tlasRid]

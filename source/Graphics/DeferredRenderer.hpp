@@ -47,7 +47,7 @@ void GenerateLightVolume(const Ref<LightNode>& light, Ref<SceneAsset>& scene, GP
 void BeginLightVolumeRenderPass();
 void RenderLightVolume(GPUScene& gpuScene, const Ref<LightNode>& light);
 void EndLightVolumeRenderPass();
-void VolumetricFogPass(GPUScene& gpuScene);
+void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene);
 
 vkw::Buffer& GetMousePickingBuffer();
 vkw::Image& GetComposedImage();

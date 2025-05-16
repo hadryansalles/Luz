@@ -195,9 +195,10 @@ struct LightNode : Node {
         Disabled = 0,
         ScreenSpace = 1,
         LightVolume = 2,
-        VolumetricLightCount = 3,
+        Fog = 3,
+        VolumetricLightCount = 4
     };
-    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "LightVolume"};
+    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "LightVolume", "Fog"};
 
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
@@ -317,6 +318,8 @@ struct SceneAsset : Asset {
     bool taaReconstruct = true;
 
     int pcfSamples = 16;
+
+    float fogFar = 50.0f;
 
     template<typename T>
     Ref<T> Add() {

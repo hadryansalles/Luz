@@ -314,6 +314,10 @@ private:
         DeferredRenderer::EndLightVolumeRenderPass();
         vkw::CmdEndTimeStamp(lightVolumeRenderTS);
 
+        auto volumetricFogTS = vkw::CmdBeginTimeStamp("VolumetricFogPass");
+        DeferredRenderer::VolumetricFogPass(gpuScene, scene);
+        vkw::CmdEndTimeStamp(volumetricFogTS);
+
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
         DeferredRenderer::TAAPass(gpuScene, scene);
         vkw::CmdEndTimeStamp(taaTS);

@@ -1,0 +1,46 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    VolumetricFogConstants ctx;
+};
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+vec3 GetFroxelUVW(vec3 worldPos, float zFar, mat4 proj, mat4 view) {
+    vec4 viewPos = view * vec4(worldPos, 1.0);
+    vec4 clipPos = proj * viewPos;
+    vec2 ndcXY = clipPos.xy / clipPos.w;
+    vec2 uvXY = ndcXY * 0.5 + 0.5;
+
+    float viewZ = -viewPos.z;
+    float uvZ = min(viewZ / zFar, 1.0);
+
+    return vec3(uvXY, uvZ);
+}
+
+vec3 DepthToWorld(vec2 fragCoord, float depth) {
+    vec4 clipSpacePosition = vec4(fragCoord, depth, 1.0);
+    vec4 viewSpacePosition = scene.inverseProj * clipSpacePosition;
+    return viewSpacePosition.xyz / viewSpacePosition.w;
+}
+
+void main() {
+    ivec2 gridPos = ivec2(gl_GlobalInvocationID.xy);
+    if (gridPos.x >= ctx.imageSize.x || gridPos.y >= ctx.imageSize.y) {
+        return;
+    }
+
+    vec2 fragCoord = vec2(gl_GlobalInvocationID.xy) / vec2(ctx.imageSize.x, ctx.imageSize.y);
+    float depth = texture(textures[ctx.depthRID], fragCoord).r;
+    vec3 worldPos = DepthToWorld(fragCoord, depth);
+    vec3 froxelPos = GetFroxelUVW(worldPos, ctx.zFar, scene.proj, scene.view);
+    vec4 froxelLight = texture(textures3D[ctx.froxelVolumeAccumulatedRID], froxelPos);
+
+    vec4 light = imageLoad(images[ctx.lightRID], ivec2(gl_GlobalInvocationID.xy));
+    vec4 result = vec4(light.rgb + froxelLight.rgb, 1.0);
+    imageStore(images[ctx.lightRID], ivec2(gl_GlobalInvocationID.xy), result);
+}

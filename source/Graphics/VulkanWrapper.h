@@ -122,6 +122,7 @@ struct Image {
     std::shared_ptr<ImageResource> resource;
     uint32_t width = 0;
     uint32_t height = 0;
+    uint32_t depth = 1;
     ImageUsageFlags usage;
     Format format;
     Layout::ImageLayout layout;

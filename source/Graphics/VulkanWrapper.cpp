@@ -548,7 +548,9 @@ Image CreateImage(const ImageDesc& desc) {
     viewInfo.image = res->image;
     if (desc.layers == 1 && desc.depth == 1) {
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    } else {
+    } else if (desc.layers == 1 && desc.depth > 1) {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
+    } else if (desc.layers == 6 && desc.depth == 1) {
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
     }
     viewInfo.format = (VkFormat)desc.format;
@@ -576,6 +578,7 @@ Image CreateImage(const ImageDesc& desc) {
         .resource = res,
         .width = desc.width,
         .height = desc.height,
+        .depth = desc.depth,
         .usage = desc.usage,
         .format = desc.format,
         .layout = Layout::Undefined,

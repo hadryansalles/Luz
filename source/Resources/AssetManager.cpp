@@ -106,6 +106,7 @@ void SceneAsset::Serialize(Serializer& s) {
     s("shadowType", shadowType);
     s("taaEnabled", taaEnabled);
     s("taaReconstruct", taaReconstruct);
+    s("fogFar", fogFar);
     s.Node("mainCamera", mainCamera, this);
 }
 
