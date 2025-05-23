@@ -59,12 +59,11 @@ vec4 BlueNoiseSample(ivec2 pixelPos, int i) {
     return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
 }
 
-vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDepth, mat4 proj, mat4 view, float camNear, float camFar) {
+vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDepth, mat4 proj, mat4 view, float camNear, float camFar, bool useJitter) {
     // Convert froxel index to normalized UVW (0 to 1), sampling the center of the froxel
     // Add blue noise offset for stochastic sampling
     vec4 blueNoise = BlueNoiseSample(ivec2(gl_GlobalInvocationID.xy), int(gl_GlobalInvocationID.z));
-    vec3 jitter = (blueNoise.xyz - 0.5) * 0.9;
-    // vec3 jitter = vec3(0.0);
+    vec3 jitter = useJitter ? (blueNoise.xyz - 0.5) * 0.9 : vec3(0.0);
     vec3 uvw = (vec3(froxelIndex) + 0.5 + jitter) / froxelVolumeSize;
     
     // Map UV to NDC space (-1 to 1)
@@ -90,8 +89,24 @@ vec3 GetFroxelPos(ivec3 froxelIndex, vec3 froxelVolumeSize, float froxelVolumeDe
     return worldPos.xyz;
 }
 
-float GetLayerThickness(int layer, vec3 froxelVolumeSize, float zFar, mat4 proj, mat4 view) {
-    return 0.01;
+float GetLayerThickness(ivec3 froxelIndex, vec3 froxelVolumeSize, float zFar, mat4 proj, mat4 view, float camNear, float camFar) {
+    vec3 current = GetFroxelPos(froxelIndex, froxelVolumeSize, zFar, proj, view, camNear, camFar, false);
+    
+    if (froxelIndex.z == 0) {
+        vec3 next = GetFroxelPos(froxelIndex + ivec3(0, 0, 1), froxelVolumeSize, zFar, proj, view, camNear, camFar, false);
+        return length(next - current);
+    }
+    
+    if (froxelIndex.z == int(froxelVolumeSize.z) - 1) {
+        vec3 prev = GetFroxelPos(froxelIndex - ivec3(0, 0, 1), froxelVolumeSize, zFar, proj, view, camNear, camFar, false);
+        return length(current - prev);
+    }
+    
+    vec3 prev = GetFroxelPos(froxelIndex - ivec3(0, 0, 1), froxelVolumeSize, zFar, proj, view, camNear, camFar, false);
+    vec3 next = GetFroxelPos(froxelIndex + ivec3(0, 0, 1), froxelVolumeSize, zFar, proj, view, camNear, camFar, false);
+    float thicknessToPrev = length(current - prev);
+    float thicknessToNext = length(next - current);
+    return (thicknessToPrev + thicknessToNext) * 0.5;
 }
 
 void main() {
@@ -100,20 +115,15 @@ void main() {
         return;
     }
     
-    vec3 worldPos = GetFroxelPos(gridPos, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view, scene.camNear, scene.camFar);
-    float layerThickness = GetLayerThickness(gridPos.z, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view);
+    vec3 worldPos = GetFroxelPos(gridPos, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view, scene.camNear, scene.camFar, true);
+    float layerThickness = GetLayerThickness(gridPos, ctx.froxelVolumeSize, ctx.zFar, scene.proj, scene.view, scene.camNear, scene.camFar);
     
     float dustDensity = ctx.density;
     
     float scattering = ctx.scattering * dustDensity * layerThickness;
     float absorption = ctx.absorption * dustDensity * layerThickness;
 
-    mat4 invView = inverse(scene.view);
-    vec3 forward = -normalize(invView[2].xyz); // Forward is negative Z in view space
-    vec3 right = normalize(invView[0].xyz);    // Right is positive X in view space
-    vec3 up = normalize(invView[1].xyz);       // Up is positive Y in view space
-
-    vec3 viewDir = normalize(worldPos - scene.camPos);
+    vec3 viewDir = normalize((inverse(scene.view) * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
     vec3 lighting = vec3(0.0);
 
     for (int i = 0; i < scene.numLights; i++) {
@@ -121,14 +131,15 @@ void main() {
         if (light.volumetricType != VOLUMETRIC_TYPE_FOG) {
             continue;
         }
-        vec3 lightDir = light.direction;
+        vec3 lightDir = normalize(light.direction);
         vec3 lightContribution = light.intensity * light.color;
         if (light.type != LUZ_LIGHT_TYPE_DIRECTIONAL && light.type != LUZ_LIGHT_TYPE_SUN) {
             vec3 lightToFrag = light.position - worldPos;
             lightDir = normalize(lightToFrag);
             lightContribution *= 1.0 / dot(lightToFrag, lightToFrag);
         }
-        lighting += lightContribution * PhaseFunction(dot(viewDir, lightDir), ctx.anisotropy) * (1.0 - SampleShadowMap(light, worldPos)) * 3;
+        float cosTheta = dot(lightDir, viewDir);
+        lighting += lightContribution * PhaseFunction(cosTheta, ctx.anisotropy) * (1.0 - SampleShadowMap(light, worldPos));
     }
 
     lighting *= ctx.albedo;

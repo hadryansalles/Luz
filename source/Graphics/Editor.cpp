@@ -378,6 +378,36 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
         if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Field of View", &scene->mainCamera->horizontalFov, 0.1, 0.1, 180.0);
         }
+        static bool profilerRecording = false;
+        static std::map<std::string, float> profilerTimeTable;
+        static uint32_t profilerFrameCount = 0;
+        if (ImGui::CollapsingHeader("Profiler", ImGuiTreeNodeFlags_DefaultOpen)) {
+            static char outputFile[1024] = "profiler.csv";
+            if (ImGui::Button("Start/Stop Recording")) {
+                profilerRecording = !profilerRecording;
+                if (profilerRecording) {
+                    profilerTimeTable.clear();
+                    profilerFrameCount = 0;
+                }
+            }
+            if (ImGui::Button("Save")) {
+                profilerRecording = false;
+                std::ofstream file(outputFile);
+                for (auto& [name, time] : profilerTimeTable) {
+                    file << name << "," << time/float(profilerFrameCount) << "\n";
+                }
+            }
+            ImGui::SameLine();
+            ImGui::InputText("File", outputFile, 1024);
+        }
+        if (profilerRecording) {
+            std::map<std::string, float> timeTable;
+            vkw::GetTimeStamps(timeTable);
+            profilerFrameCount++;
+            for (auto& [name, time] : timeTable) {
+                profilerTimeTable[name] += time;
+            }
+        }
     }
     ImGui::End();
 }

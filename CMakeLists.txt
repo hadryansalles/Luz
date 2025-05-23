@@ -52,7 +52,7 @@ target_compile_definitions(${PROJECT_NAME}
 
 # prevent my laptop from overheating...
 if(DEFINED ENV{COMPUTERNAME} AND "$ENV{COMPUTERNAME}" STREQUAL "LOVELACE")
-    target_compile_definitions(${PROJECT_NAME} PRIVATE LUZ_BATTERY_SAVER=1)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LUZ_BATTERY_SAVER=0)
 else()
     target_compile_definitions(${PROJECT_NAME} PRIVATE LUZ_BATTERY_SAVER=0)
 endif()

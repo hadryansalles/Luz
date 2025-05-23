@@ -10,10 +10,11 @@ layout(push_constant) uniform _constants {
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
-
 vec4 Accumulate(vec4 back, vec4 front) {
-    vec3 light = front.rgb + clamp(exp(-front.a), 0.0, 1.0) * back.rgb;
-    return vec4(light, front.a + back.a);
+    float transmittance = exp(-front.a);
+    vec3 light = front.rgb + transmittance * back.rgb;
+    float opticalDepth = front.a + back.a;
+    return vec4(light, opticalDepth);
 }
 
 void Write(ivec3 pixelPos, vec4 value) {
@@ -29,7 +30,7 @@ void main() {
     vec4 current = vec4(0.0);
     for (int i = 0; i < ctx.froxelVolumeSize.z; i++) {
         vec4 next = imageLoad(images3D[ctx.froxelVolumeRID], ivec3(gridPos.x, gridPos.y, i));
-        current = Accumulate(current, next);
+        current = Accumulate(next, current);
         Write(ivec3(gridPos.x, gridPos.y, i), current);
     }
 }
