@@ -261,6 +261,7 @@ bool GetSwapChainDirty();
 
 void GetTimeStamps(std::map<std::string, float>& timeTable);
 
+void CmdCopy(Buffer& dst, Image& src);
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
 void CmdCopy(Image& dst, void* data, uint32_t size);

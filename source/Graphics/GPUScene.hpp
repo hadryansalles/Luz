@@ -56,6 +56,11 @@ struct GPUScene {
     std::vector<GPUModel>& GetMeshModels();
     ShadowMapData& GetShadowMap(UUID uuid);
 
+    uint32_t GetPolygonalMemory();
+    uint32_t GetFroxelMemory();
+
+    void SetSwapChainPolygonalMemory(uint32_t memory);
+    void SetSwapChainFroxelMemory(uint32_t memory);
 
     RID GetSceneBuffer();
     RID GetModelsBuffer();

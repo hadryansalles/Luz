@@ -146,5 +146,6 @@ void main() {
 
     vec4 prev = imageLoad(images3D[ctx.froxelVolumeRID], ivec3(gl_GlobalInvocationID.xyz));
     vec4 result = prev * 0.8 + 0.2 * vec4(lighting * scattering, scattering + absorption);
+    // vec4 result = vec4(lighting * scattering, scattering + absorption);
     imageStore(images3D[ctx.froxelVolumeRID], ivec3(gl_GlobalInvocationID.xyz), result);
 }

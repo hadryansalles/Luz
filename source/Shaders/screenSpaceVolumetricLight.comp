@@ -46,9 +46,9 @@ void main() {
         int samples = light.volumetricSamples;
         vec2 deltaUV = (pixelUV - lightUV) * (1.0 / float(samples));
         vec2 sourceUV = pixelUV + (BlueNoiseSample(pixelPos, 0).r * 2.0 - 1.0) * 0.003;
-        if (length(sourceUV - lightUV) < 0.01) {
-            radiance += vec3(1, 0, 0);
-        }
+        // if (length(sourceUV - lightUV) < 0.01) {
+        //     radiance += vec3(1, 0, 0);
+        // }
         float absorption = 0.5f;
         float density = 0.100f;
         float decay = 1.0f;

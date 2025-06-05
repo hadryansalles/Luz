@@ -48,6 +48,8 @@ void BeginLightVolumeRenderPass();
 void RenderLightVolume(GPUScene& gpuScene, const Ref<LightNode>& light);
 void EndLightVolumeRenderPass();
 void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene, int frame);
+void SaveScreenShot(const std::string& filename);
+void AddMemory(uint32_t width, uint32_t height, GPUScene& gpuScene);
 
 vkw::Buffer& GetMousePickingBuffer();
 vkw::Image& GetComposedImage();

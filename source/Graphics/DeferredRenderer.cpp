@@ -6,6 +6,7 @@
 #include "VulkanWrapper.h"
 #include "LuzCommon.h"
 #include "DebugDraw.h"
+#include "AssetIO.hpp"
 
 #include "FileManager.hpp"
 #include <imgui/ImGuizmo.h>
@@ -54,6 +55,10 @@ struct Context {
 
     vkw::Image froxelVolume;
     vkw::Image froxelVolumeAccumulated;
+
+    vkw::Buffer screenShot;
+
+    glm::ivec3 fogResolution = {190, 90, 128};
 };
 
 Context ctx;
@@ -242,22 +247,22 @@ void CreateShaders() {
         .name = "Volumetric Fog Render Pipeline",
     });
     ctx.froxelVolume = vkw::CreateImage({
-        .width = 190,
-        .height = 90,
+        .width = uint32_t(ctx.fogResolution.x),
+        .height = uint32_t(ctx.fogResolution.y),
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume",
         .wrapMode = vkw::WrapMode::ClampToBorder,
-        .depth = 128,
+        .depth = uint32_t(ctx.fogResolution.z),
     });
     ctx.froxelVolumeAccumulated = vkw::CreateImage({
-        .width = 190,
-        .height = 90,
+        .width = uint32_t(ctx.fogResolution.x),
+        .height = uint32_t(ctx.fogResolution.y),
         .format = vkw::Format::RGBA32_sfloat,
         .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
         .name = "Froxel Volume Accumulated",
         .wrapMode = vkw::WrapMode::ClampToEdge,
-        .depth = 128,
+        .depth = uint32_t(ctx.fogResolution.z),
     });
 }
 
@@ -266,7 +271,7 @@ void CreateImages(uint32_t width, uint32_t height) {
         .width = width,
         .height = height,
         .format = vkw::Format::RGBA8_unorm,
-        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferSrc,
         .name = "Albedo Attachment"
     });
     ctx.debug = vkw::CreateImage({
@@ -336,9 +341,11 @@ void CreateImages(uint32_t width, uint32_t height) {
         .width = width,
         .height = height,
         .format = vkw::Format::BGRA8_unorm,
-        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferSrc,
         .name = "Compose Attachment"
     });
+    ctx.screenShot = vkw::CreateBuffer(width * height * 4, vkw::BufferUsage::TransferDst, vkw::Memory::CPU | vkw::Memory::GPU, "Screen Shot");
+
     glm::uvec2 atmosphericSize = {1920 / 4, 1080 / 4};
     ctx.atmosphericTransmittance = vkw::CreateImage({
         .width = atmosphericSize.x,
@@ -475,6 +482,10 @@ void ComposePass(bool separatePass, Output output, Ref<SceneAsset>& scene) {
         vkw::CmdEndRendering();
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
     }
+
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::General);
+    vkw::CmdCopy(ctx.screenShot, ctx.compose);
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
 void LineRenderingPass(GPUScene& gpuScene) {
@@ -750,6 +761,19 @@ void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene, int frame) {
     vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
 
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+}
+
+void SaveScreenShot(const std::string& filename) {
+    std::vector<u8> data(ctx.screenShot.size);
+    memcpy(data.data(), vkw::MapBuffer(ctx.screenShot), data.size());
+    vkw::UnmapBuffer(ctx.screenShot);
+    AssetIO::WriteTexture(filename, data.data(), ctx.compose.width, ctx.compose.height, true);
+}
+
+void AddMemory(uint32_t width, uint32_t height, GPUScene& gpuScene) {
+    gpuScene.SetSwapChainPolygonalMemory(width * height * sizeof(float));
+    gpuScene.SetSwapChainFroxelMemory(ctx.fogResolution.x * ctx.fogResolution.y * ctx.fogResolution.z * sizeof(float));
+    Log::Info("Added volumetric memory usage...");
 }
 
 }

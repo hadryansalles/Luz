@@ -38,6 +38,11 @@ struct GPUSceneImpl {
     vkw::Image blueNoise;
     vkw::Image font;
 
+    uint32_t polygonalMemory = 0;
+    uint32_t froxelMemory = 0;
+    uint32_t swapChainPolygonalMemory = 0;
+    uint32_t swapChainFroxelMemory = 0;
+
     void UpdateShadowMap(LightBlock& block, const Ref<LightNode>& light, const Ref<SceneAsset>& scene, const Ref<CameraNode>& camera);
 };
 
@@ -459,6 +464,8 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
             .layers = isDirectional ? 1u : 6u,
             .samplerType = vkw::SamplerType::Nearest,
         });
+        polygonalMemory += scene->shadowResolution * scene->shadowResolution * sizeof(float);
+        froxelMemory += scene->shadowResolution * scene->shadowResolution * sizeof(float);
     }
 
     if (!shadowMaps[light->uuid].volumeBuffer.resource) {
@@ -472,6 +479,9 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
         int numQuads = (shadowMapWidth - 1) * (shadowMapHeight - 1);
         // Add 2 more triangles for the base face
         int numIndices = numQuads * 6 + 6; // 6 indices per quad (2 triangles) + 6 for base face (2 triangles)
+
+        polygonalMemory += shadowMapSize * sizeof(glm::vec3);
+        polygonalMemory += numIndices * sizeof(uint32_t);
 
         shadowMapData.volumeBuffer = vkw::CreateBuffer(
             shadowMapSize * sizeof(glm::vec3),
@@ -535,3 +545,20 @@ void GPUSceneImpl::UpdateShadowMap(LightBlock& block, const Ref<LightNode>& ligh
         shadowMapData.volumeIndexCount = numIndices;
     }
 }
+
+uint32_t GPUScene::GetPolygonalMemory() {
+    return impl->polygonalMemory + impl->swapChainPolygonalMemory;
+}
+
+uint32_t GPUScene::GetFroxelMemory() {
+    return impl->froxelMemory + impl->swapChainFroxelMemory;
+}
+
+void GPUScene::SetSwapChainPolygonalMemory(uint32_t memory) {
+    impl->swapChainPolygonalMemory = memory;
+}
+
+void GPUScene::SetSwapChainFroxelMemory(uint32_t memory) {
+    impl->swapChainFroxelMemory = memory;
+}
+

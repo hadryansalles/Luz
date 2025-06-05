@@ -88,6 +88,7 @@ private:
         Window::SetTitle("Luz Engine - " + assetManager.GetProjectName());
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DeferredRenderer::CreateImages(Window::GetWidth(), Window::GetHeight());
+        DeferredRenderer::AddMemory(Window::GetWidth(), Window::GetHeight(), gpuScene);
         DeferredRenderer::CreateShaders();
         gpuScene.Create();
         DebugDraw::Create();
@@ -212,8 +213,8 @@ private:
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
-            editor.ScenePanel(scene);
-            editor.InspectorPanel(assetManager, camera, gpuScene);
+            editor.ScenePanel(scene, gpuScene);
+            editor.InspectorPanel(assetManager, camera, gpuScene, scene);
             editor.DebugDrawPanel();
         } else {
             newViewportSize = { Window::GetWidth(), Window::GetHeight() };
@@ -290,29 +291,26 @@ private:
         DeferredRenderer::LightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(lightTS);
 
-        auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
+        auto screenSpaceLightTS = vkw::CmdBeginTimeStamp("ScreenSpaceLightPass");
         if (gpuScene.AnyVolumetricLight()) {
             DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
         }
-        vkw::CmdEndTimeStamp(volumetricTS);
-
-        auto lightVolumeTS = vkw::CmdBeginTimeStamp("LightVolumePass");
-        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
-            DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
-        }
-        vkw::CmdEndTimeStamp(lightVolumeTS);
+        vkw::CmdEndTimeStamp(screenSpaceLightTS);
 
         auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
         DeferredRenderer::LuminanceHistogramPass();
         vkw::CmdEndTimeStamp(histogramTS);
 
-        auto lightVolumeRenderTS = vkw::CmdBeginTimeStamp("LightVolumeRenderPass");
+        auto lightVolumeTS = vkw::CmdBeginTimeStamp("PolygonalLightPass");
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
+        }
         DeferredRenderer::BeginLightVolumeRenderPass();
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
             DeferredRenderer::RenderLightVolume(gpuScene, light);
         }
         DeferredRenderer::EndLightVolumeRenderPass();
-        vkw::CmdEndTimeStamp(lightVolumeRenderTS);
+        vkw::CmdEndTimeStamp(lightVolumeTS);
 
         auto volumetricFogTS = vkw::CmdBeginTimeStamp("VolumetricFogPass");
         DeferredRenderer::VolumetricFogPass(gpuScene, scene, frameCount);
@@ -382,6 +380,7 @@ private:
             vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         }
         DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
+        DeferredRenderer::AddMemory(viewportSize.x, viewportSize.y, gpuScene);
         camera->extent = {viewportSize.x, viewportSize.y};
         atmosphericUpdate = true;
     }

@@ -90,6 +90,17 @@ void ReadTexture(const std::filesystem::path& path, std::vector<u8>& data, i32& 
     stbi_image_free(indata);
 }
 
+void WriteTexture(const std::string& path, u8* data, i32 w, i32 h, bool isBGR) {
+    if (isBGR) {
+        for (int i = 0; i < w * h * 4; i += 4) {
+            u8 temp = data[i];
+            data[i] = data[i + 2];
+            data[i + 2] = temp;
+        }
+    }
+    stbi_write_png(path.c_str(), w, h, 4, data, w * 4);
+}
+
 void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     u8* indata = stbi_load(path.string().c_str(), &t->width, &t->height, &t->channels, 4);
     t->data.resize(t->width * t->height * 4);

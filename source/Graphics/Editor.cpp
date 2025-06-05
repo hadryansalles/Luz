@@ -6,6 +6,7 @@
 #include "VulkanWrapper.h"
 #include "Window.hpp"
 #include "DebugDraw.h"
+#include "DeferredRenderer.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h>
@@ -34,7 +35,7 @@ struct EditorImpl {
     std::string assetNameFilter = "";
     void OnNode(Ref<Node> node);
     void InspectMeshNode(AssetManager& manager, Ref<MeshNode> node);
-    void InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene);
+    void InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene, Ref<SceneAsset>& scene);
     void InspectMaterial(AssetManager& manager, Ref<MaterialAsset> material);
     void OnTransform(const Ref<CameraNode>& camera, glm::vec3& position, glm::vec3& rotation, glm::vec3& scale, glm::mat4 parent = glm::mat4(1));
     void Select(Ref<Node>& node);
@@ -278,7 +279,7 @@ void Editor::DemoPanel() {
     ImGui::ShowDemoWindow();
 }
 
-void Editor::ScenePanel(Ref<SceneAsset>& scene) {
+void Editor::ScenePanel(Ref<SceneAsset>& scene, GPUScene& gpuScene) {
     if (impl->handlePicking) {
         Ref<MeshNode> node = scene->Get<MeshNode>(impl->pickingId);
         Log::Info("Picking uuid=%ld node=%s", impl->pickingId, node ? node->name.c_str() : "null");
@@ -378,41 +379,67 @@ void Editor::ScenePanel(Ref<SceneAsset>& scene) {
         if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Field of View", &scene->mainCamera->horizontalFov, 0.1, 0.1, 180.0);
         }
-        static bool profilerRecording = false;
-        static std::map<std::string, float> profilerTimeTable;
+        auto getLastFile = [](const std::string& path) {
+            std::filesystem::path dir(path);
+            std::filesystem::directory_iterator it(dir);
+            int maxNum = -1;
+            for (const auto& entry : it) {
+                if (entry.is_regular_file()) {
+                    try {
+                        int num = std::stoi(entry.path().filename().string());
+                        maxNum = std::max(maxNum, num);
+                    } catch (...) {
+                        continue;
+                    }
+                }
+            }
+            return maxNum == -1 ? 0 : maxNum + 1;
+        };
+        static uint32_t profilerMaxFrameCount = 5;
         static uint32_t profilerFrameCount = 0;
-        if (ImGui::CollapsingHeader("Profiler", ImGuiTreeNodeFlags_DefaultOpen)) {
-            static char outputFile[1024] = "profiler.csv";
-            if (ImGui::Button("Start/Stop Recording")) {
-                profilerRecording = !profilerRecording;
-                if (profilerRecording) {
-                    profilerTimeTable.clear();
-                    profilerFrameCount = 0;
-                }
+        static std::string profilerOutputFile = "";
+        static std::map<std::string, float> profilerTimeTable;
+        if (ImGui::CollapsingHeader("Tests", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::BeginDisabled(profilerFrameCount != 0);
+            if (ImGui::Button("Save Screen Space")) {
+                profilerFrameCount = profilerMaxFrameCount;
+                profilerOutputFile = "tests/screen_space/" + std::to_string(getLastFile("tests/screen_space"));
             }
-            if (ImGui::Button("Save")) {
-                profilerRecording = false;
-                std::ofstream file(outputFile);
-                for (auto& [name, time] : profilerTimeTable) {
-                    file << name << "," << time/float(profilerFrameCount) << "\n";
-                }
+            if (ImGui::Button("Save Polygonal")) {
+                profilerFrameCount = profilerMaxFrameCount;
+                profilerOutputFile = "tests/polygonal/" + std::to_string(getLastFile("tests/polygonal"));
             }
-            ImGui::SameLine();
-            ImGui::InputText("File", outputFile, 1024);
+            if (ImGui::Button("Save Froxel")) {
+                profilerFrameCount = profilerMaxFrameCount;
+                profilerOutputFile = "tests/froxel/" + std::to_string(getLastFile("tests/froxel"));
+            }
+            ImGui::EndDisabled();
+            ImGui::Text("Polygonal: %d MB", gpuScene.GetPolygonalMemory() / 1024 / 1024);
+            ImGui::Text("Froxel: %d MB", gpuScene.GetFroxelMemory() / 1024 / 1024);
         }
-        if (profilerRecording) {
+        if (profilerFrameCount > 0) {
             std::map<std::string, float> timeTable;
             vkw::GetTimeStamps(timeTable);
-            profilerFrameCount++;
+            profilerFrameCount--;
             for (auto& [name, time] : timeTable) {
                 profilerTimeTable[name] += time;
+            }
+            if (profilerFrameCount == 0) {
+                std::ofstream file(profilerOutputFile + ".csv");
+                for (auto& [name, time] : profilerTimeTable) {
+                    file << name << "," << time/float(profilerMaxFrameCount) << "\n";
+                }
+                file << "Polygonal Memory" << "," << gpuScene.GetPolygonalMemory() << "\n";
+                file << "Froxel Memory" << "," << gpuScene.GetFroxelMemory() << "\n";
+                profilerTimeTable.clear();
+                DeferredRenderer::SaveScreenShot(profilerOutputFile + ".png");
             }
         }
     }
     ImGui::End();
 }
 
-void Editor::InspectorPanel(AssetManager& assetManager, const Ref<CameraNode>& camera, GPUScene& gpuScene) {
+void Editor::InspectorPanel(AssetManager& assetManager, const Ref<CameraNode>& camera, GPUScene& gpuScene, Ref<SceneAsset>& scene) {
     bool open = ImGui::Begin("Inspector");
     if (open && impl->selectedNodes.size() > 0) {
         // todo: handle multi selection
@@ -429,14 +456,25 @@ void Editor::InspectorPanel(AssetManager& assetManager, const Ref<CameraNode>& c
                 impl->InspectMeshNode(assetManager, std::dynamic_pointer_cast<MeshNode>(selected));
                 break;
             case ObjectType::LightNode:
-                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected), gpuScene);
+                impl->InspectLightNode(assetManager, std::dynamic_pointer_cast<LightNode>(selected), gpuScene, scene);
                 break;
         }
     }
     ImGui::End();
 }
 
-void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene) {
+void EditorImpl::InspectLightNode(AssetManager& manager, Ref<LightNode> node, GPUScene& gpuScene, Ref<SceneAsset>& scene) {
+    static int copyCount = 0;
+    ImGui::SliderInt("Copies", &copyCount, 0, 64);
+    if (ImGui::Button("Duplicate")) {
+        for (int i = 0; i < copyCount; i++) {
+            Ref<Node> oldNode = std::dynamic_pointer_cast<Node>(node);
+            Ref<Node> newNodeRef = Node::Clone(oldNode);
+            newNodeRef->name = oldNode->name + "_copy_" + std::to_string(i);
+            newNodeRef->rotation.y += i * 360.0f / float(copyCount);
+            scene->Add(newNodeRef);
+        }
+    }
     ImGui::ColorEdit3("Color", glm::value_ptr(node->color));
     if (ImGui::BeginCombo("Type", LightNode::typeNames[node->lightType])) {
         for (int i = 0; i < LightNode::LightType::LightTypeCount; i++) {

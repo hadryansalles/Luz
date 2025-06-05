@@ -96,6 +96,7 @@ struct Context {
     void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
     void CmdCopy(Image& dst, void* data, uint32_t size);
     void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
+    void CmdCopy(Buffer& dst, Image& src);
     void CmdBarrier(Image& img, Layout::ImageLayout layout);
     void CmdBarrier();
     void EndCommandBuffer(VkSubmitInfo submitInfo);
@@ -1200,6 +1201,10 @@ void CmdCopy(Image& dst, void* data, uint32_t size) {
 
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
     _ctx.CmdCopy(dst, src, size, srcOffset); 
+}
+
+void CmdCopy(Buffer& dst, Image& src) {
+    _ctx.CmdCopy(dst, src);
 }
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
@@ -2410,6 +2415,22 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 
         return actualExtent;
     }
+}
+
+void Context::CmdCopy(Buffer& dst, Image& src) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    ASSERT(!(src.aspect & Aspect::Depth || src.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = { src.width, src.height, 1 };
+    vkCmdCopyImageToBuffer(cmd.buffer, src.resource->image, (VkImageLayout)src.layout, dst.resource->buffer, 1, &region);
 }
 
 void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
