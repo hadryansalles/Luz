@@ -1244,7 +1244,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
         colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-        colorAttachInfos[i].loadOp = clearBuffers ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_NONE;
+        colorAttachInfos[i].loadOp = clearBuffers ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_NONE_KHR;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachInfos[i].clearValue.color = { 0, 0, 0, 0 };
     }
@@ -1260,7 +1260,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         depthAttachInfo.imageView = depthAttach.resource->view;
         depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
-        depthAttachInfo.loadOp = clearBuffers ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_NONE;
+        depthAttachInfo.loadOp = clearBuffers ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_NONE_KHR;
         depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
         renderingInfo.pDepthAttachment = &depthAttachInfo;
