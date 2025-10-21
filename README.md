@@ -14,18 +14,25 @@ A Vulkan engine that I'm developing to study and implement modern rendering tech
 
 ## Features
 - Complete Vulkan Wrapper (including BLAS and TLAS creation)
+- 3 Approches for Volumetric Light: Froxels, Polygonon Mesh and Screen Space
 - Temporal Anti-Aliasing
-- Screen Space Volumetric Light
-- Shadow Maps (Point/Directional)
+- Shadow Maps
 - Atmospheric Scattering
 - Scene Serialization (JSON)
 - Deferred Rendering
 - Real-time ray traced shadows and ambient occlusion
 - PBR Shading with metallic, roughness, normal, ambient occlusion and emission
 - Vulkan bindless resources
-- Viewport camera with Perspective and Orthographic projections and Fly and Orbit controls
-  
+- Viewport camera with perspective and orthographic projections and fly and orbit controls
+- ImGui docking UI
+
 ## Gallery
+- Froxel Based Volumetric Light
+![froxel](https://github.com/user-attachments/assets/28efe343-f5be-45db-a3ac-246aee47faa4)
+
+- Polygonal Mesh Volumetric Light
+![polygonal](https://github.com/user-attachments/assets/c2113f1b-9081-4a1d-8b8a-516c6d81281f)
+
 - Screen Space Volumetric Light
 ![ssvl](https://github.com/user-attachments/assets/fcbd3fd5-881f-4640-a887-565d7190da23)
 
