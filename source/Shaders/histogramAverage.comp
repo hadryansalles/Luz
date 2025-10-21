@@ -8,10 +8,6 @@ layout(push_constant) uniform Constants {
     PostProcessingConstants ctx;
 };
 
-layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer _FloatBuffers {
-    float data[];
-} floatBuffers[];
-
 #include "utils.glsl"
 
 shared float HistogramShared[LUZ_HISTOGRAM_BINS];

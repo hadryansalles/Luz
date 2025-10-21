@@ -56,4 +56,9 @@ void main() {
     outNormal = vec4(N, 1.0);
     outMaterial = vec4(roughness, metallic, occlusion, 1.0);
     outEmission = emission;
+    if (gl_FragCoord.x >= ctx.mousePos.x && gl_FragCoord.x < ctx.mousePos.x + 1 &&
+        gl_FragCoord.y >= ctx.mousePos.y && gl_FragCoord.y < ctx.mousePos.y + 1) {
+        mousePickingBuffers[ctx.mousePickingBufferIndex].data[0] = model.nodeId[0];
+        mousePickingBuffers[ctx.mousePickingBufferIndex].data[1] = model.nodeId[1];
+    }
 }

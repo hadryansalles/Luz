@@ -13,10 +13,6 @@ layout(push_constant) uniform Constants {
 
 shared uint HistogramShared[LUZ_HISTOGRAM_BINS];
 
-layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer _FloatBuffers {
-    float data[];
-} floatBuffers[];
-
 uint HDRToHistogramBin(vec3 hdrColor) {
     float luminance = Luminance(hdrColor);
 

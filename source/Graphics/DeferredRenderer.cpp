@@ -6,6 +6,7 @@
 #include "VulkanWrapper.h"
 #include "LuzCommon.h"
 #include "DebugDraw.h"
+#include "AssetIO.hpp"
 
 #include "FileManager.hpp"
 #include <imgui/ImGuizmo.h>
@@ -18,12 +19,19 @@ struct Context {
     vkw::Pipeline composePipeline;
     vkw::Pipeline shadowMapPipeline;
     vkw::Pipeline ssvlPipeline;
-    vkw::Pipeline shadowMapVolumetricLightPipeline;
     vkw::Pipeline lineRenderingPipeline;
     vkw::Pipeline fontRenderingPipeline;
     vkw::Pipeline postProcessingPipeline;
     vkw::Pipeline luminanceHistogramPipeline;
     vkw::Pipeline luminanceHistogramAveragePipeline;
+    vkw::Pipeline atmosphericPipeline;
+    vkw::Pipeline lightVolumePipeline;
+    vkw::Pipeline volumeVisualizerPipeline;
+    vkw::Pipeline lightVolumeRenderPipeline;
+    vkw::Pipeline lightVolumeAddPipeline;
+    vkw::Pipeline volumetricFogPipeline;
+    vkw::Pipeline volumetricFogAccumulatePipeline;
+    vkw::Pipeline volumetricFogRenderPipeline;
 
     std::unordered_map<std::string, int> shaderVersions;
 
@@ -34,12 +42,23 @@ struct Context {
     vkw::Image depth;
     vkw::Image lightA;
     vkw::Image lightB;
+    vkw::Image lightVolume;
     vkw::Image lightHistory;
     vkw::Image compose;
     vkw::Image debug;
+    vkw::Image atmosphericTransmittance;
+    vkw::Image atmosphericScattering;
 
     vkw::Buffer luminanceHistogram;
     vkw::Buffer luminanceAverage;
+    vkw::Buffer mousePicking;
+
+    vkw::Image froxelVolume;
+    vkw::Image froxelVolumeAccumulated;
+
+    vkw::Buffer screenShot;
+
+    glm::ivec3 fogResolution = {190, 90, 128};
 };
 
 Context ctx;
@@ -99,7 +118,6 @@ void CreateShaders() {
         .colorFormats = { },
         .useDepth = true,
         .depthFormat = { vkw::Format::D32_sfloat },
-        .cullFront = true,
     });
     CreatePipeline(ctx.composePipeline, {
         .point = vkw::PipelinePoint::Graphics,
@@ -119,12 +137,12 @@ void CreateShaders() {
         },
         .name = "VolumetricLight Pipeline",
     });
-    CreatePipeline(ctx.shadowMapVolumetricLightPipeline, {
+    CreatePipeline(ctx.lightVolumeAddPipeline, {
         .point = vkw::PipelinePoint::Compute,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "shadowMapVolumetricLight.comp"},
+            {.stage = vkw::ShaderStage::Compute, .path = "lightVolumeAdd.comp"},
         },
-        .name = "ShadowMapVolumetricLight Pipeline",
+        .name = "LightVolumeAdd Pipeline",
     });
     CreatePipeline(ctx.lineRenderingPipeline, {
         .point = vkw::PipelinePoint::Graphics,
@@ -170,6 +188,82 @@ void CreateShaders() {
         },
         .name = "LuminanceHistogramAverage Pipeline",
     });
+    CreatePipeline(ctx.atmosphericPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "atmospheric.comp"},
+        },
+        .name = "Atmospheric Pipeline",
+    });
+    CreatePipeline(ctx.lightVolumePipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "lightVolume.comp"},
+        },
+        .name = "LightVolume Pipeline",
+    });
+    CreatePipeline(ctx.volumeVisualizerPipeline, {
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "volumeVisualizer.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "volumeVisualizer.frag"},
+        },
+        .name = "VolumeVisualizer Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.debug.format},
+        .useDepth = false,
+        .wireframe = true,
+    });
+    CreatePipeline(ctx.lightVolumeRenderPipeline, {
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "lightVolumeRender.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "lightVolumeRender.frag"},
+        },
+        .name = "LightVolumeRender Pipeline",
+        .vertexAttributes = {vkw::Format::RGB32_sfloat},
+        .colorFormats = {ctx.lightVolume.format},
+        .blending = true,
+    });
+    CreatePipeline(ctx.volumetricFogPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricFog.comp"},
+        },
+        .name = "Volumetric Fog Pipeline",
+    });
+    CreatePipeline(ctx.volumetricFogAccumulatePipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricFogAccumulate.comp"},
+        },
+        .name = "Volumetric Fog Accumulate Pipeline",
+    });
+    CreatePipeline(ctx.volumetricFogRenderPipeline, {
+        .point = vkw::PipelinePoint::Compute,
+        .stages = {
+            {.stage = vkw::ShaderStage::Compute, .path = "volumetricFogRender.comp"},
+        },
+        .name = "Volumetric Fog Render Pipeline",
+    });
+    ctx.froxelVolume = vkw::CreateImage({
+        .width = uint32_t(ctx.fogResolution.x),
+        .height = uint32_t(ctx.fogResolution.y),
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
+        .name = "Froxel Volume",
+        .wrapMode = vkw::WrapMode::ClampToBorder,
+        .depth = uint32_t(ctx.fogResolution.z),
+    });
+    ctx.froxelVolumeAccumulated = vkw::CreateImage({
+        .width = uint32_t(ctx.fogResolution.x),
+        .height = uint32_t(ctx.fogResolution.y),
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::Storage | vkw::ImageUsage::Sampled,
+        .name = "Froxel Volume Accumulated",
+        .wrapMode = vkw::WrapMode::ClampToEdge,
+        .depth = uint32_t(ctx.fogResolution.z),
+    });
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
@@ -177,7 +271,7 @@ void CreateImages(uint32_t width, uint32_t height) {
         .width = width,
         .height = height,
         .format = vkw::Format::RGBA8_unorm,
-        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferSrc,
         .name = "Albedo Attachment"
     });
     ctx.debug = vkw::CreateImage({
@@ -207,6 +301,13 @@ void CreateImages(uint32_t width, uint32_t height) {
         .format = vkw::Format::RGBA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
         .name = "Emission Attachment"
+    });
+    ctx.lightVolume = vkw::CreateImage({
+        .width = width,
+        .height = height,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Light Volumes"
     });
     ctx.lightA = vkw::CreateImage({
         .width = width,
@@ -240,9 +341,31 @@ void CreateImages(uint32_t width, uint32_t height) {
         .width = width,
         .height = height,
         .format = vkw::Format::BGRA8_unorm,
-        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferSrc,
         .name = "Compose Attachment"
     });
+    ctx.screenShot = vkw::CreateBuffer(width * height * 4, vkw::BufferUsage::TransferDst, vkw::Memory::CPU | vkw::Memory::GPU, "Screen Shot");
+
+    glm::uvec2 atmosphericSize = {1920 / 4, 1080 / 4};
+    ctx.atmosphericTransmittance = vkw::CreateImage({
+        .width = atmosphericSize.x,
+        .height = atmosphericSize.y,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Atmospheric Transmittance",
+        .samplerType = vkw::SamplerType::Linear,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
+    });
+    ctx.atmosphericScattering = vkw::CreateImage({
+        .width = atmosphericSize.x,
+        .height = atmosphericSize.y,
+        .format = vkw::Format::RGBA32_sfloat,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+        .name = "Atmospheric Scattering",
+        .samplerType = vkw::SamplerType::Linear,
+        .wrapMode = vkw::WrapMode::ClampToBorder,
+    });
+    ctx.mousePicking = vkw::CreateBuffer(sizeof(uint64_t), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Mouse Picking Buffer");
     ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
     ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
@@ -275,9 +398,10 @@ void ShadowMapPass(Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuS
     constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
     constants.lightIndex = shadowMap.lightIndex;
 
-    uint32_t layers = light->lightType == LightNode::LightType::Point ? 6u : 1u;
-
-    vkw::CmdBeginRendering({}, {img}, layers);
+    bool isDirectional = light->lightType == LightNode::LightType::Directional || light->lightType == LightNode::LightType::Sun;
+    uint32_t layers = isDirectional ? 1u : 6u;
+    vkw::CullMode::Mode cullMode = isDirectional ? vkw::CullMode::Front : vkw::CullMode::Back;
+    vkw::CmdBeginRendering({}, {img}, layers, cullMode);
     vkw::CmdBindPipeline(ctx.shadowMapPipeline);
     vkw::CmdPushConstants(&constants, sizeof(constants));
     auto& allModels = gpuScene.GetMeshModels();
@@ -306,34 +430,25 @@ void ScreenSpaceVolumetricLightPass(GPUScene& gpuScene, int frame) {
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
 }
 
-void ShadowMapVolumetricLightPass(GPUScene& gpuScene, int frame) {
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
-    vkw::CmdBindPipeline(ctx.shadowMapVolumetricLightPipeline);
-    VolumetricLightConstants constants;
-    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
-    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-    constants.depthRID = ctx.depth.RID();
-    constants.lightRID = ctx.lightA.RID();
-    constants.imageSize = {ctx.lightA.width, ctx.lightA.height};
-    constants.frame = frame;
-    vkw::CmdPushConstants(&constants, sizeof(constants));
-    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
-    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
-}
-
-void LightPass(LightConstants constants) {
-    std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission };
+void LightPass(GPUScene& gpuScene, int frame) {
+    std::vector<vkw::Image> attachs = { ctx.albedo, ctx.normal, ctx.material, ctx.emission, ctx.atmosphericScattering, ctx.atmosphericTransmittance };
     for (auto& attach : attachs) {
         vkw::CmdBarrier(attach, vkw::Layout::ShaderRead);
     }
     vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
     vkw::CmdBarrier(ctx.lightA, vkw::Layout::ColorAttachment);
 
+    LightConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.frame = frame;
     constants.albedoRID = ctx.albedo.RID();
     constants.normalRID = ctx.normal.RID();
     constants.materialRID = ctx.material.RID();
     constants.emissionRID = ctx.emission.RID();
     constants.depthRID = ctx.depth.RID();
+    constants.atmosphericScatteringRID = ctx.atmosphericScattering.RID();
+    constants.atmosphericTransmittanceRID = ctx.atmosphericTransmittance.RID();
 
     vkw::CmdBeginRendering({ ctx.lightA }, {});
     vkw::CmdBindPipeline(ctx.lightPipeline);
@@ -367,13 +482,13 @@ void ComposePass(bool separatePass, Output output, Ref<SceneAsset>& scene) {
         vkw::CmdEndRendering();
         vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
     }
+
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::General);
+    vkw::CmdCopy(ctx.screenShot, ctx.compose);
+    vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
 }
 
 void LineRenderingPass(GPUScene& gpuScene) {
-    auto strips = DebugDraw::Get();
-    if (strips.size() == 0) {
-        return;
-    }
     vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
     vkw::CmdBeginRendering({ ctx.debug });
     vkw::CmdBindPipeline(ctx.lineRenderingPipeline);
@@ -387,6 +502,7 @@ void LineRenderingPass(GPUScene& gpuScene) {
     constants.lineCount = 0;
 
     uint32_t offset = 0;
+    auto strips = DebugDraw::Get();
     for (const auto& s : strips) {
         if (!s.config.hide) {
             constants.color = s.config.color;
@@ -420,6 +536,45 @@ void LineRenderingPass(GPUScene& gpuScene) {
 
     vkw::CmdEndRendering();
     vkw::CmdBarrier(ctx.compose, vkw::Layout::ShaderRead);
+}
+
+void AtmosphericPass(GPUScene& gpuScene, int frame) {
+    vkw::CmdBarrier(ctx.atmosphericTransmittance, vkw::Layout::General);
+    vkw::CmdBarrier(ctx.atmosphericScattering, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.atmosphericPipeline);
+    AtmosphericConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.transmittanceRID = ctx.atmosphericTransmittance.RID();
+    constants.scatteringRID = ctx.atmosphericScattering.RID();
+    constants.frame = frame;
+    constants.size = glm::vec2(ctx.atmosphericTransmittance.width, ctx.atmosphericTransmittance.height);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.atmosphericTransmittance.width / 32 + 1, ctx.atmosphericTransmittance.height / 32 + 1, 1});
+    vkw::CmdBarrier(ctx.atmosphericTransmittance, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.atmosphericScattering, vkw::Layout::ShaderRead);
+}
+
+void GenerateLightVolume(const Ref<LightNode>& light, Ref<SceneAsset>& scene, GPUScene& gpuScene) {
+    if (light->lightType != LightNode::LightType::Directional && 
+        light->lightType != LightNode::LightType::Sun) {
+        return;
+    }
+
+    auto& shadowMapData = gpuScene.GetShadowMap(light->uuid);
+
+    LightVolumeConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.lightIndex = shadowMapData.lightIndex;
+    constants.shadowMapRID = shadowMapData.img.RID();
+    constants.volumeBufferRID = shadowMapData.volumeBuffer.RID();
+
+    vkw::CmdBindPipeline(ctx.lightVolumePipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    
+    int shadowMapWidth = shadowMapData.img.width;
+    int shadowMapHeight = shadowMapData.img.height;
+    vkw::CmdDispatch({(shadowMapWidth + 31) / 32, (shadowMapHeight + 31) / 32, 1});
+    vkw::CmdBarrier();
 }
 
 void TAAPass(GPUScene& gpuScene, Ref<SceneAsset>& scene) {
@@ -470,6 +625,10 @@ void SwapLightHistory() {
     std::swap(ctx.lightA, ctx.lightHistory);
 }
 
+vkw::Buffer& GetMousePickingBuffer() {
+    return ctx.mousePicking;
+}
+
 vkw::Image& GetComposedImage() {
     return ctx.compose;
 }
@@ -479,6 +638,142 @@ void ViewportOnImGui() {
 
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+}
+
+void VisualizeVolumeBufferPass(const Ref<LightNode>& light, GPUScene& gpuScene) {
+    if (!light->debugVolume) {
+        return;
+    }
+
+    if (light->lightType != LightNode::LightType::Directional && 
+        light->lightType != LightNode::LightType::Sun) {
+        return;
+    }
+
+    auto& shadowMapData = gpuScene.GetShadowMap(light->uuid);
+    
+    if (!shadowMapData.volumeBuffer.resource) {
+        return;
+    }
+    
+    vkw::CmdBarrier(ctx.debug, vkw::Layout::ColorAttachment);
+    vkw::CmdBarrier(ctx.depth, vkw::Layout::DepthRead);
+    
+    vkw::CmdBeginRendering({ ctx.debug }, {}, 1, vkw::CullMode::None, false);
+    vkw::CmdBindPipeline(ctx.volumeVisualizerPipeline);
+    
+    VolumeVisualizerConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.volumeBufferRID = shadowMapData.volumeBuffer.RID();
+    constants.lightIndex = shadowMapData.lightIndex;
+    constants.color = vec4(0.0f, 1.0f, 0.0f, 1.0f);
+    constants.depthRID = ctx.depth.RID();
+    constants.imageSize = {ctx.debug.width, ctx.debug.height};
+    
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    
+    int shadowMapSize = shadowMapData.img.width * shadowMapData.img.height;
+    vkw::CmdDrawMesh(shadowMapData.volumeBuffer, shadowMapData.volumeIndexBuffer, shadowMapData.volumeIndexCount);
+    vkw::CmdEndRendering();
+}
+
+void BeginLightVolumeRenderPass() {
+    vkw::CmdBarrier(ctx.lightVolume, vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ ctx.lightVolume }, {}, 1, vkw::CullMode::None, true);
+    vkw::CmdBindPipeline(ctx.lightVolumeRenderPipeline);
+}
+
+void RenderLightVolume(GPUScene& gpuScene, const Ref<LightNode>& light) {
+    if (light->lightType != LightNode::LightType::Directional && 
+        light->lightType != LightNode::LightType::Sun) {
+        return;
+    }
+
+    if (light->volumetricType != LightNode::VolumetricType::LightVolume) {
+        return;
+    }
+
+    auto& shadowMapData = gpuScene.GetShadowMap(light->uuid);
+    if (!shadowMapData.volumeBuffer.resource) {
+        return;
+    }
+
+    LightVolumeRenderConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.modelBufferIndex = gpuScene.GetModelsBuffer();
+    constants.depthRID = ctx.depth.RID();
+    constants.lightRID = ctx.lightA.RID();
+    constants.lightIndex = shadowMapData.lightIndex;
+
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDrawMesh(shadowMapData.volumeBuffer, shadowMapData.volumeIndexBuffer, shadowMapData.volumeIndexCount);
+}
+
+void EndLightVolumeRenderPass() {
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(ctx.lightVolume, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
+
+    vkw::CmdBindPipeline(ctx.lightVolumeAddPipeline);
+    LightVolumeConstants constants;
+    constants.lightRID = ctx.lightA.RID();
+    constants.lightVolumeRID = ctx.lightVolume.RID();
+    constants.imageSize = {ctx.lightVolume.width, ctx.lightVolume.height};
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.lightVolume.width / 32 + 1, ctx.lightVolume.height / 32 + 1, 1});
+
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+}
+
+void VolumetricFogPass(GPUScene& gpuScene, Ref<SceneAsset>& scene, int frame) {
+    vkw::CmdBarrier(ctx.froxelVolume, vkw::Layout::General);
+    vkw::CmdBindPipeline(ctx.volumetricFogPipeline);
+    VolumetricFogConstants constants;
+    constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
+    constants.froxelVolumeRID = ctx.froxelVolume.RID();
+    constants.froxelVolumeAccumulatedRID = ctx.froxelVolumeAccumulated.RID();
+    constants.depthRID = ctx.depth.RID();
+    constants.imageSize = {ctx.lightA.width, ctx.lightA.height, 1};
+    constants.froxelVolumeSize = {ctx.froxelVolume.width, ctx.froxelVolume.height, ctx.froxelVolume.depth};
+    constants.lightRID = ctx.lightA.RID();
+    constants.zFar = scene->fogFar;
+    constants.density = scene->fogDensity;
+    constants.scattering = scene->fogScattering;
+    constants.absorption = scene->fogAbsorption;
+    constants.anisotropy = scene->fogAnisotropy;
+    constants.albedo = scene->fogAlbedo;
+    constants.frame = frame;
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.froxelVolume.width / 10, ctx.froxelVolume.height / 10, ctx.froxelVolume.depth / 8});
+
+    vkw::CmdBarrier(ctx.froxelVolume, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.froxelVolumeAccumulated, vkw::Layout::General);
+
+    vkw::CmdBindPipeline(ctx.volumetricFogAccumulatePipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.froxelVolume.width / 32 + 1, ctx.froxelVolume.height / 32 + 1, 1});
+
+    vkw::CmdBarrier(ctx.froxelVolumeAccumulated, vkw::Layout::ShaderRead);
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::General);
+
+    vkw::CmdBindPipeline(ctx.volumetricFogRenderPipeline);
+    vkw::CmdPushConstants(&constants, sizeof(constants));
+    vkw::CmdDispatch({ctx.lightA.width / 32 + 1, ctx.lightA.height / 32 + 1, 1});
+
+    vkw::CmdBarrier(ctx.lightA, vkw::Layout::ShaderRead);
+}
+
+void SaveScreenShot(const std::string& filename) {
+    std::vector<u8> data(ctx.screenShot.size);
+    memcpy(data.data(), vkw::MapBuffer(ctx.screenShot), data.size());
+    vkw::UnmapBuffer(ctx.screenShot);
+    AssetIO::WriteTexture(filename, data.data(), ctx.compose.width, ctx.compose.height, true);
+}
+
+void AddMemory(uint32_t width, uint32_t height, GPUScene& gpuScene) {
+    gpuScene.SetSwapChainPolygonalMemory(width * height * sizeof(float));
+    gpuScene.SetSwapChainFroxelMemory(ctx.fogResolution.x * ctx.fogResolution.y * ctx.fogResolution.z * sizeof(float));
+    Log::Info("Added volumetric memory usage...");
 }
 
 }

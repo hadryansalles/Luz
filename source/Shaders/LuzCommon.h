@@ -24,12 +24,14 @@ using mat4 = glm::mat4;
 #define LUZ_LIGHT_TYPE_POINT 0
 #define LUZ_LIGHT_TYPE_SPOT 1
 #define LUZ_LIGHT_TYPE_DIRECTIONAL 2
+#define LUZ_LIGHT_TYPE_SUN 3
 
 #define SHADOW_TYPE_RAYTRACING 1
 #define SHADOW_TYPE_MAP 2
 
 #define VOLUMETRIC_TYPE_SCREEN_SPACE 1
 #define VOLUMETRIC_TYPE_SHADOW_MAP 2
+#define VOLUMETRIC_TYPE_FOG 3
 
 #define LUZ_HISTOGRAM_THREADS 16
 #define LUZ_HISTOGRAM_BINS 256
@@ -50,14 +52,25 @@ struct LightBlock {
     int shadowMap;
 
     mat4 viewProj[6];
+
     float zFar;
     int volumetricType;
     float volumetricWeight;
-    float volumetricAbsorption;
+    float volumetricDecay;
 
-    float volumetricDensity;
+    float volumetricExtinction;
+    float volumetricAnisotropy;
     int volumetricSamples;
-    int pad[2];
+    float sunRadius;
+    
+    int volumeBuffer;
+    int volumeIndexBuffer;
+    int volumeIndexCount;
+    float scatteringCoefficient;
+
+    float volumetricPlaneTop;
+    float volumetricPlaneBottom;
+    float pad[2];
 };
 
 struct LineBlock {
@@ -89,6 +102,9 @@ struct ModelBlock {
     int metallicRoughnessMap;
     int vertexBuffer;
     int indexBuffer;
+
+    int nodeId[2];
+    int pad[2];
 };
 
 struct SceneBlock {
@@ -121,13 +137,22 @@ struct SceneBlock {
     int tlasRid;
 
     int shadowType;
-    int pad[3];
+    int pcfSamples;
+    int sunLightIndex;
+    float camNear;
+
+    float camFar;
+    float pad[3];
 };
 
 struct OpaqueConstants {
     int sceneBufferIndex;
     int modelBufferIndex;
     int modelID;
+    int frame;
+
+    vec2 mousePos;
+    int mousePickingBufferIndex;
 };
 
 struct ShadowMapConstants {
@@ -182,10 +207,15 @@ struct LightConstants {
     int modelBufferIndex;
     int frame;
     int albedoRID;
+
     int normalRID;
     int materialRID;
     int emissionRID;
     int depthRID;
+
+    int atmosphericScatteringRID;
+    int atmosphericTransmittanceRID;
+    int pad[2];
 };
 
 struct ComposeConstants {
@@ -212,14 +242,79 @@ struct PostProcessingConstants {
     vec2 size;
     int sceneBufferIndex;
     int reconstruct;
-    float deltaTime;
 
+    float histogramMinLog;
+    float deltaTime;
     int histogramRID;
     int histogramAverageRID;
-    float histogramMinLog;
+
     float histogramOneOverLog;
+    int frame;
+    int pad[2];
 };
 
+struct AtmosphericConstants {
+    int sceneBufferIndex;
+    int transmittanceRID;
+    int scatteringRID;
+    int frame;
+
+    vec2 size;
+    int pad[2];
+};
+
+struct LightVolumeConstants {
+    int sceneBufferIndex;
+    int lightIndex;
+    int shadowMapRID;
+    int volumeBufferRID;
+
+    vec2 imageSize;
+    int lightRID;
+    int lightVolumeRID;
+};
+
+struct VolumetricFogConstants {
+    int froxelVolumeRID;
+    int froxelVolumeAccumulatedRID;
+    int depthRID;
+    int sceneBufferIndex;
+
+    vec3 imageSize;
+    float zFar;
+
+    float density;
+    float scattering;
+    float absorption;
+    float anisotropy;
+    
+    vec3 albedo;
+    int lightRID;
+
+    vec3 froxelVolumeSize;
+    int frame;
+};
+
+struct VolumeVisualizerConstants {
+    int sceneBufferIndex;
+    int volumeBufferRID;
+    int depthRID;
+    int lightIndex;
+    vec4 color;
+    vec2 imageSize;
+    float pad[2];
+};
+
+struct LightVolumeRenderConstants {
+    int sceneBufferIndex;
+    int modelBufferIndex;
+    int lightIndex;
+    int depthRID;
+    
+    int lightRID;
+    int scatteringTableRID;
+    int pad[2];
+};
 
 #if !defined(LUZ_ENGINE)
 
@@ -229,16 +324,17 @@ struct PostProcessingConstants {
 #extension GL_EXT_ray_query : enable
 #extension GL_EXT_shader_image_load_formatted : require
 
-#define LIGHT_TYPE_POINT 0
-#define LIGHT_TYPE_DIRECTIONAL 2
-#define LIGHT_TYPE_SPOT 1
-
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler2D textures[];
+layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform sampler3D textures3D[];
 layout(set = 0, binding = LUZ_BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer SceneBuffer {
     SceneBlock block;
 } sceneBuffers[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer MousePickingBuffer {
+    int data[];
+} mousePickingBuffers[];
 
 layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer LineBuffer {
     LineBlock data[];
@@ -256,8 +352,17 @@ layout(set = 0, binding = LUZ_BINDING_BUFFER) readonly buffer IndexBuffer {
     uint indices[];
 } indexBuffers[];
 
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer Vec3Buffer {
+    vec3 data[];
+} vec3Buffers[];
+
+layout(set = 0, binding = LUZ_BINDING_BUFFER) buffer FloatBuffer {
+    float data[];
+} floatBuffers[];
+
 layout(set = 0, binding = LUZ_BINDING_TLAS) uniform accelerationStructureEXT tlasBuffer[];
 layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image2D images[];
+layout(binding = LUZ_BINDING_STORAGE_IMAGE) uniform image3D images3D[];
 
 #define scene sceneBuffers[ctx.sceneBufferIndex].block
 #define tlas tlasBuffer[scene.tlasRid]

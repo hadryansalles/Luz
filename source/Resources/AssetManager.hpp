@@ -186,17 +186,19 @@ struct LightNode : Node {
         Point = 0,
         Spot = 1,
         Directional = 2,
-        LightTypeCount = 3,
+        Sun = 3,
+        LightTypeCount = 4,
     };
-    inline static const char* typeNames[] = { "Point", "Spot", "Directional" };
+    inline static const char* typeNames[] = { "Point", "Spot", "Directional", "Sun" };
 
     enum VolumetricType {
         Disabled = 0,
         ScreenSpace = 1,
-        ShadowMap = 2,
-        VolumetricLightCount = 3,
+        LightVolume = 2,
+        Fog = 3,
+        VolumetricLightCount = 4
     };
-    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "ShadowMap"};
+    inline static const char* volumetricTypeNames[] = { "Disabled", "ScreenSpace", "LightVolume", "Fog"};
 
     glm::vec3 color = glm::vec3(1);
     float intensity = 10.0f;
@@ -205,25 +207,36 @@ struct LightNode : Node {
     float innerAngle = 60.f;
     float outerAngle = 50.f;
 
+    float sunTime = 9.0f;
+    float sunRotation = 0.0f;
+    // todo: check if this is physically based
+    float sunRadius = 0.004685 * 2.0;
+    // todo: add param for night??
+
     float shadowMapRange = 3.0f;
     float shadowMapFar = 2000.0f;
 
+    bool debugVolume = false;
+    bool updateShadowMatrix = true;
+    
     struct VolumetricScreenSpaceParams {
-        float absorption = 0.5f;
+        float decay = 0.5f;
+        float weight = 0.5f;
         int samples = 128;
     } volumetricScreenSpaceParams;
 
     struct VolumetricShadowMapParams {
-        float weight = 0.0001f;
-        float absorption = 1.0f;
-        float density = 1.094f;
-        int samples = 128;
+        float extinction = 0.0001f;
+        float anisotropy = 0.1f;
+        float planeTop = 10.0f;
+        float planeBottom = -10.0f;
     } volumetricShadowMapParams;
 
     VolumetricType volumetricType = VolumetricType::ScreenSpace;
 
     LightNode();
     virtual void Serialize(Serializer& s);
+    void SetDefaultSun();
 };
 
 struct CameraNode : Node {
@@ -286,6 +299,15 @@ struct SceneAsset : Asset {
     ShadowType shadowType = ShadowType::ShadowRayTraced;
     uint32_t shadowResolution = 1024;
 
+    bool sunEnabled = true;
+    bool sunShadows = true;
+    glm::vec3 sunDirection = glm::vec3(0, 1, 0);
+    glm::vec3 sunColor = glm::vec3(1);
+    float sunIntensity = 2.0f;
+    float sunRadius = 0.01f;
+    // todo: check if this is physically based
+    float sunAngularRadius = 0.004685 * 2.0;
+
     float camSpeed = 0.01f;
     float zoomSpeed = 1.0f;
     float rotationSpeed = 0.3f;
@@ -294,6 +316,15 @@ struct SceneAsset : Asset {
 
     bool taaEnabled = true;
     bool taaReconstruct = true;
+
+    int pcfSamples = 16;
+
+    float fogFar = 50.0f;
+    float fogDensity = 0.1f;
+    float fogScattering = 0.1f;
+    float fogAbsorption = 0.1f;
+    float fogAnisotropy = 0.5f;
+    glm::vec3 fogAlbedo = glm::vec3(1.0f);
 
     template<typename T>
     Ref<T> Add() {
@@ -310,13 +341,27 @@ struct SceneAsset : Asset {
 
     template<typename T>
     Ref<T> Get(UUID id) {
-        // todo: search recursively
-        for (auto& node : nodes) {
+        // Helper function for recursive search
+        std::function<Ref<T>(const Ref<Node>&)> searchNode = [&](const Ref<Node>& node) -> Ref<T> {
             if (node->uuid == id) {
                 return std::dynamic_pointer_cast<T>(node);
             }
+            
+            for (const auto& child : node->children) {
+                if (auto result = searchNode(child)) {
+                    return result;
+                }
+            }
+            return nullptr;
+        };
+
+        // Search through root nodes
+        for (auto& node : nodes) {
+            if (auto result = searchNode(node)) {
+                return result;
+            }
         }
-        return {};
+        return nullptr;
     }
 
     template<typename T>
@@ -356,11 +401,12 @@ struct AssetManager {
     AssetManager();
     ~AssetManager();
     std::vector<Ref<Node>> AddAssetsToScene(Ref<SceneAsset>& scene, const std::vector<std::string>& paths);
-    void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    void LoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath, bool createNew = false);
     void SaveProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
     Ref<SceneAsset> GetInitialScene();
     Ref<CameraNode> GetMainCamera(Ref<SceneAsset>& scene);
     void OnImgui();
+    void CloseProject();
 
     template<typename T>
     Ref<T> Get(UUID uuid) {
@@ -464,6 +510,7 @@ struct AssetManager {
     bool HasLoadRequest() const;
     void LoadRequestedProject();
     void RequestLoadProject(const std::filesystem::path& path, const std::filesystem::path& binPath);
+    void RequestNewProject();
     std::string GetProjectName();
     std::filesystem::path GetCurrentProjectPath();
     std::filesystem::path GetCurrentBinPath();

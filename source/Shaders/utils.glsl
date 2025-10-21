@@ -95,3 +95,50 @@ float rcp(float value) {
 float Luminance(vec3 color) {
     return dot(color, vec3(0.2127, 0.7152, 0.0722));
 }
+
+vec4 BlueNoiseSample(int i, vec2 fragCoord) {
+    vec2 blueNoiseSize = textureSize(textures[scene.blueNoiseTexture], 0);
+    ivec2 fragUV = ivec2(mod(fragCoord, blueNoiseSize));
+    return fract(texelFetch(textures[scene.blueNoiseTexture], fragUV, 0) + GOLDEN_RATIO*(128*i + ctx.frame%128));
+}
+
+float SampleShadowMapPCF(LightBlock light, vec3 fragPos, float radius, vec2 fragCoord) {
+    int numSamples = scene.pcfSamples;
+    if (light.type == LUZ_LIGHT_TYPE_DIRECTIONAL || light.type == LUZ_LIGHT_TYPE_SUN) {
+        vec4 fragInLight = (light.viewProj[0] * vec4(fragPos, 1));
+        vec2 baseUV = (fragInLight.xy * 0.5 + vec2(0.5f, 0.5f));
+        
+        float shadow = 0.0;
+        vec2 texelSize = 1.0 / textureSize(textures[light.shadowMap], 0);
+        float screenRadius = radius / fragInLight.w;
+        
+        for(int i = 0; i < numSamples; i++) {
+            vec2 blueNoise = BlueNoiseSample(i, fragCoord).rg * 4.0 - 2.0;
+            vec2 offset = blueNoise * texelSize * screenRadius;
+            vec2 uv = baseUV + offset;
+            float shadowDepth = texture(textures[light.shadowMap], uv).r;
+            shadow += fragInLight.z >= shadowDepth ? 1.0 : 0.0;
+        }
+        
+        return shadow / float(numSamples);
+    } else {
+        vec3 lightToFrag = fragPos - light.position;
+        float shadow = 0.0;
+        vec2 texelSize = 1.0 / textureSize(cubeTextures[light.shadowMap], 0);
+        float distanceToReceiver = length(lightToFrag);
+        vec3 lightDir = normalize(lightToFrag);
+        float distanceToOccluder = texture(cubeTextures[light.shadowMap], lightDir).r * light.zFar;
+        float penumbraWidth = (light.radius * distanceToReceiver) / (distanceToOccluder);
+        float screenRadius = penumbraWidth * 100.0;
+
+        for(int i = 0; i < numSamples; i++) {
+            vec2 blueNoise = BlueNoiseSample(i, fragCoord).rg * 4.0 - 2.0;
+            vec2 offset = blueNoise * texelSize * screenRadius;
+            vec3 offsetDir = normalize(lightToFrag + vec3(offset, 0));
+            float shadowDepth = texture(cubeTextures[light.shadowMap], offsetDir).r;
+            shadow += distanceToReceiver >= (shadowDepth * light.zFar) ? 1.0 : 0.0;
+        }
+        
+        return shadow / float(numSamples);
+    }
+}

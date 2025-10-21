@@ -41,6 +41,7 @@ private:
     bool viewportHovered = false;
     bool fullscreen = false;
     bool batterySaver = LUZ_BATTERY_SAVER;
+    bool atmosphericUpdate = true;
     DeferredRenderer::Output outputMode = DeferredRenderer::Output::Light;
 
     std::chrono::high_resolution_clock::time_point lastFrameTime = {};
@@ -76,7 +77,7 @@ private:
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ReadCache();
-        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath);
+        assetManager.LoadProject(cacheData.projectPath, cacheData.binPath, false);
         scene = assetManager.GetInitialScene();
         camera = assetManager.GetMainCamera(scene);
     }
@@ -87,6 +88,7 @@ private:
         Window::SetTitle("Luz Engine - " + assetManager.GetProjectName());
         vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
         DeferredRenderer::CreateImages(Window::GetWidth(), Window::GetHeight());
+        DeferredRenderer::AddMemory(Window::GetWidth(), Window::GetHeight(), gpuScene);
         DeferredRenderer::CreateShaders();
         gpuScene.Create();
         DebugDraw::Create();
@@ -136,7 +138,10 @@ private:
             DrawFrame();
             bool ctrlPressed = Window::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) || Window::IsKeyDown(GLFW_KEY_LEFT_CONTROL);
             if (ctrlPressed && Window::IsKeyPressed(GLFW_KEY_S)) {
-                assetManager.SaveProject("assets/default.luz", "assets/default.luzbin");
+                assetManager.SaveProject(cacheData.projectPath, cacheData.binPath);
+            }
+            if (Window::IsKeyPressed(GLFW_KEY_F1)) {
+                atmosphericUpdate = true;
             }
             if (Window::IsKeyPressed(GLFW_KEY_F5)) {
                 vkw::WaitIdle();
@@ -208,8 +213,8 @@ private:
             editor.ProfilerPanel();
             editor.AssetsPanel(assetManager);
             editor.DemoPanel();
-            editor.ScenePanel(scene);
-            editor.InspectorPanel(assetManager, camera, gpuScene);
+            editor.ScenePanel(scene, gpuScene);
+            editor.InspectorPanel(assetManager, camera, gpuScene, scene);
             editor.DebugDrawPanel();
         } else {
             newViewportSize = { Window::GetWidth(), Window::GetHeight() };
@@ -226,6 +231,15 @@ private:
 
         LUZ_PROFILE_FUNC();
 
+        if (0) {
+            UUID mousePickObject = 0;
+            vkw::Buffer mousePickingBuffer = DeferredRenderer::GetMousePickingBuffer();
+            void* ptr = vkw::MapBuffer(mousePickingBuffer);
+            mousePickObject = *((UUID*)ptr);
+            vkw::UnmapBuffer(mousePickingBuffer);
+            editor.SetPickingId(mousePickObject);
+        }
+
         vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 
         gpuScene.UpdateResourcesGPU();
@@ -238,7 +252,9 @@ private:
         OpaqueConstants constants;
         constants.sceneBufferIndex = gpuScene.GetSceneBuffer();
         constants.modelBufferIndex = gpuScene.GetModelsBuffer();
-
+        constants.mousePickingBufferIndex = DeferredRenderer::GetMousePickingBuffer().RID();
+        constants.frame = frameCount;
+        editor.GetViewportMousePos(constants.mousePos.x, constants.mousePos.y);
         auto opaqueTS = vkw::CmdBeginTimeStamp("OpaquePass");
         DeferredRenderer::BeginOpaquePass();
 
@@ -257,6 +273,14 @@ private:
         DeferredRenderer::EndPass();
         vkw::CmdEndTimeStamp(opaqueTS);
 
+        if (false && atmosphericUpdate) {
+            auto atmosphericTS = vkw::CmdBeginTimeStamp("AtmosphericPass");
+            DeferredRenderer::AtmosphericPass(gpuScene, frameCount);
+            vkw::CmdEndTimeStamp(atmosphericTS);
+            Log::Info("Finished AtmosphericPass");
+            atmosphericUpdate = false;
+        }
+
         auto shadowMapTS = vkw::CmdBeginTimeStamp("ShadowMaps");
         for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
             DeferredRenderer::ShadowMapPass(light, scene, gpuScene);
@@ -264,19 +288,33 @@ private:
         vkw::CmdEndTimeStamp(shadowMapTS);
 
         auto lightTS = vkw::CmdBeginTimeStamp("LightPass");
-        DeferredRenderer::LightConstants lightPassConstants;
-        lightPassConstants.sceneBufferIndex = constants.sceneBufferIndex;
-        lightPassConstants.modelBufferIndex = constants.modelBufferIndex;
-        lightPassConstants.frameID = frameCount;
-        DeferredRenderer::LightPass(lightPassConstants);
+        DeferredRenderer::LightPass(gpuScene, frameCount);
         vkw::CmdEndTimeStamp(lightTS);
 
-        auto volumetricTS = vkw::CmdBeginTimeStamp("VolumetricLightPass");
+        auto screenSpaceLightTS = vkw::CmdBeginTimeStamp("ScreenSpaceLightPass");
         if (gpuScene.AnyVolumetricLight()) {
             DeferredRenderer::ScreenSpaceVolumetricLightPass(gpuScene, frameCount);
-            DeferredRenderer::ShadowMapVolumetricLightPass(gpuScene, frameCount);
         }
-        vkw::CmdEndTimeStamp(volumetricTS);
+        vkw::CmdEndTimeStamp(screenSpaceLightTS);
+
+        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
+        DeferredRenderer::LuminanceHistogramPass();
+        vkw::CmdEndTimeStamp(histogramTS);
+
+        auto lightVolumeTS = vkw::CmdBeginTimeStamp("PolygonalLightPass");
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredRenderer::GenerateLightVolume(light, scene, gpuScene);
+        }
+        DeferredRenderer::BeginLightVolumeRenderPass();
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredRenderer::RenderLightVolume(gpuScene, light);
+        }
+        DeferredRenderer::EndLightVolumeRenderPass();
+        vkw::CmdEndTimeStamp(lightVolumeTS);
+
+        auto volumetricFogTS = vkw::CmdBeginTimeStamp("VolumetricFogPass");
+        DeferredRenderer::VolumetricFogPass(gpuScene, scene, frameCount);
+        vkw::CmdEndTimeStamp(volumetricFogTS);
 
         auto taaTS = vkw::CmdBeginTimeStamp("TAAPass");
         DeferredRenderer::TAAPass(gpuScene, scene);
@@ -286,9 +324,11 @@ private:
         DeferredRenderer::LineRenderingPass(gpuScene);
         vkw::CmdEndTimeStamp(lineTS);
 
-        auto histogramTS = vkw::CmdBeginTimeStamp("LuminanceHistogramPass");
-        DeferredRenderer::LuminanceHistogramPass();
-        vkw::CmdEndTimeStamp(histogramTS);
+        auto debugLightVolumeTS = vkw::CmdBeginTimeStamp("DebugLightVolumePass");
+        for (auto& light : scene->GetAll<LightNode>(ObjectType::LightNode)) {
+            DeferredRenderer::VisualizeVolumeBufferPass(light, gpuScene);
+        }
+        vkw::CmdEndTimeStamp(debugLightVolumeTS);
 
         auto composeTS = vkw::CmdBeginTimeStamp("ComposePass");
         if (fullscreen) {
@@ -340,7 +380,9 @@ private:
             vkw::OnSurfaceUpdate(Window::GetWidth(), Window::GetHeight());
         }
         DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
+        DeferredRenderer::AddMemory(viewportSize.x, viewportSize.y, gpuScene);
         camera->extent = {viewportSize.x, viewportSize.y};
+        atmosphericUpdate = true;
     }
 
     void FinishImgui() {

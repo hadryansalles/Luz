@@ -115,12 +115,14 @@ struct Buffer {
     BufferUsageFlags usage;
     MemoryFlags memory;
     uint32_t RID();
+    bool Valid();
 };
 
 struct Image {
     std::shared_ptr<ImageResource> resource;
     uint32_t width = 0;
     uint32_t height = 0;
+    uint32_t depth = 1;
     ImageUsageFlags usage;
     Format format;
     Layout::ImageLayout layout;
@@ -138,6 +140,24 @@ enum Queue {
     Count = 3,
 };
 
+namespace SamplerType {
+    enum Sampler {
+        Nearest = 0,
+        Linear = 1,
+        Count = 2,
+    };
+}
+
+namespace WrapMode {
+    enum Mode {
+        Repeat = 0,
+        MirrorRepeat = 1,
+        ClampToEdge = 2,
+        ClampToBorder = 3,
+        Count = 4,
+    };
+}
+
 struct ImageDesc {
     uint32_t width;
     uint32_t height;
@@ -145,6 +165,9 @@ struct ImageDesc {
     ImageUsageFlags usage;
     std::string name = "";
     uint32_t layers = 1;
+    SamplerType::Sampler samplerType = SamplerType::Linear;
+    WrapMode::Mode wrapMode = WrapMode::Repeat;
+    uint32_t depth = 1;
 };
 
 namespace PipelinePoint {
@@ -162,6 +185,15 @@ namespace ShaderStage {
         Compute = 0x00000020,
         AllGraphics = 0x0000001F,
         All = 0x7FFFFFFF,
+    };
+}
+
+namespace CullMode {
+    enum Mode {
+        None = 0,
+        Front = 1,
+        Back = 2,
+        FrontAndBack = 3,
     };
 }
 
@@ -187,6 +219,8 @@ struct PipelineDesc {
     Format depthFormat;
     bool cullFront = false;
     bool lineTopology = false;
+    bool wireframe = false;
+    bool blending = false;
 };
 
 struct BLAS {
@@ -227,13 +261,14 @@ bool GetSwapChainDirty();
 
 void GetTimeStamps(std::map<std::string, float>& timeTable);
 
+void CmdCopy(Buffer& dst, Image& src);
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
 void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CullMode::Mode cullMode = CullMode::Back, bool clearBuffers = true);
 void CmdEndRendering();
 void CmdBeginPresent();
 void CmdEndPresent();

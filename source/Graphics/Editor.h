@@ -21,15 +21,18 @@ struct Editor {
     void BeginFrame();
     ImDrawData* EndFrame();
 
-    void InspectorPanel(AssetManager& assetManager, const Ref<struct CameraNode>& camera, GPUScene& gpuScene);
+    void InspectorPanel(AssetManager& assetManager, const Ref<struct CameraNode>& camera, GPUScene& gpuScene, Ref<SceneAsset>& scene);
     void DemoPanel();
-    void ScenePanel(Ref<SceneAsset>& scene);
+    void ScenePanel(Ref<SceneAsset>& scene, GPUScene& gpuScene);
     void AssetsPanel(AssetManager& assetManager);
     void ProfilerPanel();
     void ProfilerPopup();
     void DebugDrawPanel();
     bool ViewportPanel(vkw::Image& image, glm::ivec2& newSize);
     void Select(AssetManager& assetManager, const std::vector<Ref<Node>>& uuids);
+    void GetViewportMousePos(float& x, float& y) const;
+    void SetPickingId(UUID id);
+
 private:
     EditorImpl* impl;
 };

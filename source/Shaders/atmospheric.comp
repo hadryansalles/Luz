@@ -1,0 +1,122 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "LuzCommon.h"
+
+layout(push_constant) uniform _constants {
+    AtmosphericConstants ctx;
+};
+
+#include "utils.glsl"
+#include "atmosphericUtils.glsl"
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+vec3 OpticalDepth(float height, float angle) {
+	int sampleCount = 32;
+    vec3 rayOrigin = vec3(0.0, bottomRadius + height, 0.0);
+    vec3 rayDirection = vec3(sqrt(1.0 - angle * angle), angle, 0.0);
+    float t1;
+    float t2;
+    IntersectSphere(rayOrigin, rayDirection, topRadius, t1, t2);
+    float segmentLength = t2 / float(sampleCount);
+	float t = 0.5 * segmentLength;
+    vec3 opticalDepth = vec3(0.0);
+	for (int i = 0; i < sampleCount; i++) {
+        vec3 position = rayOrigin + t * rayDirection;
+        float height = length(position) - bottomRadius;
+        opticalDepth.xy += exp(-height / vec2(rayleighScaleHeight, mieScaleHeight)) * segmentLength;
+        // density of the ozone layer is modeled as a triangular function that is 30 km wide and centered at 25 km altitude
+        opticalDepth.z += (1.0 - min(abs(height - 25e3) / 15e3, 1.0)) * segmentLength;  
+        t += segmentLength;
+    }
+    return opticalDepth;
+}
+
+vec3 Transmittance(float height, float angle) {
+    vec3 opticalDepth = OpticalDepth(height, angle);
+    return exp(-(rayleighScatteringCoefficient * opticalDepth.x + mieExtinctionCoefficient * opticalDepth.y + ozoneAbsorptionCoefficient * opticalDepth.z));
+}
+
+vec2 Fibonacci(int i, int sampleCount) {
+    const float goldenRatio = (1.0 + sqrt(5.0)) / 2.0;
+    float u = (float(i) + 0.5) / float(sampleCount);
+    float v = goldenRatio * float(i);
+    return vec2(u, v);
+}
+
+vec3 MultipleScattering(float height, float angle) {
+    vec3 rayOrigin = vec3(0.0, bottomRadius + height, 0.0);
+    vec3 up = rayOrigin / length(rayOrigin);
+    vec3 lightDirection = vec3(sqrt(1.0 - angle * angle), angle, 0.0);
+    float isotropicPhase = 1.0 / (4.0 * pi);
+    int sampleCount1 = 64;
+    int sampleCount2 = 32;
+    vec3 light = vec3(0.0);
+    vec3 lightTransferFactor = vec3(0.0);
+    for (int i = 0; i < sampleCount1; i++) {
+        vec2 uv = Fibonacci(i, sampleCount1);
+        float r = sqrt(1.0 - uv.x * uv.x);
+        float theta = 2.0 * pi * uv.y;
+        vec3 rayDirection = vec3(cos(theta) * r, sin(theta) * r, uv.x);
+        float rayAngle = dot(up, rayDirection);
+        bool cameraBelow = rayAngle < 0.0;
+        vec3 transmittanceFromCameraToSpace = Transmittance(height, cameraBelow ? -rayAngle : rayAngle);
+        float offset = 0.0;
+        float distanceToSpace = 0.0;
+        IntersectSphere(rayOrigin, rayDirection, topRadius, offset, distanceToSpace);
+        float distanceToGround = 0.0;
+        bool hitGround = IntersectSphere(rayOrigin, rayDirection, bottomRadius, distanceToGround) && distanceToGround > 0.0;
+        float segmentLength = (hitGround ? distanceToGround : distanceToSpace) / float(sampleCount2);
+        float t = 0.5 * segmentLength;
+        vec3 transmittanceCamera;
+        vec3 transmittanceLight; 
+        for (int j = 0; j < sampleCount2; j++) {
+            vec3 position = rayOrigin + t * rayDirection;
+            float height = length(position) - bottomRadius;
+            vec3 up = position / length(position);
+            float rayAngle = dot(up, rayDirection);
+            float lightAngle = dot(up, lightDirection);
+            float distanceToGround;
+            float shadow = IntersectSphere(position, lightDirection, bottomRadius, distanceToGround) && distanceToGround >= 0.0 ? 0.0 : 1.0;
+            vec3 transmittanceToSpace = Transmittance(height, cameraBelow ? -rayAngle : rayAngle);
+            transmittanceCamera = cameraBelow ? (transmittanceToSpace / transmittanceFromCameraToSpace) : (transmittanceFromCameraToSpace / transmittanceToSpace);
+            transmittanceLight = Transmittance(height, lightAngle);
+            vec2 opticalDensity = exp(-height / vec2(rayleighScaleHeight, mieScaleHeight));        
+            vec3 scatteredLight = transmittanceLight * (rayleighScatteringCoefficient * opticalDensity.x + mieScatteringCoefficient * opticalDensity.y) * isotropicPhase;
+            light += shadow * transmittanceCamera * scatteredLight * segmentLength;
+            lightTransferFactor += transmittanceCamera * (rayleighScatteringCoefficient * opticalDensity.x + mieScatteringCoefficient * opticalDensity.y) * segmentLength;
+            t += segmentLength;
+        }
+        if (hitGround) {
+             vec3 hitPoint = rayOrigin + rayDirection * distanceToGround;
+             vec3 normal = normalize(hitPoint);
+             float lightAngle = max(dot(normal, lightDirection), 0.0); 
+             vec3 earthAlbedo = vec3(0.3);
+             light += transmittanceCamera * transmittanceLight * (earthAlbedo / pi) * lightAngle;
+        }
+    }
+    light /= float(sampleCount1);
+    lightTransferFactor /= float(sampleCount1);
+    vec3 color = light / (1.0 - lightTransferFactor); 
+    return color;
+}
+
+void main() {
+    ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    if (pixelPos.x >= ctx.size.x || pixelPos.y >= ctx.size.y) {
+        return;
+    }
+    vec2 pixelUV = vec2(pixelPos) / vec2(ctx.size);
+    float height = pixelUV.y * (topRadius - bottomRadius);
+    float angle = pixelUV.x * 2.0 - 1.0;
+    vec3 transmittanceResult = Transmittance(height, angle);
+    if (ctx.transmittanceRID >= 0) {
+        imageStore(images[ctx.transmittanceRID], pixelPos, vec4(transmittanceResult, 1.0));
+    }
+    vec3 scatteringResult = MultipleScattering(height, angle);
+    if (ctx.scatteringRID >= 0) {
+        imageStore(images[ctx.scatteringRID], pixelPos, vec4(scatteringResult, 1.0));
+    }
+}

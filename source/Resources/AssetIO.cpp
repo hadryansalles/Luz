@@ -90,6 +90,17 @@ void ReadTexture(const std::filesystem::path& path, std::vector<u8>& data, i32& 
     stbi_image_free(indata);
 }
 
+void WriteTexture(const std::string& path, u8* data, i32 w, i32 h, bool isBGR) {
+    if (isBGR) {
+        for (int i = 0; i < w * h * 4; i += 4) {
+            u8 temp = data[i];
+            data[i] = data[i + 2];
+            data[i + 2] = temp;
+        }
+    }
+    stbi_write_png(path.c_str(), w, h, 4, data, w * 4);
+}
+
 void ImportTexture(const std::filesystem::path& path, Ref<TextureAsset>& t) {
     u8* indata = stbi_load(path.string().c_str(), &t->width, &t->height, &t->channels, 4);
     t->data.resize(t->width * t->height * 4);
@@ -402,6 +413,33 @@ UUID ImportSceneGLTF(const std::filesystem::path& path, AssetManager& manager) {
     return loadedScenes.size() ? loadedScenes[0]->uuid : 0;
 }
 
+void PrepareMesh(Ref<MeshAsset>& mesh) {
+    if (true) {
+        std::vector<glm::vec3> positions;
+        positions.resize(mesh->vertices.size());
+        for (int i = 0; i < mesh->vertices.size(); i++)
+        {
+            positions[i] = mesh->vertices[i].position;
+        }
+        
+        for (size_t i = 0; i < mesh->indices.size(); i += 3) {
+            u32 i0 = mesh->indices[i + 0];
+            u32 i1 = mesh->indices[i + 1];
+            u32 i2 = mesh->indices[i + 2];
+
+            glm::vec3 v0 = positions[i0];
+            glm::vec3 v1 = positions[i1];
+            glm::vec3 v2 = positions[i2];
+
+            glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+
+            mesh->vertices[i0].normal = normal;
+            mesh->vertices[i1].normal = normal;
+            mesh->vertices[i2].normal = normal;
+        }
+    }
+}
+
 UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
     DEBUG_TRACE("Start loading mesh {}", path.string().c_str());
     tinyobj::attrib_t attrib;
@@ -470,13 +508,32 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
         size_t j = 0;
         size_t lastMaterialId = shapes[i].mesh.material_ids.size() > 0 ? shapes[i].mesh.material_ids[0] : -1;
         Ref<MeshAsset> asset = manager.CreateAsset<MeshAsset>(filename + ":" + shapes[i].name);
+
+        // Calculate bounds for normalization
+        glm::vec3 minBounds = glm::vec3(std::numeric_limits<float>::max());
+        glm::vec3 maxBounds = glm::vec3(std::numeric_limits<float>::lowest());
+
+        // First pass to find bounds
+        for (const auto& index : shapes[i].mesh.indices) {
+            glm::vec3 position = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+            minBounds = glm::min(minBounds, position);
+            maxBounds = glm::max(maxBounds, position);
+        }
+
+        glm::vec3 center = (minBounds + maxBounds) * 0.5f;
+
+        // Second pass to create normalized vertices
         for (const auto& index : shapes[i].mesh.indices) {
             MeshAsset::MeshVertex vertex{};
 
             vertex.position = {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
+                attrib.vertices[3 * index.vertex_index + 0] - center.x,
+                attrib.vertices[3 * index.vertex_index + 1] - center.y,
+                attrib.vertices[3 * index.vertex_index + 2] - center.z
             };
 
             if (index.normal_index != -1) {
@@ -512,6 +569,7 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                     Ref<MeshNode> model = manager.CreateObject<MeshNode>(asset->name);
                     Node::SetParent(model, parentNode);
                     model->mesh = asset;
+                    model->position = center;
                     if (lastMaterialId != -1) {
                         model->material = materialAssets[lastMaterialId];
                     }
@@ -522,6 +580,8 @@ UUID ImportSceneOBJ(const std::filesystem::path& path, AssetManager& manager) {
                 }
             }
         }
+
+        PrepareMesh(asset);
     }
     Log::Info("Objects: %d", parentNode->children.size());
     return scene->uuid;
