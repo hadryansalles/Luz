@@ -1,3 +1,35 @@
+
+<div align="right">
+  <details>
+    <summary >🌐 Language</summary>
+    <div>
+      <div align="center">
+        <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=en">English</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=zh-CN">简体中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=zh-TW">繁體中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=ja">日本語</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=ko">한국어</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=hi">हिन्दी</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=th">ไทย</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=fr">Français</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=de">Deutsch</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=es">Español</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=it">Italiano</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=ru">Русский</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=pt">Português</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=nl">Nederlands</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=pl">Polski</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=ar">العربية</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=fa">فارسی</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=tr">Türkçe</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=vi">Tiếng Việt</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=id">Bahasa Indonesia</a>
+        | <a href="https://openaitx.github.io/view.html?user=hadryansalles&project=Luz&lang=as">অসমীয়া</
+      </div>
+    </div>
+  </details>
+</div>
+
 # Luz Engine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
